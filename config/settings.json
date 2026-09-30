@@ -1,0 +1,9 @@
+{
+    "default_provider": "ollama",
+    "fallback_provider": "ollama",
+    "stream_output": false,
+    "project_name": "Asia",
+    "active_project": "pt",
+    "max_summary_chars": 6000,
+    "gemini_model": "gemini-2.5-flash"
+}

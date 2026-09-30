@@ -1,0 +1,15 @@
+{
+    "chrome": "chrome",
+    "google": "chrome",
+    "navegador": "chrome",
+    "vscode": "code",
+    "visual studio code": "code",
+    "visual": "code",
+    "editor": "code",
+    "bloc de notas": "notepad",
+    "notepad": "notepad",
+    "calculadora": "calc",
+    "calculator": "calc",
+    "spotify": "explorer.exe shell:AppsFolder\\SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify",
+    "whatsapp": "explorer.exe shell:AppsFolder\\5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App"
+}
