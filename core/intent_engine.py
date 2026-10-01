@@ -364,16 +364,21 @@ Usuario: limpia pruebas/buggy_calculator.py
 {"action":"smart_refactor","params":{"file_path":"pruebas/buggy_calculator.py","request":"limpia pruebas/buggy_calculator.py"}}
 """
 
-        response = ollama.chat(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text}
-            ],
-            options={
-                "temperature": 0
-            }
-        )
+        # Si Ollama no responde, se trata como chat: el provider configurado
+        # (que puede no ser Ollama) contestará o mostrará el error.
+        try:
+            response = ollama.chat(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": text}
+                ],
+                options={
+                    "temperature": 0
+                }
+            )
+        except Exception:
+            return {"action": "chat", "params": {}}
 
         content = response["message"]["content"].strip()
 

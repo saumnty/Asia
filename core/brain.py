@@ -5,6 +5,50 @@ from providers.provider_router import ProviderRouter
 from memory.project_memory import ProjectMemory
 from config.settings_manager import SettingsManager
 from pathlib import Path
+import re
+
+
+def parse_code_response(response):
+    """Extrae FILE_PATH, CODE y EXPLANATION de una respuesta del LLM.
+
+    Devuelve (file_path, code, explanation), o None si no hay sección CODE.
+    file_path es None si el LLM no lo incluyó.
+    """
+    file_match = re.search(
+        r"FILE_PATH:\s*(.*?)\s*CODE:",
+        response,
+        re.DOTALL
+    )
+
+    file_path = file_match.group(1).strip() if file_match else None
+
+    code_start = response.find("CODE:")
+
+    if code_start == -1:
+        return None
+
+    explanation_pos = response.find("EXPLANATION:")
+    explanation_label = "EXPLANATION:"
+
+    if explanation_pos == -1:
+        explanation_pos = response.find("EXPLANACIÓN:")
+        explanation_label = "EXPLANACIÓN:"
+
+    if explanation_pos == -1:
+        code_text = response[code_start + len("CODE:"):]
+        explanation = ""
+    else:
+        code_text = response[code_start + len("CODE:"):explanation_pos]
+        explanation = response[
+            explanation_pos + len(explanation_label):
+        ].strip()
+
+    code = code_text.strip()
+    code = code.replace("```python", "")
+    code = code.replace("```", "")
+    code = code.strip()
+
+    return file_path, code, explanation
 
 
 class Brain:
@@ -18,10 +62,18 @@ class Brain:
         self.last_debug_report = None
 
     def process(self, text):
+        """Ejecuta la acción detectada en el texto.
+
+        Devuelve None si el mensaje es conversación normal (acción "chat" o
+        no reconocida); en ese caso quien llama debe usar provider_router.chat.
+        """
         intent = self.intent_engine.detect(text)
 
         action = intent.get("action")
-        params = intent.get("params", {})
+        params = intent.get("params")
+
+        if not isinstance(params, dict):
+            params = {}
 
         key = params.get("key")
         value = params.get("value")
@@ -232,10 +284,7 @@ Pregunta:
 
         if action == "index_project_rag":
             project_path = params.get("project_path", ".")
-            project_name = params.get(
-                "project_name",
-                self.settings.get("active_project", "asia")
-            )
+            project_name = self.settings.get("active_project", "asia")
 
             project_name = project_name.lower().strip()
 
@@ -494,46 +543,6 @@ Instrucciones:
                 max_chars=3000
             )
 
-            priority_context = ""
-
-            for file_path in priority_files:
-                path = Path(file_path)
-
-                if path.exists():
-                    content = self.tool_registry.execute(
-                        "read_file",
-                        file_path=file_path
-                    )
-
-                    priority_context += f"""
-
-==============================
-ARCHIVO PRIORITARIO:
-{file_path}
-==============================
-
-{content}
-"""
-
-            project_context = ""
-
-            for selected_file in priority_files:
-                content = self.tool_registry.execute(
-                    "read_file_preview",
-                    file_path=selected_file,
-                    max_chars=1200
-                )
-
-                project_context += f"""
-
-            ==============================
-            ARCHIVO SELECCIONADO:
-            {selected_file}
-            ==============================
-
-            {content}
-            """
-
             prompt = f"""
 Actúa como Senior Software Architect y Debugger.
 
@@ -686,6 +695,9 @@ Responde con:
             if not file_path:
                 return "Necesito la ruta del archivo para refactorizarlo."
 
+            if not Path(file_path).is_file():
+                return f"No encontré el archivo: {file_path}"
+
             content = self.tool_registry.execute(
                 "read_file",
                 file_path=file_path
@@ -748,39 +760,14 @@ Reglas estrictas de refactor:
 
             response = self.provider_router.ask(prompt)
 
-            if response is None:
-                return "El provider respondió en modo streaming y no devolvió texto."
+            parsed = parse_code_response(response)
 
-            import re
-
-            file_match = re.search(
-                r"FILE_PATH:\s*(.*?)\s*CODE:",
-                response,
-                re.DOTALL
-            )
-
-            if not file_match:
-                return f"No pude extraer FILE_PATH.\n\nRespuesta recibida:\n{response}"
-
-            file_path = file_match.group(1).strip()
-
-            code_start = response.find("CODE:")
-            explanation_pos = response.find("EXPLANATION:")
-
-            if code_start == -1:
+            if not parsed:
                 return f"No pude extraer CODE.\n\nRespuesta recibida:\n{response}"
 
-            if explanation_pos == -1:
-                code_text = response[code_start + len("CODE:"):]
-                explanation = ""
-            else:
-                code_text = response[code_start + len("CODE:"):explanation_pos]
-                explanation = response[explanation_pos + len("EXPLANATION:"):].strip()
-
-            code = code_text.strip()
-            code = code.replace("```python", "")
-            code = code.replace("```", "")
-            code = code.strip()
+            # Se ignora el FILE_PATH que devuelva el LLM: el refactor siempre
+            # se aplica al archivo que pidió el usuario.
+            _, code, explanation = parsed
 
             def normalize_code(value):
                 return "\n".join(
@@ -790,6 +777,20 @@ Reglas estrictas de refactor:
 
             if normalize_code(content) == normalize_code(code):
                 return f"No se requieren cambios reales en {file_path}."
+            
+            forbidden_changes = [
+                ("return None", "raise "),
+                ("print(", "raise "),
+            ]
+
+            for old_pattern, new_pattern in forbidden_changes:
+
+                if old_pattern in content and new_pattern in code:
+                    return (
+                        "Refactor rechazado automáticamente.\n\n"
+                        "El cambio modifica el comportamiento observable "
+                        "del programa (prints/returns/excepciones)."
+                    )
 
             apply_tool = self.tool_registry.get_apply_changes_tool()
 
@@ -805,8 +806,6 @@ Reglas estrictas de refactor:
 """
         
         if action == "generate_code":
-            import re
-
             request = params.get("request", text)
             
             debug_context = ""
@@ -895,58 +894,36 @@ IMPORTANTE:
 
             response = self.provider_router.ask(prompt)
 
-            if response is None:
-                return "El provider respondió en modo streaming y no devolvió texto. Desactiva stream_output en settings.json temporalmente para usar generate_code."
+            parsed = parse_code_response(response)
 
-            file_match = re.search(
-                r"FILE_PATH:\s*(.*?)\s*CODE:",
-                response,
-                re.DOTALL
-            )
-
-            if not file_match:
-                return f"No pude extraer FILE_PATH.\n\nRespuesta recibida:\n{response}"
-
-            file_path = file_match.group(1).strip()
-
-            code_start = response.find("CODE:")
-
-            explanation_pos = response.find("EXPLANATION:")
-            explanation_label = "EXPLANATION:"
-
-            if explanation_pos == -1:
-                explanation_pos = response.find("EXPLANACIÓN:")
-                explanation_label = "EXPLANACIÓN:"
-
-            if code_start == -1:
+            if not parsed:
                 return f"No pude extraer CODE.\n\nRespuesta recibida:\n{response}"
 
-            if explanation_pos == -1:
-                code_text = response[code_start + len("CODE:"):]
-                explanation = ""
-            else:
-                code_text = response[code_start + len("CODE:"):explanation_pos]
-                explanation = response[
-                    explanation_pos + len(explanation_label):
-                ].strip()
+            file_path, code, explanation = parsed
 
-            code = code_text.strip()
+            # Si el usuario nombró un archivo existente, el cambio va a ese
+            # archivo aunque el LLM devuelva otra ruta.
+            if target_file and Path(target_file).is_file():
+                file_path = target_file
 
-            code = code.replace("```python", "")
-            code = code.replace("```", "")
-            code = code.strip()
-            
+            if not file_path:
+                return f"No pude extraer FILE_PATH.\n\nRespuesta recibida:\n{response}"
+
             forbidden_changes = [
                 ("return None", "raise "),
                 ("print(", "raise "),
             ]
 
-            old_code = content
+            old_content = ""
+
+            if Path(file_path).exists():
+                old_content = Path(file_path).read_text(encoding="utf-8").strip()
+
             new_code = code
 
             for old_pattern, new_pattern in forbidden_changes:
 
-                if old_pattern in old_code and new_pattern in new_code:
+                if old_pattern in old_content and new_pattern in new_code:
                     return (
                         "Refactor rechazado automáticamente.\n\n"
                         "El cambio modifica el comportamiento observable "
@@ -974,11 +951,6 @@ IMPORTANTE:
             Por seguridad no lo aplicaré automáticamente todavía.
             Primero revisa el cambio manualmente o pide modificar un archivo menos crítico.
             """
-            
-            old_content = ""
-
-            if Path(file_path).exists():
-                old_content = Path(file_path).read_text(encoding="utf-8").strip()
 
             if old_content == code.strip():
                 return f"No se requieren cambios en {file_path}."
@@ -1020,4 +992,6 @@ IMPORTANTE:
         ]:
             return self.tool_registry.execute(action, **params)
 
-        return "No entendí esa acción todavía."
+        # "chat" o acción no reconocida: conversación normal. El launcher la
+        # envía a provider_router.chat (con memoria, historial y streaming).
+        return None

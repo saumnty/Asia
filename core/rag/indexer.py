@@ -8,7 +8,6 @@ class ProjectIndexer:
     def __init__(self, project_path: str, project_name: str):
         self.project_path = Path(project_path)
         self.embedder = OllamaEmbedder()
-        self.store = VectorStore()
 
         self.allowed_extensions = {
             ".py", ".md", ".txt", ".json", ".yaml", ".yml", ".toml"
@@ -76,7 +75,20 @@ class ProjectIndexer:
                     "chunk": i
                 })
 
+        # Se borran los fragmentos previos de esta carpeta (incluidos los de
+        # archivos que ya no existen) solo después de generar todos los
+        # embeddings, para no dejar el índice vacío si Ollama falla a medias.
+        self.store.delete_where_file_path(self.is_inside_project)
+
         if ids:
             self.store.add_documents(ids, documents, embeddings, metadatas)
 
         return len(ids)
+
+    def is_inside_project(self, file_path: str) -> bool:
+        root = self.project_path.as_posix()
+
+        if root == ".":
+            return True
+
+        return file_path == root or file_path.startswith(root.rstrip("/") + "/")

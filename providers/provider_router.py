@@ -5,16 +5,44 @@ from config.settings_manager import SettingsManager
 from providers.gemini_provider import GeminiProvider
 
 
+SYSTEM_PROMPT = (
+    "Eres Asia, un asistente local. "
+    "Responde en español, de forma clara y útil."
+)
+
+# Mensajes (usuario + asistente) que se conservan del chat con el usuario.
+MAX_HISTORY_MESSAGES = 20
+
+
+class ProviderError(Exception):
+    pass
+
+
 class ProviderRouter:
+    # Los providers se crean al primer uso: así un provider mal configurado
+    # (p. ej. Gemini sin API key) no impide arrancar Asia con otro.
+    provider_factories = {
+        "ollama": OllamaProvider,
+        "gemini": GeminiProvider
+    }
+
     def __init__(self):
         self.settings = SettingsManager()
         self.memory = MemoryManager()
         self.project_memory = ProjectMemory()
-        self.providers = {
-            "ollama": OllamaProvider(),
-            "gemini": GeminiProvider()
-        }
-        
+        self.providers = {}
+        self.history = []
+
+    def get_provider(self, name: str):
+        if name not in self.providers:
+            factory = self.provider_factories.get(name)
+
+            if not factory:
+                raise ProviderError(f"Proveedor no disponible: {name}")
+
+            self.providers[name] = factory()
+
+        return self.providers[name]
 
     def build_memory_context(self):
         data = self.memory.load()
@@ -42,48 +70,80 @@ class ProviderRouter:
         return summary
 
     def ask(self, prompt: str) -> str:
-        provider_name = self.settings.get("default_provider", "ollama")
-        provider = self.providers.get(provider_name)
+        """Llamada de un solo turno, sin historial de chat ni contexto personal.
 
-        if not provider:
-            return f"Proveedor no disponible: {provider_name}"
-
-        memory_context = self.build_memory_context()
-        project_context = self.build_project_context()
-
-        final_prompt = f"""
-Contexto personal:
-{memory_context}
-
-Contexto del proyecto:
-{project_context}
-
-Mensaje del usuario:
-{prompt}
-"""
+        La usan las acciones internas (resúmenes, revisiones, generación de
+        código), que ya incluyen en el prompt todo el contexto que necesitan.
+        """
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt}
+        ]
 
         try:
-            stream_output = self.settings.get("stream_output", False)
+            return self._complete(messages)
+        except ProviderError as e:
+            return str(e)
 
-            if stream_output and hasattr(provider, "ask_stream"):
-                return provider.ask_stream(final_prompt)
+    def chat(self, prompt: str, on_chunk=None) -> str:
+        """Conversación con el usuario: incluye memoria, proyecto e historial."""
+        system_prompt = f"""{SYSTEM_PROMPT}
 
-            return provider.ask(final_prompt)
+Contexto personal:
+{self.build_memory_context()}
+
+Contexto del proyecto:
+{self.build_project_context()}
+"""
+
+        user_message = {"role": "user", "content": prompt}
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            *self.history,
+            user_message
+        ]
+
+        try:
+            answer = self._complete(messages, on_chunk=on_chunk)
+        except ProviderError as e:
+            if on_chunk:
+                on_chunk(str(e))
+
+            return str(e)
+
+        self.history.append(user_message)
+        self.history.append({"role": "assistant", "content": answer})
+        self.history = self.history[-MAX_HISTORY_MESSAGES:]
+
+        return answer
+
+    def _complete(self, messages: list[dict], on_chunk=None) -> str:
+        provider_name = self.settings.get("default_provider", "ollama")
+
+        try:
+            provider = self.get_provider(provider_name)
+            return provider.complete(messages, on_chunk=on_chunk)
         except Exception as e:
             fallback_name = self.settings.get("fallback_provider", None)
 
-            if fallback_name and fallback_name != provider_name:
-                fallback_provider = self.providers.get(fallback_name)
+            if not fallback_name or fallback_name == provider_name:
+                raise ProviderError(
+                    f"Error usando provider {provider_name}: {e}"
+                ) from e
 
-                if fallback_provider:
-                    try:
-                        response = fallback_provider.ask(final_prompt)
+            try:
+                fallback_provider = self.get_provider(fallback_name)
+                response = fallback_provider.complete(messages)
+            except Exception as fallback_error:
+                raise ProviderError(
+                    "Falló el provider principal y también el fallback. "
+                    f"Error: {fallback_error}"
+                ) from fallback_error
 
-                        return (
-                            f"[Fallback: usando {fallback_name}]\n\n"
-                            + response
-                        )
-                    except Exception as fallback_error:
-                        return f"Falló el provider principal y también el fallback. Error: {fallback_error}"
+            response = f"[Fallback: usando {fallback_name}]\n\n{response}"
 
-            return f"Error usando provider {provider_name}: {e}"
+            if on_chunk:
+                on_chunk(response)
+
+            return response

@@ -1,3 +1,5 @@
+import inspect
+
 from tools.app_tool import AppTool
 from tools.file_tool import FileTool
 from tools.rag_tool import RagTool
@@ -50,7 +52,14 @@ class ToolRegistry:
         tool = self.tools.get(action)
 
         if not tool:
-            return None
+            return f"Herramienta no disponible: {action}"
+
+        # Los parámetros pueden venir del LLM: se validan antes de llamar
+        # para no caerse por un argumento inventado o faltante.
+        try:
+            inspect.signature(tool).bind(**kwargs)
+        except TypeError as e:
+            return f"Parámetros inválidos para {action}: {e}"
 
         return tool(**kwargs)
     

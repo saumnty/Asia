@@ -1,2 +1,2 @@
 @echo off
-"C:\Projects\IA\JARVIS-IA-main\.venv\Scripts\python.exe" "C:\Projects\JARVIS-IA-main\Asia\launcher.py" %*
+"%~dp0.venv\Scripts\python.exe" "%~dp0launcher.py" %*
