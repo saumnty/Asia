@@ -1,9 +1,9 @@
-from pathlib import Path
+from core.paths import PROJECTS_DIR
 
 
 class ProjectMemory:
-    def __init__(self):
-        self.projects_dir = Path("memory/projects")
+    def __init__(self, projects_dir=PROJECTS_DIR):
+        self.projects_dir = projects_dir
         self.projects_dir.mkdir(parents=True, exist_ok=True)
 
     def _project_path(self, project_name: str):

@@ -1,24 +1,24 @@
 from pathlib import Path
 
+from config.settings_manager import SettingsManager
+from core.paths import has_ignored_part
 from core.rag.embedder import OllamaEmbedder
 from core.rag.vector_store import VectorStore
 
 
 class ProjectIndexer:
     def __init__(self, project_path: str, project_name: str):
-        self.project_path = Path(project_path)
+        # Ruta absoluta: los fragmentos se identifican igual sin importar
+        # desde qué carpeta se indexe o se pregunte.
+        self.project_path = Path(project_path).resolve()
         self.embedder = OllamaEmbedder()
 
         self.allowed_extensions = {
             ".py", ".md", ".txt", ".json", ".yaml", ".yml", ".toml"
         }
 
-        self.ignored_dirs = {
-            ".git", "__pycache__", ".venv", "venv", "env",
-            "node_modules", "data", ".idea", ".vscode",
-            "test", "tests", "pruebas"
-        }
-        
+        self.ignored_dirs = SettingsManager().ignored_dirs(include_tests=True)
+
         self.store = VectorStore(
             collection_name=project_name
         )
@@ -27,11 +27,7 @@ class ProjectIndexer:
         if path.suffix.lower() not in self.allowed_extensions:
             return False
 
-        for part in path.parts:
-            if part in self.ignored_dirs:
-                return False
-
-        return True
+        return not has_ignored_part(path, self.project_path, self.ignored_dirs)
 
     def chunk_text(self, text: str, chunk_size=1200, overlap=200):
         chunks = []
@@ -86,9 +82,11 @@ class ProjectIndexer:
         return len(ids)
 
     def is_inside_project(self, file_path: str) -> bool:
-        root = self.project_path.as_posix()
-
-        if root == ".":
+        # Los índices creados antes de la fase 2 guardaban rutas relativas
+        # (ambiguas sin la carpeta de origen): se reemplazan al reindexar.
+        if not Path(file_path).is_absolute():
             return True
+
+        root = self.project_path.as_posix()
 
         return file_path == root or file_path.startswith(root.rstrip("/") + "/")

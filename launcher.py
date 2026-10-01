@@ -1,18 +1,16 @@
 import sys
-import os
 from pathlib import Path
 
-USER_CWD = Path.cwd()
-PROJECT_ROOT = Path(__file__).resolve().parent
-
-os.chdir(PROJECT_ROOT)
-
+# No se cambia de carpeta: los datos internos de Asia usan rutas absolutas
+# (core/paths.py) y las rutas que da el usuario se resuelven contra la
+# carpeta desde la que llamó a Asia.
+from core.paths import PROJECT_ROOT
 from core.session import Session
 from core.brain import Brain
 
 Session.set_paths(
     project_root=PROJECT_ROOT,
-    user_cwd=USER_CWD,
+    user_cwd=Path.cwd(),
 )
 
 EXIT_COMMANDS = {"salir", "exit", "quit"}
@@ -67,10 +65,6 @@ def interactive_mode():
 
 def single_prompt_mode(prompt):
     clean_prompt = prompt.lower().strip()
-
-    if clean_prompt in ["revisa este proyecto", "analiza este proyecto"]:
-        print(f"Proyecto objetivo detectado: {Session.get_user_cwd()}")
-        return
 
     if clean_prompt in ["cwd", "donde estoy", "carpeta actual"]:
         print(f"Carpeta desde donde llamaste a Asia: {Session.get_user_cwd()}")

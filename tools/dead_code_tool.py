@@ -1,6 +1,9 @@
 import ast
 from pathlib import Path
 
+from config.settings_manager import SettingsManager
+from core.paths import has_ignored_part, is_private_data
+
 
 class DeadCodeTool:
 
@@ -15,27 +18,12 @@ class DeadCodeTool:
 
         findings = []
 
-        python_files = list(root.rglob("*.py"))
-        
-        ignored_parts = {
-            ".git",
-            ".venv",
-            "venv",
-            "__pycache__",
-            "memory",
-            "backups",
-            "chroma_db",
-            "pruebas",
-            "test",
-            "tests"
-        }
+        ignored_dirs = SettingsManager().ignored_dirs(include_tests=True)
 
         python_files = []
 
         for file in root.rglob("*.py"):
-            parts = {part.lower() for part in file.parts}
-
-            if parts.intersection(ignored_parts):
+            if has_ignored_part(file, root, ignored_dirs) or is_private_data(file):
                 continue
 
             python_files.append(file)

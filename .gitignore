@@ -8,3 +8,6 @@ memory/backups/
 data/chroma/
 pending_change.json
 test/data/chroma/
+# Ajustes locales: Asia los escribe al cambiar provider o proyecto.
+# Los valores por defecto viven en config/defaults.json.
+config/settings.json

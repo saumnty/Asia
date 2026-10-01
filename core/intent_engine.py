@@ -2,10 +2,13 @@ import json
 import re
 import ollama
 
+from config.settings_manager import SettingsManager
+
 
 class IntentEngine:
-    def __init__(self, model="qwen2.5-coder:7b"):
-        self.model = model
+    def __init__(self):
+        self.settings = SettingsManager()
+        self.client = ollama.Client(host=self.settings.get("ollama_host"))
 
     def detect(self, text: str) -> dict:
         system_prompt = """
@@ -169,13 +172,13 @@ Usuario: usando rag dime dónde se configura ollama
 {"action":"search_project_rag","params":{"question":"dónde se configura ollama"}}
 
 Usuario: indexa el proyecto
-{"action":"index_project_rag","params":{"project_path":".","project_name":"asia"}}
+{"action":"index_project_rag","params":{"project_path":"."}}
 
-Usuario: reindexa el proyecto Asia
-{"action":"index_project_rag","params":{"project_path":".","project_name":"asia"}}
+Usuario: reindexa el proyecto
+{"action":"index_project_rag","params":{"project_path":"."}}
 
 Usuario: indexa la carpeta core
-{"action":"index_project_rag","params":{"project_path":"core","project_name":"asia"}}
+{"action":"index_project_rag","params":{"project_path":"core"}}
 
 Usuario: cambia al proyecto PT
 {"action":"set_active_project","params":{"project_name":"pt"}}
@@ -367,8 +370,8 @@ Usuario: limpia pruebas/buggy_calculator.py
         # Si Ollama no responde, se trata como chat: el provider configurado
         # (que puede no ser Ollama) contestará o mostrará el error.
         try:
-            response = ollama.chat(
-                model=self.model,
+            response = self.client.chat(
+                model=self.settings.get("intent_model"),
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": text}

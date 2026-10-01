@@ -1,13 +1,13 @@
 import json
 import subprocess
-from pathlib import Path
 
+from core.paths import APPS_FILE
 from tools.app_resolver import find_start_app
 
 
 class AppTool:
-    def __init__(self):
-        self.config_file = Path("config/apps.json")
+    def __init__(self, config_file=APPS_FILE):
+        self.config_file = config_file
 
     def load_apps(self):
         if not self.config_file.exists():

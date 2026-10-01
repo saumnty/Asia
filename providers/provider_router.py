@@ -56,8 +56,7 @@ class ProviderRouter:
         )
 
     def build_project_context(self):
-        data = self.memory.load()
-        project_name = data.get("proyecto")
+        project_name = self.settings.get("active_project")
 
         if not project_name:
             return ""

@@ -1,16 +1,19 @@
 from pathlib import Path
 from difflib import unified_diff
 import json
+import re
 from datetime import datetime
+
+from core.paths import BACKUPS_DIR, PENDING_CHANGE_FILE, PROJECT_ROOT
 
 
 class ApplyChangesTool:
     name = "apply_changes"
     description = "Genera y aplica cambios en archivos solo después de confirmación."
 
-    def __init__(self):
-        self.pending_file = Path("memory/pending_change.json")
-        self.backup_dir = Path("memory/backups")
+    def __init__(self, pending_file=PENDING_CHANGE_FILE, backup_dir=BACKUPS_DIR):
+        self.pending_file = pending_file
+        self.backup_dir = backup_dir
         self.pending_file.parent.mkdir(parents=True, exist_ok=True)
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
@@ -32,8 +35,11 @@ class ApplyChangesTool:
             )
         )
 
+        # Se guarda la ruta absoluta: el cambio puede confirmarse desde otra
+        # carpeta (p. ej. en otra llamada a jarvis.bat).
         pending_change = {
             "file_path": file_path,
+            "absolute_path": str(path.resolve()),
             "old_content": old_content,
             "new_content": new_content,
             "diff": diff,
@@ -61,6 +67,17 @@ Para cancelarlo escribe:
 cancelar cambio
 """
 
+    def pending_path(self, pending_change) -> Path:
+        absolute_path = pending_change.get("absolute_path")
+
+        if absolute_path:
+            return Path(absolute_path)
+
+        # Cambios guardados antes de la fase 2: se crearon con la carpeta de
+        # trabajo en la raíz de Asia.
+        path = Path(pending_change["file_path"])
+        return path if path.is_absolute() else PROJECT_ROOT / path
+
     def load_pending_change(self):
         if not self.pending_file.exists():
             return None
@@ -82,12 +99,12 @@ cancelar cambio
         old_content = pending_change.get("old_content", "")
         new_content = pending_change["new_content"]
 
-        path = Path(file_path)
+        path = self.pending_path(pending_change)
         path.parent.mkdir(parents=True, exist_ok=True)
 
         if path.exists():
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            safe_name = file_path.replace("/", "__").replace("\\", "__")
+            safe_name = re.sub(r"[\\/:]+", "__", file_path).strip("_")
             backup_path = self.backup_dir / f"{safe_name}.{timestamp}.bak"
 
             backup_path.write_text(

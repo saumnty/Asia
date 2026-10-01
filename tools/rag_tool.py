@@ -3,13 +3,10 @@ from core.rag.indexer import ProjectIndexer
 
 
 class RagTool:
-    def __init__(self):
-        self.retriever = ProjectRetriever()
-
     def search_project(
         self,
         question: str,
-        project_name: str = "asia",
+        project_name: str,
         n_results: int = 5
     ):
         retriever = ProjectRetriever(
@@ -42,8 +39,8 @@ class RagTool:
     
     def index_project(
         self,
-        project_path: str = ".",
-        project_name: str = "asia"
+        project_name: str,
+        project_path: str = "."
     ):
         indexer = ProjectIndexer(
             project_path=project_path,

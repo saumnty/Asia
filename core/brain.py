@@ -61,6 +61,13 @@ class Brain:
         self.settings = SettingsManager()
         self.last_debug_report = None
 
+    def limit(self, name):
+        """Límite de contexto configurado en context_limits (settings)."""
+        return self.settings.get("context_limits")[name]
+
+    def active_project(self):
+        return self.settings.get("active_project").lower().strip()
+
     def process(self, text):
         """Ejecuta la acción detectada en el texto.
 
@@ -107,7 +114,7 @@ class Brain:
             content = self.tool_registry.execute(
                 "read_file_preview",
                 file_path=file_path,
-                max_chars=6000
+                max_chars=self.limit("summarize_file")
             )
 
             prompt = f"""
@@ -128,8 +135,7 @@ Contenido:
             content = self.tool_registry.execute(
                 "read_folder_context",
                 folder_path=folder_path,
-                max_files=12,
-                max_chars_per_file=1200
+                **self.limit("summarize_folder")
             )
 
             prompt = f"""
@@ -146,13 +152,12 @@ Contenido:
 
         if action == "summarize_and_save_project":
             folder_path = params.get("folder_path", ".")
-            project_name = self.memory.recall("proyecto") or "proyecto"
+            project_name = self.active_project()
 
             content = self.tool_registry.execute(
                 "read_folder_context",
                 folder_path=folder_path,
-                max_files=15,
-                max_chars_per_file=1500
+                **self.limit("save_project_summary")
             )
 
             prompt = f"""
@@ -184,7 +189,7 @@ Contenido:
 
         if action == "ask_project_memory":
             question = params.get("question", text)
-            project_name = self.memory.recall("proyecto") or "proyecto"
+            project_name = self.active_project()
             project_summary = self.project_memory.load_project_summary(project_name)
 
             if not project_summary:
@@ -211,7 +216,7 @@ Pregunta:
             if not note:
                 return "Necesito una nota para actualizar la memoria del proyecto."
 
-            project_name = self.memory.recall("proyecto") or "proyecto"
+            project_name = self.active_project()
 
             self.project_memory.append_project_note(
                 project_name,
@@ -221,14 +226,17 @@ Pregunta:
             return f"Memoria del proyecto {project_name} actualizada."
 
         if action == "show_settings":
-            provider = self.settings.get("default_provider", "ollama")
-            fallback = self.settings.get("fallback_provider", None)
+            provider = self.settings.get("default_provider")
+            fallback = self.settings.get("fallback_provider")
             stream = self.settings.get("stream_output", False)
+            model = self.settings.get(f"{provider}_model")
 
             return (
                 f"Provider actual: {provider}\n"
+                f"Modelo: {model}\n"
                 f"Fallback: {fallback}\n"
-                f"Streaming: {stream}"
+                f"Streaming: {stream}\n"
+                f"Proyecto activo: {self.active_project()}"
             )
 
         if action == "set_provider":
@@ -239,17 +247,10 @@ Pregunta:
 
             provider = provider.lower().strip()
 
-            aliases = {
-                "ollana": "ollama",
-                "olama": "ollama",
-                "ollama": "ollama",
-                "gemini": "gemini"
-            }
-
+            aliases = self.settings.get("provider_aliases", {})
             provider = aliases.get(provider, provider)
-            allowed = ["ollama", "gemini"]
 
-            if provider not in allowed:
+            if provider not in self.provider_router.provider_factories:
                 return f"Provider no disponible todavía: {provider}"
 
             self.settings.set("default_provider", provider)
@@ -264,14 +265,7 @@ Pregunta:
 
             project_name = project_name.lower().strip()
 
-            aliases = {
-                "asia": "asia",
-                "pt": "pt",
-                "bolitabot": "pt",
-                "kabal": "kabal",
-                "jarvis": "jarvis"
-            }
-
+            aliases = self.settings.get("project_aliases", {})
             project_name = aliases.get(project_name, project_name)
 
             self.settings.set("active_project", project_name)
@@ -279,14 +273,11 @@ Pregunta:
             return f"Proyecto activo cambiado a: {project_name}"
 
         if action == "show_active_project":
-            project_name = self.settings.get("active_project", "asia")
-            return f"Proyecto activo: {project_name}"
+            return f"Proyecto activo: {self.active_project()}"
 
         if action == "index_project_rag":
             project_path = params.get("project_path", ".")
-            project_name = self.settings.get("active_project", "asia")
-
-            project_name = project_name.lower().strip()
+            project_name = self.active_project()
 
             return self.tool_registry.execute(
                 "index_project_rag",
@@ -296,7 +287,7 @@ Pregunta:
 
         if action == "search_project_rag":
             question = params.get("question", text)
-            project_name = self.settings.get("active_project", "asia")
+            project_name = self.active_project()
 
             rag_context = self.tool_registry.execute(
                 "search_project_rag",
@@ -334,7 +325,7 @@ Instrucciones:
             content = self.tool_registry.execute(
                 "read_file_preview",
                 file_path=file_path,
-                max_chars=8000
+                max_chars=self.limit("explain_file")
             )
 
             prompt = f"""
@@ -433,8 +424,7 @@ Instrucciones:
             content = self.tool_registry.execute(
                 "read_folder_context",
                 folder_path=folder_path,
-                max_files=30,
-                max_chars_per_file=800
+                **self.limit("map_project")
             )
 
             prompt = f"""
@@ -496,7 +486,7 @@ Instrucciones:
             content = self.tool_registry.execute(
                 "read_file_preview",
                 file_path=file_path,
-                max_chars=10000
+                max_chars=self.limit("review_file")
             )
 
             prompt = f"""
@@ -534,13 +524,13 @@ Instrucciones:
             priority_files = self.tool_registry.execute(
                 "select_project_files",
                 folder_path=folder_path,
-                max_files=15
+                max_files=self.limit("review_project_files")
             )
-            
+
             per_file_report = self.tool_registry.execute(
                 "review_project_files",
                 file_paths=priority_files,
-                max_chars=3000
+                max_chars=self.limit("review_project_file")
             )
 
             prompt = f"""
@@ -582,8 +572,7 @@ Reglas anti-alucinación:
 - Si no viste el contenido exacto de un archivo, NO propongas código para ese archivo.
 - No uses ejemplos genéricos de OpenAI, response.choices, self.client, ni chat.completions si no aparecen literalmente en el contexto.
 - Si no hay evidencia suficiente, responde "sin evidencia suficiente".
-- No digas "proyecto Asia" a menos que folder_path sea ".".
-- Si folder_path no es ".", llama al análisis "carpeta analizada".
+- No asumas el nombre del proyecto: llama al análisis "carpeta analizada".
 - No reportes bugs provenientes de herramientas de análisis salvo que el usuario pida revisar esas herramientas.
 
 Regla crítica:
@@ -828,8 +817,7 @@ Reglas estrictas de refactor:
             project_context = self.tool_registry.execute(
                 "read_folder_context",
                 folder_path=".",
-                max_files=25,
-                max_chars_per_file=800
+                **self.limit("generate_code_project")
             )
 
             target_file_content = ""
@@ -838,7 +826,7 @@ Reglas estrictas de refactor:
                 target_file_content = self.tool_registry.execute(
                     "read_file_preview",
                     file_path=target_file,
-                    max_chars=12000
+                    max_chars=self.limit("generate_code_file")
                 )
 
             prompt = f"""

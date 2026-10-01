@@ -1,6 +1,9 @@
 import ast
 from pathlib import Path
 
+from config.settings_manager import SettingsManager
+from core.paths import has_ignored_part, is_private_data
+
 
 class StaticAnalyzerTool:
     name = "static_analyzer"
@@ -81,32 +84,20 @@ class StaticAnalyzerTool:
 
         files = []
 
-        ignored_dirs = [
-            "__pycache__",
-            ".git",
-            ".venv",
-            "venv",
-            "node_modules",
-            "memory",
-            "chroma_db",
-            "backups"
-        ]
+        settings = SettingsManager()
+        ignored_dirs = settings.ignored_dirs()
+        test_dirs = settings.test_dirs()
 
-        ignored_files = [
-            "tools/static_analyzer_tool.py"
-        ]
+        # Esta misma herramienta está llena de patrones de "riesgo" a propósito.
+        this_file = Path(__file__).resolve()
 
         for file in path.rglob("*"):
 
             if not file.is_file():
                 continue
-            
-            normalized_parts = [part.lower() for part in file.parts]
 
             if reviewing_entire_project and (
-                "pruebas" in normalized_parts
-                or "test" in normalized_parts
-                or "tests" in normalized_parts
+                has_ignored_part(file, path, test_dirs)
                 or file.name.startswith("test_")
             ):
                 continue
@@ -114,12 +105,10 @@ class StaticAnalyzerTool:
             if file.suffix.lower() not in supported_extensions:
                 continue
 
-            if any(part in ignored_dirs for part in file.parts):
+            if has_ignored_part(file, path, ignored_dirs) or is_private_data(file):
                 continue
 
-            normalized = str(file).replace("\\", "/")
-
-            if normalized in ignored_files:
+            if file.resolve() == this_file:
                 continue
 
             files.append(file)

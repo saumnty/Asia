@@ -2,6 +2,8 @@ import re
 
 import chromadb
 
+from core.paths import CHROMA_DIR
+
 
 BATCH_SIZE = 1000
 
@@ -24,12 +26,12 @@ class VectorStore:
 
     def __init__(
         self,
-        persist_dir="data/chroma",
+        persist_dir=CHROMA_DIR,
         collection_name="default"
     ):
 
         self.client = chromadb.PersistentClient(
-            path=persist_dir
+            path=str(persist_dir)
         )
 
         self.collection = self.client.get_or_create_collection(

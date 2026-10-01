@@ -1,9 +1,15 @@
 from pathlib import Path
 
+from config.settings_manager import SettingsManager
+from core.paths import has_ignored_part
+
 
 class FileTool:
     def __init__(self):
+        # Carpeta desde la que se llamó a Asia: las rutas relativas que da el
+        # usuario se resuelven contra ella.
         self.base_dir = Path.cwd()
+        self.settings = SettingsManager()
 
     def create_file(self, file_path: str, content: str = ""):
         path = Path(file_path)
@@ -67,19 +73,12 @@ class FileTool:
         if not base_path.exists():
             return f"No encontré la carpeta: {base_path}"
 
-        ignored_dirs = {
-            "__pycache__",
-            ".venv",
-            ".git",
-            "node_modules",
-            ".idea",
-            ".vscode"
-        }
+        ignored_dirs = self.settings.ignored_dirs()
 
         results = []
 
         for path in base_path.rglob("*"):
-            if any(part in ignored_dirs for part in path.parts):
+            if has_ignored_part(path, base_path, ignored_dirs):
                 continue
 
             if path.is_file() and query.lower() in path.name.lower():
@@ -99,14 +98,7 @@ class FileTool:
         if not base_path.exists():
             return f"No encontré la carpeta: {base_path}"
 
-        ignored_dirs = {
-            "__pycache__",
-            ".venv",
-            ".git",
-            "node_modules",
-            ".idea",
-            ".vscode"
-        }
+        ignored_dirs = self.settings.ignored_dirs()
 
         allowed_extensions = {
             ".py", ".txt", ".md", ".json", ".yaml", ".yml",
@@ -116,7 +108,7 @@ class FileTool:
         results = []
 
         for path in base_path.rglob("*"):
-            if any(part in ignored_dirs for part in path.parts):
+            if has_ignored_part(path, base_path, ignored_dirs):
                 continue
 
             if not path.is_file():
@@ -161,14 +153,7 @@ class FileTool:
         if not base_path.exists():
             return f"No encontré la carpeta: {base_path}"
 
-        ignored_dirs = {
-            "__pycache__",
-            ".venv",
-            ".git",
-            "node_modules",
-            ".idea",
-            ".vscode"
-        }
+        ignored_dirs = self.settings.ignored_dirs()
 
         allowed_extensions = {
             ".py", ".txt", ".md", ".json", ".yaml", ".yml"
@@ -177,7 +162,7 @@ class FileTool:
         files = []
 
         for path in base_path.rglob("*"):
-            if any(part in ignored_dirs for part in path.parts):
+            if has_ignored_part(path, base_path, ignored_dirs):
                 continue
 
             if path.is_file() and path.suffix.lower() in allowed_extensions:
@@ -196,7 +181,10 @@ class FileTool:
             if len(content) > max_chars_per_file:
                 content = content[:max_chars_per_file] + "\n... [archivo recortado]"
 
-            relative_path = path.relative_to(self.base_dir)
+            try:
+                relative_path = path.relative_to(self.base_dir)
+            except ValueError:
+                relative_path = path
 
             chunks.append(
                 f"\n--- Archivo: {relative_path} ---\n{content}"

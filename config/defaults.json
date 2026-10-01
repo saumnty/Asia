@@ -1,0 +1,40 @@
+{
+    "default_provider": "ollama",
+    "fallback_provider": "ollama",
+    "stream_output": false,
+    "active_project": "asia",
+
+    "ollama_host": "http://localhost:11434",
+    "ollama_model": "qwen2.5-coder:7b",
+    "intent_model": "qwen2.5-coder:7b",
+    "embedding_model": "nomic-embed-text",
+    "embedding_timeout": 120,
+    "gemini_model": "gemini-2.5-flash",
+
+    "provider_aliases": {
+        "olama": "ollama",
+        "ollana": "ollama"
+    },
+    "project_aliases": {
+        "bolitabot": "pt"
+    },
+
+    "ignored_dirs": [
+        ".git", "__pycache__", ".venv", "venv", "env", "node_modules",
+        ".idea", ".vscode", ".pytest_cache", "backups", "chroma_db"
+    ],
+    "test_dirs": ["test", "tests", "pruebas"],
+
+    "context_limits": {
+        "summarize_file": 6000,
+        "explain_file": 8000,
+        "review_file": 10000,
+        "generate_code_file": 12000,
+        "review_project_file": 3000,
+        "review_project_files": 15,
+        "summarize_folder": {"max_files": 12, "max_chars_per_file": 1200},
+        "save_project_summary": {"max_files": 15, "max_chars_per_file": 1500},
+        "map_project": {"max_files": 30, "max_chars_per_file": 800},
+        "generate_code_project": {"max_files": 25, "max_chars_per_file": 800}
+    }
+}

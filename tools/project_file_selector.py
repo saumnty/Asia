@@ -1,21 +1,14 @@
 from pathlib import Path
 
+from config.settings_manager import SettingsManager
+from core.paths import has_ignored_part, is_private_data
+
 
 class ProjectFileSelector:
 
     def __init__(self):
 
-        self.ignored_dirs = {
-            ".git",
-            ".venv",
-            "venv",
-            "__pycache__",
-            "node_modules",
-            "memory",
-            "backups",
-            "chroma_db",
-            ".pytest_cache"
-        }
+        self.settings = SettingsManager()
 
         self.supported_extensions = {
             ".py",
@@ -79,6 +72,9 @@ class ProjectFileSelector:
 
         reviewing_entire_project = Path(folder_path).resolve() == Path(".").resolve()
 
+        ignored_dirs = self.settings.ignored_dirs()
+        test_dirs = self.settings.test_dirs()
+
         for file in root.rglob("*"):
 
             if not file.is_file():
@@ -89,19 +85,14 @@ class ProjectFileSelector:
                 for part in file.parts
             ]
 
-            if any(
-                part in self.ignored_dirs
-                for part in normalized_parts
-            ):
+            if has_ignored_part(file, root, ignored_dirs) or is_private_data(file):
                 continue
 
             # Ignorar pruebas cuando revisamos TODO el proyecto
             if reviewing_entire_project:
 
                 if (
-                    "pruebas" in normalized_parts
-                    or "test" in normalized_parts
-                    or "tests" in normalized_parts
+                    has_ignored_part(file, root, test_dirs)
                     or file.name.startswith("test_")
                 ):
                     continue

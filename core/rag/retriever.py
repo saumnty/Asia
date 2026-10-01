@@ -5,7 +5,7 @@ from core.rag.vector_store import VectorStore
 class ProjectRetriever:
     def __init__(
         self,
-        project_name="asia"
+        project_name: str
     ):
         self.embedder = OllamaEmbedder()
 

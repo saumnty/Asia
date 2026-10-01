@@ -1,9 +1,12 @@
 import ollama
 
+from config.settings_manager import SettingsManager
+
 
 class OllamaProvider:
-    def __init__(self, model="qwen2.5-coder:7b"):
-        self.model = model
+    def __init__(self):
+        self.settings = SettingsManager()
+        self.client = ollama.Client(host=self.settings.get("ollama_host"))
 
     def complete(self, messages: list[dict], on_chunk=None) -> str:
         """Envía los mensajes y devuelve la respuesta completa.
@@ -11,16 +14,20 @@ class OllamaProvider:
         Si se pasa on_chunk, la respuesta se transmite en streaming y cada
         fragmento se entrega a on_chunk a medida que llega.
         """
+        # Se lee en cada llamada para que un cambio en settings.json se
+        # aplique sin reiniciar Asia.
+        model = self.settings.get("ollama_model")
+
         if on_chunk is None:
-            response = ollama.chat(
-                model=self.model,
+            response = self.client.chat(
+                model=model,
                 messages=messages
             )
 
             return response["message"]["content"]
 
-        stream = ollama.chat(
-            model=self.model,
+        stream = self.client.chat(
+            model=model,
             messages=messages,
             stream=True
         )

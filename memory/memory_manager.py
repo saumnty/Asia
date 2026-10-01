@@ -1,15 +1,17 @@
 import json
-from pathlib import Path
+
+from core.paths import MEMORY_FILE
 
 
 class MemoryManager:
 
-    def __init__(self):
+    def __init__(self, memory_file=MEMORY_FILE):
 
-        self.memory_file = Path("memory/memory.json")
+        self.memory_file = memory_file
 
         if not self.memory_file.exists():
-            self.memory_file.write_text("{}")
+            self.memory_file.parent.mkdir(parents=True, exist_ok=True)
+            self.memory_file.write_text("{}", encoding="utf-8")
 
     def load(self):
 
