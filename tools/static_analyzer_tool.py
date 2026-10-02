@@ -14,6 +14,14 @@ class StaticAnalyzerTool:
         if not path.exists():
             return f"No existe el archivo: {file_path}"
 
+        # El análisis usa el parser de Python: en otros lenguajes reportaría
+        # un "error de sintaxis" falso que el LLM tomaría como evidencia.
+        if path.suffix.lower() != ".py":
+            return (
+                "Sin análisis estático automático para este archivo "
+                "(solo disponible para Python). No es un error del archivo."
+            )
+
         lines = path.read_text(encoding="utf-8").splitlines()
         content = "\n".join(lines)
         findings = []
@@ -123,7 +131,7 @@ class StaticAnalyzerTool:
         for file in files:
             result = self.analyze_file(str(file))
 
-            if "No se encontraron riesgos" not in result:
+            if file.suffix.lower() == ".py" and "No se encontraron riesgos" not in result:
                 report += f"\n=== {file} ===\n"
                 report += result
                 report += "\n"
