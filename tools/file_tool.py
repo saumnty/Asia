@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from config.settings_manager import SettingsManager
-from core.paths import has_ignored_part
+from core.paths import iter_files
 from tools.apply_changes_tool import ApplyChangesTool
 
 
@@ -118,11 +118,8 @@ class FileTool:
 
         results = []
 
-        for path in base_path.rglob("*"):
-            if has_ignored_part(path, base_path, ignored_dirs):
-                continue
-
-            if path.is_file() and query.lower() in path.name.lower():
+        for path in iter_files(base_path, ignored_dirs):
+            if query.lower() in path.name.lower():
                 results.append(str(path))
 
         if not results:
@@ -140,21 +137,11 @@ class FileTool:
             return f"No encontré la carpeta: {base_path}"
 
         ignored_dirs = self.settings.ignored_dirs()
-
-        allowed_extensions = {
-            ".py", ".txt", ".md", ".json", ".yaml", ".yml",
-            ".html", ".css", ".js", ".ts"
-        }
+        allowed_extensions = self.settings.text_extensions()
 
         results = []
 
-        for path in base_path.rglob("*"):
-            if has_ignored_part(path, base_path, ignored_dirs):
-                continue
-
-            if not path.is_file():
-                continue
-
+        for path in iter_files(base_path, ignored_dirs):
             if path.suffix.lower() not in allowed_extensions:
                 continue
 
@@ -195,19 +182,16 @@ class FileTool:
             return f"No encontré la carpeta: {base_path}"
 
         ignored_dirs = self.settings.ignored_dirs()
-
-        allowed_extensions = {
-            ".py", ".txt", ".md", ".json", ".yaml", ".yml"
-        }
+        allowed_extensions = self.settings.text_extensions()
 
         files = []
 
-        for path in base_path.rglob("*"):
-            if has_ignored_part(path, base_path, ignored_dirs):
-                continue
-
-            if path.is_file() and path.suffix.lower() in allowed_extensions:
+        for path in iter_files(base_path, ignored_dirs):
+            if path.suffix.lower() in allowed_extensions:
                 files.append(path)
+
+                if len(files) >= max_files:
+                    break
 
         files = files[:max_files]
 

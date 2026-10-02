@@ -20,10 +20,25 @@
     },
 
     "ignored_dirs": [
-        ".git", "__pycache__", ".venv", "venv", "env", "node_modules",
-        ".idea", ".vscode", ".pytest_cache", "backups", "chroma_db"
+        ".git", ".idea", ".vscode",
+        "__pycache__", ".venv", "venv", "env", ".pytest_cache",
+        "node_modules",
+        "target", "build", ".gradle", ".m2",
+        "bin", "obj",
+        "backups", "chroma_db"
     ],
     "test_dirs": ["test", "tests", "pruebas"],
+
+    "code_extensions": [
+        ".py", ".java", ".kt", ".js", ".jsx", ".ts", ".tsx",
+        ".c", ".cpp", ".h", ".hpp", ".cs", ".go", ".rs", ".rb", ".php",
+        ".m", ".dart", ".swift", ".sh", ".ps1", ".sql"
+    ],
+    "text_extensions": [
+        ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".xml",
+        ".gradle", ".properties", ".ini", ".cfg",
+        ".html", ".css", ".sdf", ".urdf", ".launch"
+    ],
 
     "context_limits": {
         "summarize_file": 6000,

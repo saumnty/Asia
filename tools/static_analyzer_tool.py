@@ -2,7 +2,7 @@ import ast
 from pathlib import Path
 
 from config.settings_manager import SettingsManager
-from core.paths import has_ignored_part, is_private_data
+from core.paths import has_ignored_part, is_private_data, iter_files
 
 
 class StaticAnalyzerTool:
@@ -84,12 +84,6 @@ class StaticAnalyzerTool:
         if not path.exists():
             return f"No existe la carpeta: {folder_path}"
 
-        supported_extensions = [
-            ".py", ".m", ".c", ".cpp", ".h", ".hpp",
-            ".js", ".ts", ".json", ".yaml", ".yml",
-            ".sdf", ".urdf", ".launch"
-        ]
-
         files = []
 
         settings = SettingsManager()
@@ -99,10 +93,7 @@ class StaticAnalyzerTool:
         # Esta misma herramienta está llena de patrones de "riesgo" a propósito.
         this_file = Path(__file__).resolve()
 
-        for file in path.rglob("*"):
-
-            if not file.is_file():
-                continue
+        for file in iter_files(path, ignored_dirs):
 
             if reviewing_entire_project and (
                 has_ignored_part(file, path, test_dirs)
@@ -110,10 +101,11 @@ class StaticAnalyzerTool:
             ):
                 continue
 
-            if file.suffix.lower() not in supported_extensions:
+            # Solo Python: es el único lenguaje que analyze_file sabe analizar.
+            if file.suffix.lower() != ".py":
                 continue
 
-            if has_ignored_part(file, path, ignored_dirs) or is_private_data(file):
+            if is_private_data(file):
                 continue
 
             if file.resolve() == this_file:
@@ -131,7 +123,7 @@ class StaticAnalyzerTool:
         for file in files:
             result = self.analyze_file(str(file))
 
-            if file.suffix.lower() == ".py" and "No se encontraron riesgos" not in result:
+            if "No se encontraron riesgos" not in result:
                 report += f"\n=== {file} ===\n"
                 report += result
                 report += "\n"

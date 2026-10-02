@@ -2,7 +2,7 @@ import ast
 from pathlib import Path
 
 from config.settings_manager import SettingsManager
-from core.paths import has_ignored_part, is_private_data
+from core.paths import is_private_data, iter_files
 
 
 class DeadCodeTool:
@@ -22,8 +22,8 @@ class DeadCodeTool:
 
         python_files = []
 
-        for file in root.rglob("*.py"):
-            if has_ignored_part(file, root, ignored_dirs) or is_private_data(file):
+        for file in iter_files(root, ignored_dirs):
+            if file.suffix.lower() != ".py" or is_private_data(file):
                 continue
 
             python_files.append(file)

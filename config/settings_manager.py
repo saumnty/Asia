@@ -54,6 +54,15 @@ class SettingsManager:
     def test_dirs(self) -> set[str]:
         return {name.lower() for name in self.get("test_dirs", [])}
 
+    def code_extensions(self) -> set[str]:
+        return {ext.lower() for ext in self.get("code_extensions", [])}
+
+    def text_extensions(self) -> set[str]:
+        """Extensiones que Asia puede leer, buscar e indexar: código y texto."""
+        return self.code_extensions() | {
+            ext.lower() for ext in self.get("text_extensions", [])
+        }
+
     def set(self, key, value):
         data = read_json(self.path)
 

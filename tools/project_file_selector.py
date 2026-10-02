@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from config.settings_manager import SettingsManager
-from core.paths import has_ignored_part, is_private_data
+from core.paths import has_ignored_part, is_private_data, iter_files
 
 
 class ProjectFileSelector:
@@ -9,26 +9,6 @@ class ProjectFileSelector:
     def __init__(self):
 
         self.settings = SettingsManager()
-
-        self.supported_extensions = {
-            ".py",
-            ".js",
-            ".ts",
-            ".java",
-            ".c",
-            ".cpp",
-            ".h",
-            ".hpp",
-            ".m",
-            ".dart",
-            ".yaml",
-            ".yml",
-            ".json",
-            ".sdf",
-            ".urdf",
-            ".launch",
-            ".sh"
-        }
 
         self.priority_names = {
             "main.py",
@@ -74,18 +54,19 @@ class ProjectFileSelector:
 
         ignored_dirs = self.settings.ignored_dirs()
         test_dirs = self.settings.test_dirs()
+        # Las mismas extensiones que search_text y read_folder_context: todo
+        # lo que se selecciona para revisar también se puede buscar y leer.
+        supported_extensions = self.settings.text_extensions()
+        code_extensions = self.settings.code_extensions()
 
-        for file in root.rglob("*"):
-
-            if not file.is_file():
-                continue
+        for file in iter_files(root, ignored_dirs):
 
             normalized_parts = [
                 part.lower()
                 for part in file.parts
             ]
 
-            if has_ignored_part(file, root, ignored_dirs) or is_private_data(file):
+            if is_private_data(file):
                 continue
 
             # Ignorar pruebas cuando revisamos TODO el proyecto
@@ -98,7 +79,7 @@ class ProjectFileSelector:
                     continue
 
             if (
-                file.suffix.lower() not in self.supported_extensions
+                file.suffix.lower() not in supported_extensions
                 and file.name not in self.priority_names
             ):
                 continue
@@ -117,16 +98,7 @@ class ProjectFileSelector:
                 score += 30
 
             # Código fuente
-            if file.suffix.lower() in {
-                ".py",
-                ".js",
-                ".ts",
-                ".java",
-                ".c",
-                ".cpp",
-                ".m",
-                ".dart"
-            }:
+            if file.suffix.lower() in code_extensions:
                 score += 20
 
             # Penalizar tests (si no fueron excluidos)

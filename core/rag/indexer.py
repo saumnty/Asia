@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from config.settings_manager import SettingsManager
-from core.paths import has_ignored_part
+from core.paths import has_ignored_part, iter_files
 from core.rag.embedder import OllamaEmbedder
 from core.rag.vector_store import VectorStore
 
@@ -13,11 +13,9 @@ class ProjectIndexer:
         self.project_path = Path(project_path).resolve()
         self.embedder = OllamaEmbedder()
 
-        self.allowed_extensions = {
-            ".py", ".md", ".txt", ".json", ".yaml", ".yml", ".toml"
-        }
-
-        self.ignored_dirs = SettingsManager().ignored_dirs(include_tests=True)
+        settings = SettingsManager()
+        self.allowed_extensions = settings.text_extensions()
+        self.ignored_dirs = settings.ignored_dirs(include_tests=True)
 
         self.store = VectorStore(
             collection_name=project_name
@@ -46,10 +44,7 @@ class ProjectIndexer:
         embeddings = []
         metadatas = []
 
-        for file_path in self.project_path.rglob("*"):
-            if not file_path.is_file():
-                continue
-
+        for file_path in iter_files(self.project_path, self.ignored_dirs):
             if not self.should_index(file_path):
                 continue
 
