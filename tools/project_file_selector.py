@@ -52,7 +52,12 @@ class ProjectFileSelector:
 
         reviewing_entire_project = Path(folder_path).resolve() == Path(".").resolve()
 
-        ignored_dirs = self.settings.ignored_dirs()
+        # review_ignored_dirs: carpetas de herramientas (.github, ...) que no
+        # son código del proyecto. Solo se excluyen al elegir qué revisar; si
+        # se pide revisar esa carpeta directamente, es la raíz y sí se recorre.
+        ignored_dirs = self.settings.ignored_dirs() | {
+            name.lower() for name in self.settings.get("review_ignored_dirs", [])
+        }
         test_dirs = self.settings.test_dirs()
         # Las mismas extensiones que search_text y read_folder_context: todo
         # lo que se selecciona para revisar también se puede buscar y leer.

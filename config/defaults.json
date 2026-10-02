@@ -29,6 +29,7 @@
         "backups", "chroma_db"
     ],
     "test_dirs": ["test", "tests", "pruebas"],
+    "review_ignored_dirs": [".github", ".devcontainer"],
 
     "code_extensions": [
         ".py", ".java", ".kt", ".js", ".jsx", ".ts", ".tsx",
