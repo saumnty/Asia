@@ -2,20 +2,44 @@ from pathlib import Path
 
 from config.settings_manager import SettingsManager
 from core.paths import has_ignored_part
+from tools.apply_changes_tool import ApplyChangesTool
 
 
 class FileTool:
-    def __init__(self):
+    def __init__(self, apply_changes_tool=None):
         # Carpeta desde la que se llamó a Asia: las rutas relativas que da el
         # usuario se resuelven contra ella.
         self.base_dir = Path.cwd()
         self.settings = SettingsManager()
+        self.apply_changes_tool = apply_changes_tool or ApplyChangesTool()
+
+    def is_inside_base_dir(self, path: Path) -> bool:
+        return path.resolve().is_relative_to(self.base_dir.resolve())
+
+    def propose_write(self, path: Path, new_content: str, reason: str):
+        """Deja la escritura como cambio pendiente ("confirmar cambio")."""
+        diff_message = self.apply_changes_tool.propose_change(
+            file_path=str(path),
+            new_content=new_content
+        )
+
+        return f"{reason}\n{diff_message}"
 
     def create_file(self, file_path: str, content: str = ""):
         path = Path(file_path)
 
         if not path.is_absolute():
             path = self.base_dir / path
+
+        # Las rutas las decide el LLM: fuera de la carpeta del usuario solo
+        # se escribe después de una confirmación explícita.
+        if not self.is_inside_base_dir(path):
+            return self.propose_write(
+                path,
+                content,
+                f"{path.resolve()} está fuera de la carpeta actual "
+                f"({self.base_dir}). No lo escribiré sin confirmación."
+            )
 
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
@@ -58,6 +82,16 @@ class FileTool:
 
         if not path.exists():
             return f"No encontré el archivo: {path}"
+
+        if not self.is_inside_base_dir(path):
+            old_content = path.read_text(encoding="utf-8")
+
+            return self.propose_write(
+                path,
+                old_content + "\n" + content,
+                f"{path.resolve()} está fuera de la carpeta actual "
+                f"({self.base_dir}). No lo modificaré sin confirmación."
+            )
 
         with open(path, "a", encoding="utf-8") as f:
             f.write("\n" + content)

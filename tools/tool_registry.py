@@ -15,9 +15,11 @@ class ToolRegistry:
     def __init__(self, provider_router=None):
 
         self.app_tool = AppTool()
-        self.file_tool = FileTool()
-        self.rag_tool = RagTool()
         self.apply_changes_tool = ApplyChangesTool()
+        # Comparten el cambio pendiente: "confirmar cambio" aplica también
+        # las escrituras que FileTool deja pendientes.
+        self.file_tool = FileTool(self.apply_changes_tool)
+        self.rag_tool = RagTool()
         self.debug_agent_tool = DebugAgentTool(self, provider_router)
         self.static_analyzer_tool = StaticAnalyzerTool()
         self.project_file_selector = ProjectFileSelector()
