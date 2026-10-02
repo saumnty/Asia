@@ -3,6 +3,7 @@ import re
 import ollama
 
 from config.settings_manager import SettingsManager
+from providers.ollama_provider import ollama_options
 
 
 class IntentEngine:
@@ -369,16 +370,16 @@ Usuario: limpia pruebas/buggy_calculator.py
 
         # Si Ollama no responde, se trata como chat: el provider configurado
         # (que puede no ser Ollama) contestará o mostrará el error.
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": text}
+        ]
+
         try:
             response = self.client.chat(
                 model=self.settings.get("intent_model"),
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": text}
-                ],
-                options={
-                    "temperature": 0
-                }
+                messages=messages,
+                options=ollama_options(self.settings, messages, temperature=0)
             )
         except Exception:
             return {"action": "chat", "params": {}}
