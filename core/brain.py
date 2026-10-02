@@ -600,8 +600,8 @@ Reglas anti-alucinación:
 - No reportes bugs provenientes de herramientas de análisis salvo que el usuario pida revisar esas herramientas.
 
 Regla crítica:
-- Solo puedes mencionar archivos presentes en ARCHIVO SELECCIONADO.
-- No menciones archivos de test, pruebas o examples si no aparecen en ARCHIVO SELECCIONADO.
+- Solo puedes mencionar archivos presentes en "Archivos realmente seleccionados y leídos".
+- No menciones archivos de test, pruebas o examples si no aparecen en "Archivos realmente seleccionados y leídos".
 - No uses ejemplos de buggy_calculator.py salvo que ese archivo haya sido seleccionado explícitamente.
 - El reporte final solo puede usar evidencia que venga de "Reportes individuales por archivo".
 - No mezcles evidencia entre archivos.
