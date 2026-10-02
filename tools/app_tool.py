@@ -1,8 +1,37 @@
 import json
+import os
+import re
+import shutil
 import subprocess
 
 from core.paths import APPS_FILE
 from tools.app_resolver import find_start_app
+
+
+# "explorer.exe shell:AppsFolder\<AppID>" (o solo "shell:AppsFolder\<AppID>").
+APPS_FOLDER_PATTERN = re.compile(
+    r"^\s*(?:explorer(?:\.exe)?\s+)?shell:AppsFolder\\(?P<app_id>\S+)\s*$",
+    re.IGNORECASE
+)
+
+
+def launch(entry: str):
+    """Abre una entrada de apps.json sin pasar por un shell.
+
+    Así ningún carácter del texto (&, |, ;) se interpreta como otro comando.
+    """
+    match = APPS_FOLDER_PATTERN.match(entry)
+
+    if match:
+        subprocess.Popen([
+            "explorer.exe",
+            f"shell:AppsFolder\\{match.group('app_id')}"
+        ])
+        return
+
+    # Nombre de programa ("chrome", "code") o ruta: Windows lo resuelve por
+    # PATH o por "App Paths", sin interpretar el texto como un comando.
+    os.startfile(shutil.which(entry) or entry)
 
 
 class AppTool:
@@ -23,6 +52,14 @@ class AppTool:
             json.dump(apps, f, ensure_ascii=False, indent=4)
 
     def open_app(self, app_name: str):
+        """Abre una app de apps.json o del menú Inicio (Get-StartApps).
+
+        El nombre lo extrae el LLM, así que nunca se ejecuta como comando:
+        si no corresponde a una app conocida, no se abre nada.
+        """
+        if not isinstance(app_name, str) or not app_name.strip():
+            return "No encontré qué aplicación abrir."
+
         apps = self.load_apps()
         app_key = app_name.lower().strip()
 
@@ -32,15 +69,18 @@ class AppTool:
             found = find_start_app(app_key)
 
             if found:
-                command = found["command"]
+                command = f"explorer.exe shell:AppsFolder\\{found['appid']}"
                 apps[app_key] = command
                 self.save_apps(apps)
 
         if not command:
-            command = app_key
+            return (
+                f"No encontré la aplicación '{app_name}'. "
+                f"Puedes agregarla en config/apps.json."
+            )
 
         try:
-            subprocess.Popen(command, shell=True)
+            launch(command)
             return f"Abriendo {app_name}."
         except Exception as e:
             return f"No pude abrir {app_name}. Error: {e}"
