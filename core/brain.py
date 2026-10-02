@@ -4,8 +4,32 @@ from tools.tool_registry import ToolRegistry
 from providers.provider_router import ProviderRouter
 from memory.project_memory import ProjectMemory
 from config.settings_manager import SettingsManager
+from core.paths import PROJECT_ROOT
 from pathlib import Path
+import os
 import re
+
+
+# Archivos de Asia que generate_code nunca propone reescribir.
+PROTECTED_FILES = [
+    PROJECT_ROOT / "core" / "brain.py",
+    PROJECT_ROOT / "core" / "intent_engine.py",
+    PROJECT_ROOT / "tools" / "tool_registry.py",
+]
+
+
+def normalized_path(path) -> str:
+    # normcase: en Windows "CORE\Brain.py" y "core/brain.py" son el mismo archivo.
+    return os.path.normcase(str(Path(path).resolve()))
+
+
+def is_protected_file(file_path: str) -> bool:
+    """Compara rutas resueltas, no texto: "./core/brain.py", "core\\brain.py"
+    o la ruta absoluta apuntan al mismo archivo protegido. Un core/brain.py de
+    otro proyecto (otra carpeta actual) no está protegido.
+    """
+    target = normalized_path(file_path)
+    return any(target == normalized_path(protected) for protected in PROTECTED_FILES)
 
 
 def parse_code_response(response):
@@ -924,13 +948,7 @@ IMPORTANTE:
             if not file_path or not code:
                 return f"Faltan datos para proponer el cambio.\n\nRespuesta recibida:\n{response}"
             
-            protected_files = [
-                "core/brain.py",
-                "core/intent_engine.py",
-                "tools/tool_registry.py",
-            ]
-
-            if file_path in protected_files:
+            if is_protected_file(file_path):
                 return f"""
             Asia generó un cambio para un archivo protegido:
 
