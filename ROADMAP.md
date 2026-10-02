@@ -12,6 +12,7 @@ para poder revisar o revertir los cambios.
 | — | El analizador estático solo aplica el parser de Python a `.py`. | `d432d338` |
 | 3. Seguridad | `open_app` sin `shell=True` ni texto libre; escritura fuera de la carpeta actual y `create_file` sobre archivos existentes pasan por "confirmar cambio"; archivos protegidos comparados por ruta resuelta. | `aaef0db5`, `1bf8ff24`, `b6e9c7dc`, `69ebf064` |
 | — | Proyectos no Python: carpetas de build/IDE ignoradas sin recorrerlas (`target`, `build`, `.gradle`, `.m2`, `bin`, `obj`…) y una sola lista de extensiones para seleccionar, buscar, leer e indexar. | `946c1443` |
+| — | Ventana de contexto de Ollama configurable (`ollama_num_ctx`, 16384) y aviso cuando un prompt no cabe. Antes se recortaban en silencio la síntesis de `review_project` y `generate_code` (ver "Alucinación en revisiones largas"). | `0b5b5c61` |
 
 ## Próximas fases
 
@@ -68,14 +69,20 @@ Dos colecciones nuevas en ChromaDB, separadas de las de proyectos. Usar un prefi
 - *Antes de `d432d338` (confirmado):* reportes de "línea 1 vacía / error de sintaxis" en archivos Java de `practica2`. Causa: el analizador estático aplicaba el parser de Python a `.java` y el LLM tomaba ese error como evidencia. Corregido.
 - *Observado por el usuario, sin registro:* `EstadoTicket.java` reportado como vacío aunque `read_file_preview` entregaba el contenido completo. Sin marca de tiempo para saber si fue antes o después del fix. Si se repite con el fix aplicado, se atribuye a pérdida de coherencia del modelo (`qwen2.5-coder:7b`) en revisiones largas.
 
-**Hipótesis a verificar antes de diseñar:**
-- Desde la fase 1, cada revisión por archivo es una llamada independiente (`ProviderRouter.ask`, sin historial), así que no hay "memoria" que se degrade entre archivos.
-- El prompt final de `review_project` concatena todos los reportes por archivo y puede superar la ventana de contexto que Ollama usa por defecto (`num_ctx`). Si es así, Ollama recorta el prompt **sin avisar** y el modelo trabaja con información parcial. Comprobarlo midiendo los tokens del prompt y probando con `num_ctx` explícito en `options`.
+- *Confirmado (recorte de contexto):* la síntesis de `review_project` afirmó que `asignar()`, `cerrar()` y `cancelar()` de `SistemaDeTickets.java` "no realizan validaciones necesarias", aunque los tres validan sus parámetros con `IllegalArgumentException`. Datos:
+  - El archivo tiene 2798 caracteres, por debajo del corte de 3000 de `review_project_file`: el modelo lo vio entero.
+  - La revisión individual de ese archivo (895 tokens, sin recorte) fue precisa: reconoce las validaciones de `null` y señala lo que sí falta. `asignar()` y `cerrar()` no comprueban el estado actual del ticket, y `cancelar()` nunca llama a `Ticket.cancelado()` ni a `repo.actualizar()`.
+  - Ollama cargaba el modelo con `num_ctx=4096` (`ollama ps`). La síntesis medía 4628–4770 tokens y Ollama la recortó a 2050, descartando el principio: el encabezado y la mayoría de los reportes por archivo (log: `truncating input prompt limit=2050 prompt=4770 keep=4 new=2050`). La frase vaga salió de una síntesis hecha con el 43% de la evidencia.
+  - `generate_code` sufría lo mismo (4114 tokens → 2050), perdiendo la petición del usuario y el archivo objetivo.
+  - Corregido en `0b5b5c61`: `ollama_num_ctx=16384` y aviso cuando un prompt no cabe. Con ese valor, los cuatro prompts medidos (síntesis, `generate_code`, `map_project`, IntentEngine) se procesan completos.
 
-**Opciones a evaluar:**
-- Procesar en lotes más pequeños (p. ej. 5 archivos por síntesis) y combinar los resúmenes.
-- Exponer un modo explícito "archivo por archivo" para revisiones críticas, sin síntesis final.
-- Configurar `num_ctx` según el tamaño del prompt.
+**Contexto:** desde la fase 1, cada revisión por archivo es una llamada independiente (`ProviderRouter.ask`, sin historial), así que no hay "memoria" que se degrade entre archivos. La degradación observada venía del recorte de la síntesis, no de revisar muchos archivos seguidos.
+
+**Opciones pendientes (mitigación secundaria, ahora que la síntesis recibe la entrada completa):**
+- Volver a evaluar la calidad de la síntesis con `num_ctx=16384` antes de rediseñar.
+- Si la síntesis sigue siendo vaga: procesar en lotes (p. ej. 5 archivos por síntesis) o pedir que cite literalmente el hallazgo de cada reporte.
+- Exponer un modo explícito "archivo por archivo" para revisiones críticas, sin síntesis final: los reportes individuales resultaron los más precisos.
+- Proyectos más grandes que `practica2` pueden volver a superar 16384 tokens en la síntesis (unos 30 reportes). El aviso por stderr lo detecta; si pasa seguido, los lotes dejan de ser opcionales.
 
 ### CLI enriquecida
 
