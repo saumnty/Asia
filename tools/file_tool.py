@@ -41,6 +41,13 @@ class FileTool:
                 f"({self.base_dir}). No lo escribiré sin confirmación."
             )
 
+        if path.exists():
+            return self.propose_write(
+                path,
+                content,
+                f"{path} ya existe. No lo sobrescribiré sin confirmación."
+            )
+
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
 
