@@ -17,6 +17,7 @@ para poder revisar o revertir los cambios.
 | 4. Limpieza | Borrados los archivos vacíos, `core/llm.py` y `core/utils/text_cleaner.py` (queda `text_utils.clean_text`). `review_project` ya no calcula `static_report`. `requirements.txt` con 4 paquetes; `pytest` en `requirements-dev.txt`. `test/` pasa a pytest con carpetas temporales; los scripts que usan Ollama o Gemini quedan en `test/manual/`. Copia vieja archivada en `C:\Projects\JARVIS-IA-main\Asia-archivo.zip` (la carpeta sigue sin borrar). | `254dc3cd` |
 | — | `review_project` sin síntesis: devuelve los reportes por archivo sin llamar al LLM si el mensaje dice "sin síntesis"/"por archivo", si el IntentEngine manda `synthesis: false` o con `review_project_synthesis: false` en config (default `true`). `smart_refactor` rechaza los archivos protegidos antes de llamar al LLM. | `284c1bdc` |
 | B2. Hallazgos falsos | `review_file_deep` y `review_project_files`: cada hallazgo con línea, cita y claim; la cita se verifica sin LLM, se corrige la línea y se descartan citas inexistentes y repetidos. Solo se muestra "VERIFICADO (cita encontrada)", salvo que se pida "muestra todo". `analyze_static` sale de esos prompts. `ollama_temperature`/`ollama_repeat_penalty` solo en revisiones. Banco de calidad en `test/manual/` (ver "Alucinación en revisiones largas"). | `b4b288c3`, `65b68774`, `be698d1a` |
+| B3. Truncado determinista | La etiqueta pasa a "Citas encontradas en el archivo (análisis del modelo, no verificado)". `tools/write_safety.py`: regla con `ast`, sin LLM, que avisa si un script lee un archivo y luego lo abre con `"w"` sin respaldo ni temporal; va en la sección "Detección automática". Caso negativo `guardar_seguro.py` en el banco. | `46469f71`, `eae58942` |
 
 ## Próximas fases
 
@@ -92,6 +93,21 @@ Dos colecciones nuevas en ChromaDB, separadas de las de proyectos. Usar un prefi
   | `archivo` | 0,00 (0/14) → 0,00 (0/6) | 0,00 (0/9) → 0,00 (0/9) | 10 → 1 |
 
   Conclusión: los falsos conocidos casi desaparecen, pero el truncado no se detectó en ninguna corrida y la mayoría de lo reportado sigue siendo especulativo (excepciones de `loadarff` "no capturadas" que sí están dentro del `try`, límites de memoria). Los ejemplos negativos del prompt salen de los mismos casos del banco, así que la baja de falsos conocidos es en parte por construcción. Con la verificación de citas solo se filtran citas inventadas: un claim falso con cita real pasa.
+
+  *B3, regla determinista de truncado* (3 corridas × 3 casos; el caso nuevo `guardar_seguro.py` no tiene bugs reales esperados):
+
+  | Modo | Parte | Precisión | Recall |
+  |---|---|---|---|
+  | `deep` | total | 0,30 (10/33) | 1,00 (9/9) |
+  | `deep` | modelo | 0,15 (4/27) | 0,33 (3/9) |
+  | `deep` | automática | 1,00 (6/6) | 0,67 (6/9) |
+  | `archivo` | total | 0,41 (7/17) | 0,78 (7/9) |
+  | `archivo` | modelo | 0,09 (1/11) | 0,11 (1/9) |
+  | `archivo` | automática | 1,00 (6/6) | 0,67 (6/9) |
+
+  La regla detecta el truncado en las 12 revisiones de `moda.py`/`eliminar.py` y no avisa en ninguna de las 6 de `guardar_seguro.py`. El modelo sigue sin detectar el truncado por su cuenta; lo que aporta es la columna con todos los valores faltantes de `moda.py` (en `deep`, 3 de 3). El prompt del modelo no cambió en B3: la diferencia en sus números frente a B2 es variación entre corridas. Recall 0,67 de la regla = 6 de los 9 reales esperados; los 3 restantes son `moda_vacia`, que no es de escritura.
+
+  La misma regla marca dos archivos de Asia: `memory/memory_manager.py:23` (`save`) y `config/settings_manager.py:73` (`set`) leen el JSON y lo reescriben con `"w"`. Un fallo a medias dejaría `memory.json` o `settings.json` vacíos. Pendiente.
 
   Hallazgo de la evaluación: con "si no hay problemas responde solo SIN_HALLAZGOS" al final del prompt, el modelo respondía eso el 100% de las veces (16/16, con y sin ejemplos ni temperatura). Pedir un análisis previo lo evita. También ignora el formato de bloques y escribe listas markdown; el parser acepta ambos.
 
