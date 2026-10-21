@@ -539,12 +539,6 @@ Instrucciones:
 
             folder_path = params.get("folder_path", ".")
 
-            static_report = self.tool_registry.execute(
-                "analyze_folder_static",
-                folder_path=folder_path,
-                max_files=40
-            )
-
             priority_files = self.tool_registry.execute(
                 "select_project_files",
                 folder_path=folder_path,

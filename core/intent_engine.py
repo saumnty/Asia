@@ -316,8 +316,8 @@ Usuario: cancelar cambio
 Usuario: muestra el cambio pendiente
 {"action":"show_pending_change","params":{}}
 
-Usuario: corrige core/utils/text_cleaner.py para que ya no tenga errores
-{"action":"generate_code","params":{"request":"corrige core/utils/text_cleaner.py para que ya no tenga errores"}}
+Usuario: corrige core/utils/text_utils.py para que ya no tenga errores
+{"action":"generate_code","params":{"request":"corrige core/utils/text_utils.py para que ya no tenga errores"}}
 
 Usuario: arregla tools/file_tool.py
 {"action":"generate_code","params":{"request":"arregla tools/file_tool.py"}}
