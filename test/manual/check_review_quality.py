@@ -163,13 +163,25 @@ def main():
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--modo", choices=["deep", "archivo", "ambos"], default="ambos")
     parser.add_argument("--out", type=Path, help="carpeta para respuestas y métricas")
+    parser.add_argument(
+        "--rescore", type=Path,
+        help="recalifica los reportes guardados en esa carpeta (de un --out anterior) sin llamar a Ollama",
+    )
     args = parser.parse_args()
 
-    settings = SettingsManager()
-    registry = ToolRegistry(ProviderRouter())
     modes = ["deep", "archivo"] if args.modo == "ambos" else [args.modo]
     cases = sorted(p for p in CASES_DIR.glob("*.py"))
     runs = []
+
+    if args.rescore:
+        def get_report(mode, case, run):
+            return (args.rescore / f"{mode}_{case.stem}_{run}.txt").read_text(encoding="utf-8")
+    else:
+        settings = SettingsManager()
+        registry = ToolRegistry(ProviderRouter())
+
+        def get_report(mode, case, run):
+            return run_review(registry, settings, mode, case)
 
     if args.out:
         args.out.mkdir(parents=True, exist_ok=True)
@@ -179,7 +191,7 @@ def main():
             truth = load_truth(case.name)
 
             for run in range(1, args.runs + 1):
-                report = run_review(registry, settings, mode, case)
+                report = get_report(mode, case, run)
                 result = score(extract_findings(report), truth)
                 result.update({"modo": mode, "caso": case.name, "corrida": run})
                 runs.append(result)

@@ -6,12 +6,12 @@
             {
                 "id": "truncado",
                 "descripcion": "open(nombre_archivo, \"w\") trunca el original antes de escribir; un fallo a medias lo deja vacío o corrupto y el except solo imprime.",
+                "_nota": "'corrupto' solo no basta: el modelo dice 'si el .arff está corrupto, loadarff falla', que es otra cosa. Hace falta truncado, escritura a medias o la línea del open con 'w'.",
                 "patrones": [
-                    "trunc", "corrup", "corromp", "atomic", "tempfile",
-                    "archivo temporal", "os\\.replace", "a medias", "incomplet",
+                    "trunc", "atomic", "tempfile", "archivo temporal", "os\\.replace",
                     "respaldo", "backup", "copia de seguridad",
-                    "(perd|pierd)\\w*\\s+(\\w+\\s+){0,3}(datos|contenido|archivo|original)",
-                    "(datos|contenido|archivo)\\s+original\\w*\\s+(\\w+\\s+){0,2}(perd|pierd)"
+                    "open\\(nombre_archivo, \"w\".{0,300}(corrup|corromp|vaci|perd|pierd|incomplet|a medias|interrump)",
+                    "(sobrescrib|escritura|escribir).{0,150}(corrup|corromp|perd|pierd|incomplet|a medias|interrump)"
                 ]
             }
         ],
