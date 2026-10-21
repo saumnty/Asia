@@ -14,18 +14,9 @@ para poder revisar o revertir los cambios.
 | — | Proyectos no Python: carpetas de build/IDE ignoradas sin recorrerlas (`target`, `build`, `.gradle`, `.m2`, `bin`, `obj`…) y una sola lista de extensiones para seleccionar, buscar, leer e indexar. | `946c1443` |
 | — | Ventana de contexto de Ollama configurable (`ollama_num_ctx`, 16384) y aviso cuando un prompt no cabe. Antes se recortaban en silencio la síntesis de `review_project` y `generate_code` (ver "Alucinación en revisiones largas"). | `0b5b5c61` |
 | — | `review_project`: excluye carpetas de herramientas (`.github`) al seleccionar y corrige reglas del prompt de síntesis que apuntaban a secciones inexistentes. | `985e02ec`, `f3c0eb9a` |
+| 4. Limpieza | Borrados los archivos vacíos, `core/llm.py` y `core/utils/text_cleaner.py` (queda `text_utils.clean_text`). `review_project` ya no calcula `static_report`. `requirements.txt` con 4 paquetes; `pytest` en `requirements-dev.txt`. `test/` pasa a pytest con carpetas temporales; los scripts que usan Ollama o Gemini quedan en `test/manual/`. Copia vieja archivada en `C:\Projects\JARVIS-IA-main\Asia-archivo.zip` (la carpeta sigue sin borrar). | `254dc3cd` |
 
 ## Próximas fases
-
-### Fase 4: Limpieza
-
-- Borrar archivos vacíos: `core/router.py`, `core/state.py`, `interfaces/cli.py`, `interfaces/gui.py`, `server/server.py`, `providers/openai_provider.py`, `memory/pending_change.py`, `memory/preferences.json` (JSON inválido).
-- Borrar `core/llm.py` (sin uso; tiene el modelo escrito a mano).
-- Unificar `core/utils/text_cleaner.py` y `core/utils/text_utils.py` (misma función `clean_text`, comportamientos distintos).
-- `review_project` calcula `static_report` y no lo usa.
-- `requirements.txt`: reducir los 170 paquetes heredados a los que usa el código (`ollama`, `chromadb`, `requests`, `google-genai`).
-- Convertir `test/` en tests de `pytest` con carpetas temporales. Hoy `test_memory.py` y `test_project_memory.py` escriben en la memoria real (el segundo sobrescribe `memory/projects/asia.md`).
-- Archivar la copia vieja en `C:\Projects\JARVIS-IA-main\Asia` (ya no la usa `C:\Tools\jarvis.bat`).
 
 ### Fase 5: Refactor de Brain
 
@@ -42,7 +33,7 @@ para poder revisar o revertir los cambios.
 
 **Objetivo:** usar varios modelos de Ollama según la naturaleza del prompt. Por ejemplo, `qwen2.5-coder:7b` para código, un modelo de razonamiento destilado (tipo `deepseek-r1`) para matemáticas/física y un generalista para conversación e inglés.
 
-**Punto de partida:** desde la fase 2 los modelos ya no están en el código: `ollama_model`, `intent_model` y `embedding_model` viven en `config/defaults.json`. Queda `core/llm.py` (sin uso, se elimina en la fase 4).
+**Punto de partida:** desde la fase 2 los modelos ya no están en el código: `ollama_model`, `intent_model` y `embedding_model` viven en `config/defaults.json`.
 
 **Qué falta:**
 - Parametrizar el modelo por llamada: `OllamaProvider.complete(messages, model=...)` y `ProviderRouter.ask/chat(..., model=...)`, con el valor de config como default.
