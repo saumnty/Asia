@@ -16,6 +16,7 @@ para poder revisar o revertir los cambios.
 | — | `review_project`: excluye carpetas de herramientas (`.github`) al seleccionar y corrige reglas del prompt de síntesis que apuntaban a secciones inexistentes. | `985e02ec`, `f3c0eb9a` |
 | 4. Limpieza | Borrados los archivos vacíos, `core/llm.py` y `core/utils/text_cleaner.py` (queda `text_utils.clean_text`). `review_project` ya no calcula `static_report`. `requirements.txt` con 4 paquetes; `pytest` en `requirements-dev.txt`. `test/` pasa a pytest con carpetas temporales; los scripts que usan Ollama o Gemini quedan en `test/manual/`. Copia vieja archivada en `C:\Projects\JARVIS-IA-main\Asia-archivo.zip` (la carpeta sigue sin borrar). | `254dc3cd` |
 | — | `review_project` sin síntesis: devuelve los reportes por archivo sin llamar al LLM si el mensaje dice "sin síntesis"/"por archivo", si el IntentEngine manda `synthesis: false` o con `review_project_synthesis: false` en config (default `true`). `smart_refactor` rechaza los archivos protegidos antes de llamar al LLM. | `284c1bdc` |
+| B2. Hallazgos falsos | `review_file_deep` y `review_project_files`: cada hallazgo con línea, cita y claim; la cita se verifica sin LLM, se corrige la línea y se descartan citas inexistentes y repetidos. Solo se muestra "VERIFICADO (cita encontrada)", salvo que se pida "muestra todo". `analyze_static` sale de esos prompts. `ollama_temperature`/`ollama_repeat_penalty` solo en revisiones. Banco de calidad en `test/manual/` (ver "Alucinación en revisiones largas"). | `b4b288c3`, `65b68774`, `be698d1a` |
 
 ## Próximas fases
 
@@ -80,6 +81,19 @@ Dos colecciones nuevas en ChromaDB, separadas de las de proyectos. Usar un prefi
   - cerró con "los hallazgos son confirmados por evidencia".
 
   Conclusión: con la entrada completa, `qwen2.5-coder:7b` elige mal qué hallazgos importan y mezcla conocimiento genérico que no aplica. Ya no es un problema de contexto, sino de la capacidad del modelo para sintetizar.
+
+- *Confirmado (B2, `moda.py` y `eliminar.py` de practica6):* hallazgos falsos (`KeyError` imposibles), repetidos, líneas incorrectas y "CONFIRMED" sobre hipótesis; omitió el bug real (`open(..., "w")` trunca el original y un fallo a medias lo deja corrupto). Parte venía de Asia: `analyze_static` marcaba cada `df[col]` como "posible índice fuera de rango" (9 veces en `moda.py`, la línea 25 cuatro) y el prompt de `review_file_deep` obligaba a copiarlo.
+
+  Banco: `test/manual/check_review_quality.py` (verdad conocida en `test/manual/casos/verdad.json`; `--rescore` recalifica sin Ollama). 3 corridas × 2 casos, 3 bugs reales esperados por corrida:
+
+  | Modo | Precisión antes → después | Recall antes → después | Falsos conocidos |
+  |---|---|---|---|
+  | `deep` | 0,06 (1/16) → 0,09 (2/23) | 0,11 (1/9) → 0,22 (2/9) | 9 → 1 |
+  | `archivo` | 0,00 (0/14) → 0,00 (0/6) | 0,00 (0/9) → 0,00 (0/9) | 10 → 1 |
+
+  Conclusión: los falsos conocidos casi desaparecen, pero el truncado no se detectó en ninguna corrida y la mayoría de lo reportado sigue siendo especulativo (excepciones de `loadarff` "no capturadas" que sí están dentro del `try`, límites de memoria). Los ejemplos negativos del prompt salen de los mismos casos del banco, así que la baja de falsos conocidos es en parte por construcción. Con la verificación de citas solo se filtran citas inventadas: un claim falso con cita real pasa.
+
+  Hallazgo de la evaluación: con "si no hay problemas responde solo SIN_HALLAZGOS" al final del prompt, el modelo respondía eso el 100% de las veces (16/16, con y sin ejemplos ni temperatura). Pedir un análisis previo lo evita. También ignora el formato de bloques y escribe listas markdown; el parser acepta ambos.
 
 **Corregido durante esa evaluación** (causas que no eran del modelo):
 - `985e02ec`: los scripts de `.github/` entraban en la selección desde que se unificaron las extensiones, y empataban en prioridad con el código. Ahora `review_ignored_dirs` los excluye al elegir qué revisar.
