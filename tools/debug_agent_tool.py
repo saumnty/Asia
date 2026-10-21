@@ -1,6 +1,9 @@
 from pathlib import Path
 
 from tools.review_findings import FINDING_FORMAT, HONESTY_RULES, numbered, render_report
+from tools.write_safety import find_truncating_rewrites
+
+TRUNCATED_PREVIEW_MARK = "... [archivo recortado]"
 
 
 class DebugAgentTool:
@@ -113,7 +116,24 @@ Busca especialmente:
 
         response = self.provider_router.ask(prompt, review=True)
 
-        return render_report(file_path, response, content, show_unverified)
+        return render_report(
+            file_path, response, content, show_unverified,
+            auto_findings=self.automatic_findings(file_path, content)
+        )
+
+    def automatic_findings(self, file_path: str, content: str) -> list[dict]:
+        """Avisos de reglas deterministas (sin LLM); solo para Python.
+
+        Se analiza el archivo completo: si content es una vista previa
+        recortada, ast no podría parsearlo.
+        """
+        if Path(file_path).suffix.lower() != ".py":
+            return []
+
+        if content.rstrip().endswith(TRUNCATED_PREVIEW_MARK):
+            content = self.tool_registry.execute("read_file", file_path=file_path)
+
+        return find_truncating_rewrites(content)
 
     def review_project_files(self, file_paths: list, max_chars: int = 3000, show_unverified: bool = False):
         if not file_paths:
@@ -147,7 +167,10 @@ Contenido (cada línea empieza con su número):
 """
 
             response = self.provider_router.ask(prompt, review=True)
-            file_report = render_report(file_path, response, content, show_unverified)
+            file_report = render_report(
+                file_path, response, content, show_unverified,
+                auto_findings=self.automatic_findings(file_path, content)
+            )
 
             full_report += f"""
 

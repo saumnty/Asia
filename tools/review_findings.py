@@ -205,10 +205,11 @@ def is_duplicate(finding: dict, kept: list[dict]) -> bool:
 
 
 def verify_findings(findings: list[dict], content: str) -> dict:
-    """Separa hallazgos verificados (cita encontrada) y descartados.
+    """Separa los hallazgos cuya cita existe en el archivo de los descartados.
 
-    Los verificados llevan la línea real de la cita; los repetidos se
-    eliminan, tanto entre verificados como entre los no verificados.
+    "verified" solo quiere decir que la cita existe, no que el claim sea
+    cierto. Llevan la línea real de la cita; los repetidos se eliminan, tanto
+    entre los que tienen cita como entre los que no.
     """
     verified = []
     unverified = []
@@ -243,18 +244,34 @@ def format_finding(number: int, finding: dict) -> str:
     return f"{number}. Línea {line}: `{finding['quote']}`\n   {claim}"
 
 
-def render_report(file_path: str, response: str, content: str, show_unverified=False) -> str:
-    """Reporte de un archivo a partir de la respuesta del LLM."""
+# Lo único que se comprueba de un hallazgo del modelo es que la línea citada
+# exista: el claim sigue siendo opinión del modelo.
+MODEL_HEADER = "Citas encontradas en el archivo (análisis del modelo, no verificado):"
+AUTO_HEADER = "Detección automática (regla determinista con ast, sin LLM):"
+
+
+def render_report(file_path: str, response: str, content: str, show_unverified=False, auto_findings=None) -> str:
+    """Reporte de un archivo a partir de la respuesta del LLM.
+
+    auto_findings son avisos de reglas deterministas (p. ej.
+    write_safety.find_truncating_rewrites) y van en su propia sección.
+    """
     result = verify_findings(parse_findings(response), content)
     verified = result["verified"]
     unverified = result["unverified"]
 
-    parts = [f"FILE: {file_path}", "", "VERIFICADO (cita encontrada):"]
+    parts = [f"FILE: {file_path}"]
+
+    if auto_findings:
+        parts += ["", AUTO_HEADER]
+        parts += [format_finding(n, f) for n, f in enumerate(auto_findings, start=1)]
+
+    parts += ["", MODEL_HEADER]
 
     if verified:
         parts += [format_finding(n, f) for n, f in enumerate(verified, start=1)]
     else:
-        parts.append("No encontré problemas verificables.")
+        parts.append("El modelo no reportó problemas con una cita que exista en el archivo.")
 
     if show_unverified and unverified:
         parts += ["", "SIN VERIFICAR (cita no encontrada en el archivo):"]

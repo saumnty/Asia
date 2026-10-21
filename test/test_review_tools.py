@@ -86,7 +86,7 @@ def test_review_project_files_un_reporte_verificado_por_archivo():
 
     assert tool.tool_registry.calls == ["read_file_preview", "read_file_preview"]
     assert [review for _, review in tool.provider_router.calls] == [True, True]
-    assert report.count("VERIFICADO (cita encontrada):") == 2
+    assert report.count("Citas encontradas en el archivo (análisis del modelo, no verificado):") == 2
     assert "FILE: a.py" in report and "FILE: b.py" in report
     assert "CONFIRMED_ISSUES" not in report
 
@@ -211,3 +211,67 @@ def test_brain_review_file_deep_pasa_show_unverified():
 
     brain.process("revisa a fondo moda.py")
     assert brain.tool_registry.kwargs["show_unverified"] is False
+
+
+TRUNCATING = """ruta = "datos.json"
+datos = open(ruta).read()
+with open(ruta, "w") as f:
+    f.write(datos)
+"""
+
+
+class ContentRegistry:
+    """Devuelve contenidos distintos para la vista previa y el archivo completo."""
+
+    def __init__(self, preview, full=None):
+        self.preview = preview
+        self.full = full if full is not None else preview
+        self.calls = []
+
+    def execute(self, action, **kwargs):
+        self.calls.append(action)
+        return self.full if action == "read_file" else self.preview
+
+
+class NoFindingsRouter:
+    def ask(self, prompt, review=False):
+        return "SIN_HALLAZGOS"
+
+
+def test_review_file_deep_agrega_deteccion_automatica_en_su_seccion():
+    tool = DebugAgentTool(ContentRegistry(TRUNCATING), NoFindingsRouter())
+
+    report = tool.review_file_deep("guardar.py")
+
+    auto, model = report.split("Citas encontradas en el archivo")
+    assert "Detección automática (regla determinista con ast, sin LLM):" in auto
+    assert '1. Línea 3: `with open(ruta, "w") as f:`' in auto
+    assert "vacía el archivo antes de escribir" in auto
+    assert "El modelo no reportó problemas" in model
+
+
+def test_deteccion_automatica_solo_en_python():
+    tool = DebugAgentTool(ContentRegistry(TRUNCATING), NoFindingsRouter())
+
+    assert "Detección automática" not in tool.review_file_deep("notas.txt")
+
+
+def test_review_project_files_usa_el_archivo_completo_si_la_vista_esta_recortada():
+    preview = TRUNCATING[:40] + "\n\n... [archivo recortado]"
+    registry = ContentRegistry(preview, full=TRUNCATING)
+    tool = DebugAgentTool(registry, NoFindingsRouter())
+
+    report = tool.review_project_files(["guardar.py"], max_chars=40)
+
+    assert registry.calls == ["read_file_preview", "read_file"]
+    assert "Detección automática" in report
+
+
+def test_review_project_files_sin_recorte_no_relee():
+    registry = ContentRegistry(TRUNCATING)
+    tool = DebugAgentTool(registry, NoFindingsRouter())
+
+    report = tool.review_project_files(["guardar.py"])
+
+    assert registry.calls == ["read_file_preview"]
+    assert "Detección automática" in report

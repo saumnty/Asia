@@ -657,12 +657,13 @@ Reglas de severidad:
 - Prioriza bugs funcionales reales: retornos None, respuestas duplicadas, rutas incorrectas, archivos no encontrados, errores de provider, fallos de parseo, errores de streaming.
 
 Reglas de evidencia:
-- Usa solo los hallazgos de las secciones "VERIFICADO (cita encontrada)".
-- "Verificado" solo significa que la cita existe en el archivo, no que el bug esté demostrado: no digas que los hallazgos están "confirmados por evidencia".
-- Si un reporte dice "No encontré problemas verificables", no inventes hallazgos para ese archivo.
+- Usa solo los hallazgos de las secciones "Detección automática" y "Citas encontradas en el archivo".
+- "Detección automática" viene de una regla determinista: inclúyelos siempre.
+- "Citas encontradas en el archivo" solo significa que la línea citada existe, no que el bug esté demostrado: no digas que esos hallazgos están "confirmados por evidencia".
+- Si un reporte dice que el modelo no reportó problemas y no tiene detección automática, no inventes hallazgos para ese archivo.
 
 No resumas los hallazgos individuales.
-Si un reporte por archivo tiene varios hallazgos verificados, conserva todos.
+Si un reporte por archivo tiene varios hallazgos, conserva todos.
 No reduzcas varios bugs a uno solo.
 """
 

@@ -143,7 +143,8 @@ CLAIM: KeyError inventado
 
     report = render_report("a.py", response, CONTENT)
 
-    assert "VERIFICADO (cita encontrada):" in report
+    assert "Citas encontradas en el archivo (análisis del modelo, no verificado):" in report
+    assert "VERIFICADO" not in report
     assert "1. Línea 9: `return json.load(f)`" in report
     assert "KeyError" not in report
     assert "SIN VERIFICAR" not in report
@@ -159,7 +160,8 @@ CLAIM: KeyError inventado
 def test_render_sin_hallazgos_verificables():
     report = render_report("a.py", NO_FINDINGS_MARK, CONTENT)
 
-    assert "No encontré problemas verificables." in report
+    assert "El modelo no reportó problemas con una cita que exista en el archivo." in report
+    assert "Detección automática" not in report
     assert "Descartados por cita no encontrada: 0" in report
 
 
