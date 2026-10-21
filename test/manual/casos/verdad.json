@@ -1,0 +1,68 @@
+{
+    "_formato": "Cada patrón es una regex que se aplica al hallazgo en minúsculas y sin acentos. Orden de clasificación: reales, aceptables, falsos; lo que no coincide queda como 'no clasificado'. Los aceptables cuentan como acierto en la precisión pero no entran en el recall.",
+
+    "comunes": {
+        "reales": [
+            {
+                "id": "truncado",
+                "descripcion": "open(nombre_archivo, \"w\") trunca el original antes de escribir; un fallo a medias lo deja vacío o corrupto y el except solo imprime.",
+                "patrones": [
+                    "trunc", "corrup", "corromp", "atomic", "tempfile",
+                    "archivo temporal", "os\\.replace", "a medias", "incomplet",
+                    "respaldo", "backup", "copia de seguridad",
+                    "(perd|pierd)\\w*\\s+(\\w+\\s+){0,3}(datos|contenido|archivo|original)",
+                    "(datos|contenido|archivo)\\s+original\\w*\\s+(\\w+\\s+){0,2}(perd|pierd)"
+                ]
+            }
+        ],
+        "aceptables": [
+            {
+                "id": "comillas",
+                "descripcion": "Un valor con comilla simple rompe el ARFF escrito a mano.",
+                "patrones": ["comilla", "apostrof", "escap"]
+            }
+        ],
+        "falsos": [
+            {
+                "id": "keyerror",
+                "descripcion": "KeyError en df[col] o meta[col]: las columnas salen de df.columns y meta.names().",
+                "patrones": ["keyerror", "no exist\\w*\\s+(la\\s+)?columna", "columna\\s+(\\w+\\s+){0,2}no\\s+exist"]
+            },
+            {
+                "id": "indexerror_meta",
+                "descripcion": "IndexError en meta[col][1]: meta[col] siempre es (tipo, valores).",
+                "patrones": ["meta\\[col\\]\\[1\\]", "indexerror", "fuera de rango"]
+            },
+            {
+                "id": "division_cero",
+                "descripcion": "No hay divisiones en el archivo.",
+                "patrones": ["division (entre|por) cero", "zerodivision"]
+            }
+        ]
+    },
+
+    "casos": {
+        "moda.py": {
+            "reales": [
+                {
+                    "id": "moda_vacia",
+                    "descripcion": "Una columna con todos los valores faltantes deja mode() vacío y mode().iloc[0] lanza IndexError.",
+                    "patrones": [
+                        "(todos|todas|completamente|enteramente|totalmente)\\W+(\\w+\\W+){0,5}(nan|nul|faltante|missing|vaci)",
+                        "(solo|unicamente)\\s+(\\w+\\s+){0,3}(nan|nul|faltantes)",
+                        "(moda|mode\\(\\))\\s+(\\w+\\s+){0,4}vaci",
+                        "serie vacia", "empty"
+                    ]
+                }
+            ],
+            "falsos": [
+                {
+                    "id": "iloc_sin_faltantes",
+                    "descripcion": "mode().iloc[0] dentro de if isnull().any() no falla por falta de faltantes.",
+                    "patrones": ["iloc"]
+                }
+            ]
+        },
+        "eliminar.py": {}
+    }
+}
