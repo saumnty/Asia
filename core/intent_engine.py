@@ -82,6 +82,7 @@ Reglas:
 - Si el usuario pide encontrar todos los bugs, analizar a fondo o revisar profundamente un archivo específico, usa review_file_deep.
 - Si el usuario dice "lista la carpeta" o "muestra archivos", usa list_folder.
 - Si el usuario dice "revisa", "analiza", "audita" o "encuentra bugs" sobre una carpeta/proyecto, usa review_project.
+- Si además pide "sin síntesis", "sin resumen" o "solo los reportes por archivo", agrega "synthesis": false a review_project.
 - Si el usuario pide refactorizar, limpiar, mejorar estilo, ordenar, simplificar o hacer más mantenible un archivo específico, usa smart_refactor.
 
 Ejemplos:
@@ -279,6 +280,9 @@ Usuario: revisa todo el proyecto y encuentra por qué aparece Asia None
 
 Usuario: detecta bugs en el proyecto
 {"action":"review_project","params":{"folder_path":"."}}
+
+Usuario: revisa el proyecto sin resumen, solo los reportes de cada archivo
+{"action":"review_project","params":{"folder_path":".","synthesis":false}}
 
 Usuario: busca código muerto
 {"action":"detect_dead_code","params":{"folder_path":"."}}

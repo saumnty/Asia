@@ -32,6 +32,32 @@ def is_protected_file(file_path: str) -> bool:
     return any(target == normalized_path(protected) for protected in PROTECTED_FILES)
 
 
+NO_SYNTHESIS_PHRASES = ("sin síntesis", "sin sintesis", "por archivo")
+
+
+def wants_synthesis(text, params, default=True) -> bool:
+    """Decide si review_project termina con la síntesis del LLM.
+
+    Frases como "sin síntesis" en el mensaje mandan sobre todo lo demás, para
+    no depender de que el IntentEngine llene el parámetro. Si no aparecen, se
+    usa params["synthesis"] (puede llegar como texto) y luego el default.
+    """
+    lowered = (text or "").lower()
+
+    if any(phrase in lowered for phrase in NO_SYNTHESIS_PHRASES):
+        return False
+
+    value = params.get("synthesis")
+
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, str) and value.strip():
+        return value.strip().lower() not in ("false", "no", "0")
+
+    return default
+
+
 def parse_code_response(response):
     """Extrae FILE_PATH, CODE y EXPLANATION de una respuesta del LLM.
 
@@ -551,6 +577,19 @@ Instrucciones:
                 max_chars=self.limit("review_project_file")
             )
 
+            synthesis_default = self.settings.get("review_project_synthesis", True)
+
+            # Sin síntesis se devuelven los reportes por archivo tal cual: en
+            # las pruebas fueron más precisos que el resumen final del modelo.
+            if not wants_synthesis(text, params, synthesis_default):
+                files_list = "\n".join(f"- {path}" for path in priority_files)
+
+                return (
+                    f"Reportes por archivo de {folder_path} (sin síntesis).\n\n"
+                    f"Archivos revisados:\n{files_list or '- ninguno'}\n"
+                    f"{per_file_report}"
+                )
+
             prompt = f"""
 Actúa como Senior Software Architect y Debugger.
 
@@ -704,6 +743,15 @@ Responde con:
 
             if not Path(file_path).is_file():
                 return f"No encontré el archivo: {file_path}"
+
+            # Se revisa antes de llamar al LLM: el refactor siempre va al
+            # archivo pedido, así que no tiene sentido generarlo.
+            if is_protected_file(file_path):
+                return (
+                    f"{file_path} es un archivo protegido de Asia.\n"
+                    "No propondré un refactor automático. Edítalo a mano o "
+                    "pide refactorizar un archivo menos crítico."
+                )
 
             content = self.tool_registry.execute(
                 "read_file",
