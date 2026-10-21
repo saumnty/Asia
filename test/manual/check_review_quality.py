@@ -25,17 +25,23 @@ from tools.tool_registry import ToolRegistry
 
 CASES_DIR = Path(__file__).resolve().parent / "casos"
 
-# Secciones donde cada formato pone los hallazgos que presenta como ciertos.
-FINDING_HEADERS = [
+# Secciones donde cada formato pone los hallazgos del modelo que muestra al
+# usuario: antes de B2, B2 y desde B3.
+MODEL_HEADERS = [
     r"BUGS_FOUND:",
     r"CONFIRMED_ISSUES:",
     r"VERIFICADO \(cita encontrada\):",
+    r"Citas encontradas en el archivo \(.*\):",
 ]
+# Avisos de reglas deterministas (desde B3).
+AUTO_HEADERS = [r"Detección automática \(.*\):"]
+FINDING_HEADERS = MODEL_HEADERS + AUTO_HEADERS
 SECTION_END = re.compile(
-    r"^[\s*#]*([A-Z_]{4,}:|[A-Z][A-Z ]{3,}(\(.*\))?:|Descartados|Duplicados|={5,})"
+    r"^[\s*#]*([A-Z_]{4,}:|[A-Z][A-Z ]{3,}(\(.*\))?:|Descartados|Duplicados|={5,}"
+    r"|Citas encontradas en el archivo|Detección automática)"
 )
 ITEM_START = re.compile(r"^\s*(\d+[.)]|[-*•])\s+")
-NEGATIVE = re.compile(r"ningun|no se encontr|no encontr|no hay|n/a|none|sin problemas")
+NEGATIVE = re.compile(r"ningun|no se encontr|no encontr|no report|no hay|n/a|none|sin problemas")
 
 
 def normalize(text: str) -> str:
@@ -43,8 +49,8 @@ def normalize(text: str) -> str:
     return "".join(c for c in text if not unicodedata.combining(c))
 
 
-def extract_findings(report: str) -> list[str]:
-    """Hallazgos de las secciones de FINDING_HEADERS, uno por viñeta."""
+def extract_findings(report: str, headers=FINDING_HEADERS) -> list[str]:
+    """Hallazgos de las secciones de headers, uno por viñeta."""
     findings = []
     lines = report.splitlines()
     index = 0
@@ -52,7 +58,7 @@ def extract_findings(report: str) -> list[str]:
     while index < len(lines):
         line = lines[index]
         header = next(
-            (h for h in FINDING_HEADERS if re.search(h, line)), None
+            (h for h in headers if re.search(h, line)), None
         )
         index += 1
 
@@ -87,8 +93,10 @@ def extract_findings(report: str) -> list[str]:
 
 def load_truth(case_name: str) -> dict:
     data = json.loads((CASES_DIR / "verdad.json").read_text(encoding="utf-8"))
-    common = data["comunes"]
     case = data["casos"].get(case_name, {})
+    # Un caso sin el bug común (p. ej. uno que ya escribe a un temporal)
+    # no debe contar "trunca el archivo" como acierto.
+    common = data["comunes"] if case.get("usar_comunes", True) else {}
 
     return {
         kind: case.get(kind, []) + common.get(kind, [])
@@ -175,7 +183,9 @@ def main():
 
     if args.rescore:
         def get_report(mode, case, run):
-            return (args.rescore / f"{mode}_{case.stem}_{run}.txt").read_text(encoding="utf-8")
+            path = args.rescore / f"{mode}_{case.stem}_{run}.txt"
+            # Una corrida vieja puede no tener los casos agregados después.
+            return path.read_text(encoding="utf-8") if path.exists() else None
     else:
         settings = SettingsManager()
         registry = ToolRegistry(ProviderRouter())
@@ -192,20 +202,28 @@ def main():
 
             for run in range(1, args.runs + 1):
                 report = get_report(mode, case, run)
+
+                if report is None:
+                    continue
+
                 result = score(extract_findings(report), truth)
                 result.update({"modo": mode, "caso": case.name, "corrida": run})
+                result["modelo"] = score(extract_findings(report, MODEL_HEADERS), truth)
+                result["auto"] = score(extract_findings(report, AUTO_HEADERS), truth)
                 runs.append(result)
 
                 descartados = re.search(r"Descartados[^:]*:\s*(\d+)", report)
                 result["descartados"] = int(descartados.group(1)) if descartados else 0
 
                 print(
-                    f"[{mode:7}] {case.name:12} #{run}: "
+                    f"[{mode:7}] {case.name:17} #{run}: "
                     f"reportados={result['reportados']:2} aciertos={result['aciertos']} "
                     f"reales={result['reales_detectados']} falsos={result['falsos']} "
                     f"repetidos={result['repetidos']} "
                     f"no_clasif={len(result['no_clasificados'])} "
-                    f"descartados={result['descartados']}"
+                    f"descartados={result['descartados']} "
+                    f"auto={result['auto']['reportados']}",
+                    flush=True,
                 )
 
                 if args.out:
@@ -214,21 +232,29 @@ def main():
 
     print("\nResumen (sumando todas las corridas):")
 
+    # "total" es lo que ve el usuario; "modelo" y "auto" separan el aporte del
+    # LLM y el de las reglas deterministas. El recall de cada parte se mide
+    # contra todos los reales esperados.
     for mode in modes:
-        selected = [r for r in runs if r["modo"] == mode]
-        reported = sum(r["reportados"] for r in selected)
-        hits = sum(r["aciertos"] for r in selected)
-        found = sum(len(r["reales_detectados"]) for r in selected)
-        expected = sum(len(r["reales_esperados"]) for r in selected)
-        false = sum(r["falsos"] for r in selected)
-        repeated = sum(r["repetidos"] for r in selected)
-        unknown = sum(len(r["no_clasificados"]) for r in selected)
+        for part in ("total", "modelo", "auto"):
+            selected = [
+                r if part == "total" else r[part]
+                for r in runs
+                if r["modo"] == mode
+            ]
+            reported = sum(r["reportados"] for r in selected)
+            hits = sum(r["aciertos"] for r in selected)
+            found = sum(len(r["reales_detectados"]) for r in selected)
+            expected = sum(len(r["reales_esperados"]) for r in selected)
+            false = sum(r["falsos"] for r in selected)
+            repeated = sum(r["repetidos"] for r in selected)
+            unknown = sum(len(r["no_clasificados"]) for r in selected)
 
-        print(
-            f"  {mode:7}: precisión={ratio(hits, reported)} ({hits}/{reported})  "
-            f"recall={ratio(found, expected)} ({found}/{expected})  "
-            f"falsos={false} repetidos={repeated} no_clasificados={unknown}"
-        )
+            print(
+                f"  {mode:7} {part:6}: precisión={ratio(hits, reported)} ({hits}/{reported})  "
+                f"recall={ratio(found, expected)} ({found}/{expected})  "
+                f"falsos={false} repetidos={repeated} no_clasificados={unknown}"
+            )
 
     unknown_items = [
         (r["modo"], r["caso"], text)

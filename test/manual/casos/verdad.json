@@ -63,6 +63,23 @@
                 }
             ]
         },
-        "eliminar.py": {}
+        "eliminar.py": {},
+        "guardar_seguro.py": {
+            "_nota": "Caso negativo de la regla de truncado: lee el JSON y lo reescribe con un temporal y os.replace. No tiene bugs reales conocidos.",
+            "usar_comunes": false,
+            "reales": [],
+            "falsos": [
+                {
+                    "id": "truncado_falso",
+                    "descripcion": "No trunca el original: escribe a un temporal y lo reemplaza con os.replace.",
+                    "patrones": ["trunc", "corrup", "corromp", "a medias", "(perd|pierd)\\w*\\s+(\\w+\\s+){0,3}(datos|contenido|archivo|original)"]
+                },
+                {
+                    "id": "keyerror_version",
+                    "descripcion": "datos.get(\"version\", 0) no lanza KeyError.",
+                    "patrones": ["keyerror"]
+                }
+            ]
+        }
     }
 }
