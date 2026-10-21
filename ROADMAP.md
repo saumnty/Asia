@@ -15,6 +15,7 @@ para poder revisar o revertir los cambios.
 | — | Ventana de contexto de Ollama configurable (`ollama_num_ctx`, 16384) y aviso cuando un prompt no cabe. Antes se recortaban en silencio la síntesis de `review_project` y `generate_code` (ver "Alucinación en revisiones largas"). | `0b5b5c61` |
 | — | `review_project`: excluye carpetas de herramientas (`.github`) al seleccionar y corrige reglas del prompt de síntesis que apuntaban a secciones inexistentes. | `985e02ec`, `f3c0eb9a` |
 | 4. Limpieza | Borrados los archivos vacíos, `core/llm.py` y `core/utils/text_cleaner.py` (queda `text_utils.clean_text`). `review_project` ya no calcula `static_report`. `requirements.txt` con 4 paquetes; `pytest` en `requirements-dev.txt`. `test/` pasa a pytest con carpetas temporales; los scripts que usan Ollama o Gemini quedan en `test/manual/`. Copia vieja archivada en `C:\Projects\JARVIS-IA-main\Asia-archivo.zip` (la carpeta sigue sin borrar). | `254dc3cd` |
+| — | `review_project` sin síntesis: devuelve los reportes por archivo sin llamar al LLM si el mensaje dice "sin síntesis"/"por archivo", si el IntentEngine manda `synthesis: false` o con `review_project_synthesis: false` en config (default `true`). `smart_refactor` rechaza los archivos protegidos antes de llamar al LLM. | `284c1bdc` |
 
 ## Próximas fases
 
@@ -23,8 +24,7 @@ para poder revisar o revertir los cambios.
 - `Brain.process` es un único método de ~1000 líneas con más de 30 `if action == ...`: pasar a un diccionario de handlers y sacar los prompts a un módulo.
 - Atajos sin LLM para comandos fijos (salir, confirmar/cancelar cambio, mostrar cambio pendiente).
 - Recortar el prompt del IntentEngine (~350 líneas por mensaje) y resolver reglas que se contradicen ("corrige/mejora" apunta a `generate_code`, `smart_refactor` y `debug_project`).
-- Pendientes menores detectados en la fase 3:
-  - `smart_refactor` no aplica la lista de archivos protegidos (solo `generate_code` lo hace).
+- Pendiente menor detectado en la fase 3:
   - "Proyecto activo" es solo un nombre; asociarle una ruta permitiría limitar la escritura al proyecto y no solo a la carpeta actual.
 
 ## Fases futuras (diseño pendiente)
@@ -49,7 +49,7 @@ para poder revisar o revertir los cambios.
 - Regla de diseño: elegir el modelo al empezar una conversación y mantenerlo mientras siga activa ("modelo pegajoso"); cambiar solo si el dominio cambia claramente y de forma sostenida, o si el usuario lo pide.
 
 **Primer caso concreto: la síntesis de `review_project`.** Con la entrada completa, `qwen2.5-coder:7b` hace buenas revisiones por archivo pero malas síntesis (ver "Alucinación en revisiones largas"). Opciones:
-1. Un modo de `review_project` que devuelva los reportes por archivo sin síntesis final. No requiere otro modelo; es lo más barato y lo que mejor funcionó en las pruebas.
+1. Un modo de `review_project` que devuelva los reportes por archivo sin síntesis final. No requiere otro modelo; es lo más barato y lo que mejor funcionó en las pruebas. Hecho en `284c1bdc` ("revisa el proyecto sin síntesis").
 2. Usar un modelo más capaz solo para el paso de síntesis. Encaja con "modelo por llamada", pero paga una recarga al terminar las revisiones por archivo. Antes de elegir el modelo, medir con la revisión de `practica2` ya documentada: ¿menciona el bug de `cancelar()`? ¿evita las afirmaciones falsas sobre versiones y Spring?
 
 ### RAG más allá de código
@@ -90,7 +90,7 @@ Dos colecciones nuevas en ChromaDB, separadas de las de proyectos. Usar un prefi
 **Uso recomendado mientras tanto:** para revisiones que importan, usar "revisa a fondo X.java" (`review_file_deep`, un archivo por llamada) en vez de "revisa el proyecto completo". Los reportes por archivo fueron los más precisos en todas las pruebas.
 
 **Pendiente:**
-- Modo sin síntesis y modelo distinto para la síntesis: ver "Multi-modelo según tipo de tarea".
+- Modelo distinto para la síntesis: ver "Multi-modelo según tipo de tarea". El modo sin síntesis ya existe (`284c1bdc`).
 - Proyectos más grandes que `practica2` pueden superar 16384 tokens en la síntesis (unos 30 reportes). El aviso por stderr lo detecta; si pasa seguido, habrá que procesar en lotes.
 
 ### CLI enriquecida
