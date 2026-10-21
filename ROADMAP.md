@@ -109,3 +109,61 @@ Dos colecciones nuevas en ChromaDB, separadas de las de proyectos. Usar un prefi
 - Análisis directo de un archivo: `jarvis "analiza archivo.py"`, con la ruta resuelta contra la carpeta del usuario (`Session.get_user_cwd()`). Las tools de archivos ya resuelven rutas relativas contra esa carpeta desde la fase 2; lo que falta es un camino directo que no dependa de que el IntentEngine acierte la acción.
 - Flags: `--project`, `--provider`, `--no-stream`.
 - Reemplazar `jarvis.bat` por un ejecutable nativo, para evitar el "¿Desea terminar el trabajo por lotes (S/N)?" de Windows al interrumpir con Ctrl+C.
+
+### CLI tipo chat (adjuntos)
+
+- Archivos por ruta dentro del mensaje: `explica @src/app.py` o `@C:\ruta\foto.png`. Se resuelve contra `Session.get_user_cwd()` y se agrega al contexto.
+- Autocompletado de rutas al escribir `@` (`prompt_toolkit`).
+- Imágenes desde el portapapeles: la terminal no pasa imágenes con Ctrl+V, así que hace falta un atajo propio (p. ej. Alt+V) o un comando `:pegar` que use `PIL.ImageGrab.grabclipboard()`, guarde la imagen en una carpeta temporal y la adjunte. Si el portapapeles trae texto, se pega normal. Ctrl+V exacto requiere reasignar la tecla en Windows Terminal.
+- Varios adjuntos por mensaje, límite de tamaño con aviso al truncar (como el de `num_ctx`) y PDF/texto largo vía RAG.
+- Las imágenes requieren un modelo con visión (ver "Multi-modelo"); el clasificador debe enviar a ese modelo cualquier mensaje con imagen.
+
+### Generación de código con verificación
+
+Ciclo: planear -> generar -> ejecutar en sandbox -> verificar -> reparar, con criterios de aceptación objetivos (pruebas tipo omegaUp, entorno simulado, tarea descompuesta). Caso de regresión: el modelo de Hodgkin-Huxley.
+
+**Librerías inventadas u obsoletas** (bug observado):
+- Una librería que no existe se detecta al ejecutar (`ModuleNotFoundError`). Una API que existe pero cambió solo se detecta si una prueba la ejercita.
+- Riesgo de seguridad (*slopsquatting*): nunca hacer `pip install` automático de lo que el modelo inventó. Solo lista permitida o confirmación del usuario.
+- Pasos, de menor a mayor costo:
+  1. Antes de ejecutar, extraer los imports con `ast` y comprobar `importlib.util.find_spec`. Si falta alguno, pedir reescritura sin esa librería.
+  2. Lista permitida de dependencias (stdlib + `requirements.txt`) dentro del prompt.
+  3. Sandbox en un venv desechable, sin tocar el entorno real.
+  4. Fijar versiones en el prompt cuando la API cambie entre versiones.
+  5. Indexar la documentación de las librerías usadas en `asia__knowledge`.
+
+### Confidencialidad
+
+- Modo solo-local (ningún dato sale a proveedores externos).
+- Modo que entrega a proveedores externos únicamente contexto de memoria, sin código.
+- Registro de auditoría de lo que sale hacia afuera.
+
+### Voz y avatar
+
+- Voz local: reconocimiento con faster-whisper y síntesis con Piper (voz femenina).
+- Canal de estado local (Flask-SocketIO) para que el avatar reaccione a hablar, pensar y escuchar.
+- Avatar: perro bóxer.
+
+### Conocimiento offline
+
+- Herramienta de Wikipedia offline con Kiwix/ZIM, separada del RAG de proyectos.
+- Knowledge Manager: destilar lo aprendido de proveedores externos, deduplicar y reindexar en una base global.
+- Indexación incremental del RAG por hash y calibración de umbrales del retriever.
+- Detección de código muerto por AST y auto-fix desde el diagnóstico de `DebugAgent`.
+
+### Servidor y acceso remoto
+
+- Medir el uso real de RAM/VRAM antes de comprar el Jetson Orin Nano Super (8 GB de RAM soldada).
+- Portar a ARM64 y revisar requisitos del Jetson.
+- Tailscale para acceso remoto, con modo reducido en conexiones lentas.
+- Respaldos de `memory/memory.json`, `memory/projects/` y `data/chroma/`.
+
+### Orden de trabajo
+
+1. Estabilizar el modelo actual con uso real.
+2. Fase 4 (limpieza) y revisión sin síntesis.
+3. Cambio entre modelos.
+4. Wikipedia offline.
+5. Voz.
+6. Avatar.
+7. Jetson, servidor y uso remoto.
