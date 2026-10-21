@@ -68,11 +68,13 @@ class ProviderRouter:
 
         return summary
 
-    def ask(self, prompt: str) -> str:
+    def ask(self, prompt: str, review=False) -> str:
         """Llamada de un solo turno, sin historial de chat ni contexto personal.
 
         La usan las acciones internas (resúmenes, revisiones, generación de
         código), que ya incluyen en el prompt todo el contexto que necesitan.
+        review=True para las revisiones de código: usan temperatura baja y
+        penalización de repetición (ver ollama_provider.review_options).
         """
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -80,7 +82,7 @@ class ProviderRouter:
         ]
 
         try:
-            return self._complete(messages)
+            return self._complete(messages, review=review)
         except ProviderError as e:
             return str(e)
 
@@ -117,12 +119,12 @@ Contexto del proyecto:
 
         return answer
 
-    def _complete(self, messages: list[dict], on_chunk=None) -> str:
+    def _complete(self, messages: list[dict], on_chunk=None, review=False) -> str:
         provider_name = self.settings.get("default_provider", "ollama")
 
         try:
             provider = self.get_provider(provider_name)
-            return provider.complete(messages, on_chunk=on_chunk)
+            return provider.complete(messages, on_chunk=on_chunk, review=review)
         except Exception as e:
             fallback_name = self.settings.get("fallback_provider", None)
 
@@ -133,7 +135,7 @@ Contexto del proyecto:
 
             try:
                 fallback_provider = self.get_provider(fallback_name)
-                response = fallback_provider.complete(messages)
+                response = fallback_provider.complete(messages, review=review)
             except Exception as fallback_error:
                 raise ProviderError(
                     "Falló el provider principal y también el fallback. "

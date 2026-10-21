@@ -9,11 +9,13 @@ class GeminiProvider:
         self.client = genai.Client()
         self.model = self.settings.get("gemini_model", "gemini-2.5-flash")
 
-    def complete(self, messages: list[dict], on_chunk=None) -> str:
+    def complete(self, messages: list[dict], on_chunk=None, review=False) -> str:
         """Envía los mensajes y devuelve la respuesta completa.
 
         Si se pasa on_chunk, la respuesta se transmite en streaming y cada
-        fragmento se entrega a on_chunk a medida que llega.
+        fragmento se entrega a on_chunk a medida que llega. review se acepta
+        por compatibilidad con OllamaProvider: las opciones de revisión
+        (ollama_temperature, ollama_repeat_penalty) son solo de Ollama.
         """
         system_instruction = "\n\n".join(
             message["content"]

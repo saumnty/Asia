@@ -25,7 +25,7 @@ class FakeProviderRouter:
     def __init__(self):
         self.prompts = []
 
-    def ask(self, prompt):
+    def ask(self, prompt, **kwargs):
         self.prompts.append(prompt)
         return "respuesta sin código"
 

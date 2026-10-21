@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from tools.review_findings import FINDING_FORMAT, HONESTY_RULES, numbered, render_report
+
 
 class DebugAgentTool:
     name = "debug_project"
@@ -75,19 +77,17 @@ qué archivo revisar o corregir primero
 
         return self.provider_router.ask(prompt)
     
-    def review_file_deep(self, file_path: str):
+    # Las heurísticas de analyze_static (p. ej. "posible índice fuera de rango"
+    # en cada df[col]) no entran en estos prompts: el modelo las repetía como
+    # hallazgos y sus citas sí existen, así que pasaban la verificación.
+    def review_file_deep(self, file_path: str, show_unverified: bool = False):
         content = self.tool_registry.execute(
             "read_file",
             file_path=file_path
         )
 
-        if not content:
+        if not content or content.startswith("No encontré"):
             return f"No pude leer el archivo: {file_path}"
-        
-        static_findings = self.tool_registry.execute(
-            "analyze_static",
-            file_path=file_path
-        )
 
         prompt = f"""
 Actúa como Senior Debugger.
@@ -97,50 +97,25 @@ Analiza profundamente este archivo buscando errores reales y casos límite.
 Archivo:
 {file_path}
 
-Contenido:
-{content}
-
-Hallazgos estáticos automáticos:
-{static_findings}
-
-Reglas:
-- Debes incluir obligatoriamente una sección llamada STATIC_EVIDENCE.
-- Copia ahí los hallazgos estáticos automáticos con línea, riesgo, confianza y evidencia.
-- No los omitas.
+Contenido (cada línea empieza con su número):
+{numbered(content)}
 
 Busca especialmente:
-- división entre cero
-- listas vacías
-- valores None
-- índices fuera de rango
-- atributos llamados sobre None
-- imports faltantes
-- variables no definidas
-- errores de tipos
-- errores lógicos
-- retornos inconsistentes
+- datos que se pierden o quedan corruptos si algo falla a la mitad
+- colecciones vacías y valores None
+- errores lógicos y retornos inconsistentes
+- excepciones capturadas que ocultan un fallo
 
-Responde con este formato:
+{HONESTY_RULES}
 
-STATIC_EVIDENCE:
-hallazgos estáticos automáticos relevantes
-
-SUMMARY:
-resumen breve
-
-BUGS_FOUND:
-lista numerada
-
-RECOMMENDED_FIXES:
-correcciones concretas
-
-FIX_REQUEST:
-instrucción clara para corregir el archivo completo
+{FINDING_FORMAT}
 """
 
-        return self.provider_router.ask(prompt)
-    
-    def review_project_files(self, file_paths: list, max_chars: int = 3000):
+        response = self.provider_router.ask(prompt, review=True)
+
+        return render_report(file_path, response, content, show_unverified)
+
+    def review_project_files(self, file_paths: list, max_chars: int = 3000, show_unverified: bool = False):
         if not file_paths:
             return "No hay archivos para revisar."
 
@@ -153,11 +128,6 @@ instrucción clara para corregir el archivo completo
                 max_chars=max_chars
             )
 
-            static_findings = self.tool_registry.execute(
-                "analyze_static",
-                file_path=file_path
-            )
-
             prompt = f"""
 Actúa como Senior Debugger.
 
@@ -166,39 +136,18 @@ Revisa SOLO este archivo.
 Archivo:
 {file_path}
 
-Contenido:
-{content}
+Contenido (cada línea empieza con su número):
+{numbered(content)}
 
-Hallazgos estáticos:
-{static_findings}
-
-Responde EXACTAMENTE con:
-
-FILE:
-{file_path}
-
-CONFIDENCE:
-alta|media|baja
-
-CONFIRMED_ISSUES:
-problemas confirmados por evidencia real del archivo
-
-SUSPECTED_ISSUES:
-sospechas razonables, si existen
-
-OPTIONAL_IMPROVEMENTS:
-mejoras opcionales, si existen
-
-Reglas:
+{HONESTY_RULES}
 - No menciones otros archivos.
-- No inventes funciones.
-- No mezcles evidencia de otros archivos.
-- Si no hay bugs claros, dilo.
 - No propongas código todavía.
-- Enumera TODOS los bugs o riesgos detectados, no solo el más importante.
+
+{FINDING_FORMAT}
 """
 
-            file_report = self.provider_router.ask(prompt)
+            response = self.provider_router.ask(prompt, review=True)
+            file_report = render_report(file_path, response, content, show_unverified)
 
             full_report += f"""
 

@@ -58,6 +58,15 @@ def wants_synthesis(text, params, default=True) -> bool:
     return default
 
 
+UNVERIFIED_PHRASES = ("sin verificar", "no verificad", "incluye todo", "muestra todo")
+
+
+def wants_unverified(text) -> bool:
+    """True si el usuario pide ver también los hallazgos cuya cita no existe."""
+    lowered = (text or "").lower()
+    return any(phrase in lowered for phrase in UNVERIFIED_PHRASES)
+
+
 def parse_code_response(response):
     """Extrae FILE_PATH, CODE y EXPLANATION de una respuesta del LLM.
 
@@ -559,7 +568,7 @@ Instrucciones:
         Responde en español, claro y práctico.
         """
 
-            return self.provider_router.ask(prompt)
+            return self.provider_router.ask(prompt, review=True)
         
         if action == "review_project":
 
@@ -574,7 +583,8 @@ Instrucciones:
             per_file_report = self.tool_registry.execute(
                 "review_project_files",
                 file_paths=priority_files,
-                max_chars=self.limit("review_project_file")
+                max_chars=self.limit("review_project_file"),
+                show_unverified=wants_unverified(text)
             )
 
             synthesis_default = self.settings.get("review_project_synthesis", True)
@@ -646,18 +656,17 @@ Reglas de severidad:
 - En un asistente local, prompts de usuario no son vulnerabilidad crítica por sí solos.
 - Prioriza bugs funcionales reales: retornos None, respuestas duplicadas, rutas incorrectas, archivos no encontrados, errores de provider, fallos de parseo, errores de streaming.
 
-## Confianza del reporte
-Indica si los hallazgos son:
-- Confirmados por evidencia
-- Sospechas razonables
-- Mejoras opcionales
+Reglas de evidencia:
+- Usa solo los hallazgos de las secciones "VERIFICADO (cita encontrada)".
+- "Verificado" solo significa que la cita existe en el archivo, no que el bug esté demostrado: no digas que los hallazgos están "confirmados por evidencia".
+- Si un reporte dice "No encontré problemas verificables", no inventes hallazgos para ese archivo.
 
 No resumas los hallazgos individuales.
-Si un reporte por archivo contiene varios CONFIRMED_ISSUES o SUSPECTED_ISSUES, conserva todos.
+Si un reporte por archivo tiene varios hallazgos verificados, conserva todos.
 No reduzcas varios bugs a uno solo.
 """
 
-            return self.provider_router.ask(prompt)
+            return self.provider_router.ask(prompt, review=True)
         
         if action == "detect_dead_code":
             folder_path = params.get("folder_path", ".")
@@ -727,7 +736,8 @@ Responde con:
 
             debug_report = self.tool_registry.execute(
                 "review_file_deep",
-                file_path=file_path
+                file_path=file_path,
+                show_unverified=wants_unverified(text)
             )
 
             self.last_debug_report = debug_report

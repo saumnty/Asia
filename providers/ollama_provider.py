@@ -38,21 +38,36 @@ def ollama_options(settings, messages: list[dict], **extra) -> dict:
     return {"num_ctx": num_ctx, **extra}
 
 
+def review_options(settings) -> dict:
+    """Opciones para las revisiones de código, no para el chat.
+
+    Temperatura baja para que el modelo no improvise hallazgos y penalización
+    de repetición porque qwen2.5-coder:7b repetía el mismo hallazgo varias
+    veces.
+    """
+    return {
+        "temperature": settings.get("ollama_temperature"),
+        "repeat_penalty": settings.get("ollama_repeat_penalty"),
+    }
+
+
 class OllamaProvider:
     def __init__(self):
         self.settings = SettingsManager()
         self.client = ollama.Client(host=self.settings.get("ollama_host"))
 
-    def complete(self, messages: list[dict], on_chunk=None) -> str:
+    def complete(self, messages: list[dict], on_chunk=None, review=False) -> str:
         """Envía los mensajes y devuelve la respuesta completa.
 
         Si se pasa on_chunk, la respuesta se transmite en streaming y cada
-        fragmento se entrega a on_chunk a medida que llega.
+        fragmento se entrega a on_chunk a medida que llega. Con review=True
+        se usan las opciones de revisión (review_options).
         """
         # Se lee en cada llamada para que un cambio en settings.json se
         # aplique sin reiniciar Asia.
         model = self.settings.get("ollama_model")
-        options = ollama_options(self.settings, messages)
+        extra = review_options(self.settings) if review else {}
+        options = ollama_options(self.settings, messages, **extra)
 
         if on_chunk is None:
             response = self.client.chat(
