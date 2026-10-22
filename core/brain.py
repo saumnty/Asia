@@ -6,6 +6,8 @@ from memory.project_memory import ProjectMemory
 from config.settings_manager import SettingsManager
 from core.actions.explore import ExploreActions
 from core.actions.memory import MemoryActions
+# wants_synthesis y wants_unverified se importan desde aquí en las pruebas.
+from core.actions.review import ReviewActions, wants_synthesis, wants_unverified  # noqa: F401
 from core.paths import PROJECT_ROOT
 from tools.import_check import ImportPolicy, check_imports, refusal_message, rewrite_request
 from tools.sandbox import PendingRun, SandboxRunner, format_result, sandbox_import_problems
@@ -34,32 +36,6 @@ def is_protected_file(file_path: str) -> bool:
     """
     target = normalized_path(file_path)
     return any(target == normalized_path(protected) for protected in PROTECTED_FILES)
-
-
-NO_SYNTHESIS_PHRASES = ("sin síntesis", "sin sintesis", "por archivo")
-
-
-def wants_synthesis(text, params, default=True) -> bool:
-    """Decide si review_project termina con la síntesis del LLM.
-
-    Frases como "sin síntesis" en el mensaje mandan sobre todo lo demás, para
-    no depender de que el IntentEngine llene el parámetro. Si no aparecen, se
-    usa params["synthesis"] (puede llegar como texto) y luego el default.
-    """
-    lowered = (text or "").lower()
-
-    if any(phrase in lowered for phrase in NO_SYNTHESIS_PHRASES):
-        return False
-
-    value = params.get("synthesis")
-
-    if isinstance(value, bool):
-        return value
-
-    if isinstance(value, str) and value.strip():
-        return value.strip().lower() not in ("false", "no", "0")
-
-    return default
 
 
 # El IntentEngine inventa rutas cuando el mensaje no trae ninguna
@@ -145,15 +121,6 @@ def normalized_command(text) -> str:
     return " ".join((text or "").lower().split()).strip(" .!¡")
 
 
-UNVERIFIED_PHRASES = ("sin verificar", "no verificad", "incluye todo", "muestra todo")
-
-
-def wants_unverified(text) -> bool:
-    """True si el usuario pide ver también los hallazgos cuya cita no existe."""
-    lowered = (text or "").lower()
-    return any(phrase in lowered for phrase in UNVERIFIED_PHRASES)
-
-
 def parse_code_response(response):
     """Extrae FILE_PATH, CODE y EXPLANATION de una respuesta del LLM.
 
@@ -197,11 +164,12 @@ def parse_code_response(response):
     return file_path, code, explanation
 
 
-class Brain(MemoryActions, ExploreActions):
+class Brain(MemoryActions, ExploreActions, ReviewActions):
     # Acción del IntentEngine -> método que la atiende (ver core/actions).
     HANDLERS = {
         **MemoryActions.HANDLERS,
         **ExploreActions.HANDLERS,
+        **ReviewActions.HANDLERS,
     }
 
     def __init__(self):
@@ -376,215 +344,6 @@ class Brain(MemoryActions, ExploreActions):
         if handler:
             return getattr(self, handler)(text, params)
 
-        if action == "review_file":
-            file_path = params.get("file_path")
-
-            if not file_path:
-                return "Necesito la ruta del archivo para revisarlo."
-
-            content = self.tool_registry.execute(
-                "read_file_preview",
-                file_path=file_path,
-                max_chars=self.limit("review_file")
-            )
-
-            prompt = f"""
-        Actúa como revisor de código Python.
-
-        Revisa este archivo buscando:
-        1. Bugs posibles
-        2. Errores de flujo
-        3. Código duplicado
-        4. Riesgos de devolver None
-        5. Mejoras de claridad
-        6. Cambios recomendados
-
-        Archivo:
-        {file_path}
-
-        Contenido:
-        {content}
-
-        Responde en español, claro y práctico.
-        """
-
-            return self.provider_router.ask(prompt, review=True)
-        
-        if action == "review_project":
-
-            folder_path = params.get("folder_path", ".")
-
-            priority_files = self.tool_registry.execute(
-                "select_project_files",
-                folder_path=folder_path,
-                max_files=self.limit("review_project_files")
-            )
-
-            per_file_report = self.tool_registry.execute(
-                "review_project_files",
-                file_paths=priority_files,
-                max_chars=self.limit("review_project_file"),
-                show_unverified=wants_unverified(text)
-            )
-
-            synthesis_default = self.settings.get("review_project_synthesis", True)
-
-            # Sin síntesis se devuelven los reportes por archivo tal cual: en
-            # las pruebas fueron más precisos que el resumen final del modelo.
-            if not wants_synthesis(text, params, synthesis_default):
-                files_list = "\n".join(f"- {path}" for path in priority_files)
-
-                return (
-                    f"Reportes por archivo de {folder_path} (sin síntesis).\n\n"
-                    f"Archivos revisados:\n{files_list or '- ninguno'}\n"
-                    f"{per_file_report}"
-                )
-
-            prompt = f"""
-Actúa como Senior Software Architect y Debugger.
-
-Realiza una revisión completa de la carpeta o proyecto indicado.
-
-Archivos realmente seleccionados y leídos:
-{priority_files}
-
-Reportes individuales por archivo:
-{per_file_report}
-
-Debes generar un reporte útil, práctico y priorizado.
-
-Incluye obligatoriamente:
-
-## Resumen general
-
-## Hallazgos críticos
-- Archivo
-- Riesgo
-- Evidencia exacta
-- Prioridad
-
-## Posibles bugs
-- Explica causa probable
-- Archivos relacionados
-
-## Problemas de arquitectura
-
-## Mejoras recomendadas
-
-## Siguiente acción recomendada
-
-Reglas anti-alucinación:
-- No inventes código.
-- Solo menciona funciones, clases o líneas que aparezcan literalmente en el contexto.
-- Si no viste el contenido exacto de un archivo, NO propongas código para ese archivo.
-- No uses ejemplos genéricos de OpenAI, response.choices, self.client, ni chat.completions si no aparecen literalmente en el contexto.
-- Si no hay evidencia suficiente, responde "sin evidencia suficiente".
-- No asumas el nombre del proyecto: llama al análisis "carpeta analizada".
-- No reportes bugs provenientes de herramientas de análisis salvo que el usuario pida revisar esas herramientas.
-
-Regla crítica:
-- Solo puedes mencionar archivos presentes en "Archivos realmente seleccionados y leídos".
-- No menciones archivos de test, pruebas o examples si no aparecen en "Archivos realmente seleccionados y leídos".
-- No uses ejemplos de buggy_calculator.py salvo que ese archivo haya sido seleccionado explícitamente.
-- El reporte final solo puede usar evidencia que venga de "Reportes individuales por archivo".
-- No mezcles evidencia entre archivos.
-- Si un archivo no tiene problemas confirmados, no lo pongas en hallazgos críticos.
-
-Reglas de severidad:
-- No marques como crítico un riesgo de seguridad genérico si no hay ejecución remota, servidor público, credenciales expuestas o escritura peligrosa sin confirmación.
-- No llames "inyección de comandos" a un prompt de LLM salvo que haya ejecución directa de comandos del sistema.
-- En un asistente local, prompts de usuario no son vulnerabilidad crítica por sí solos.
-- Prioriza bugs funcionales reales: retornos None, respuestas duplicadas, rutas incorrectas, archivos no encontrados, errores de provider, fallos de parseo, errores de streaming.
-
-Reglas de evidencia:
-- Usa solo los hallazgos de las secciones "Detección automática" y "Citas encontradas en el archivo".
-- "Detección automática" viene de una regla determinista: inclúyelos siempre.
-- "Citas encontradas en el archivo" solo significa que la línea citada existe, no que el bug esté demostrado: no digas que esos hallazgos están "confirmados por evidencia".
-- Si un reporte dice que el modelo no reportó problemas y no tiene detección automática, no inventes hallazgos para ese archivo.
-
-No resumas los hallazgos individuales.
-Si un reporte por archivo tiene varios hallazgos, conserva todos.
-No reduzcas varios bugs a uno solo.
-"""
-
-            return self.provider_router.ask(prompt, review=True)
-        
-        if action == "detect_dead_code":
-            folder_path = params.get("folder_path", ".")
-
-            raw_report = self.tool_registry.execute(
-                "detect_dead_code",
-                folder_path=folder_path
-            )
-
-            prompt = f"""
-Actúa como analizador senior de código Python.
-
-El siguiente reporte fue generado mediante análisis estático básico.
-
-Reporte automático:
-{raw_report}
-
-Tu tarea:
-- Ordena los hallazgos por importancia.
-- Explica por qué podrían ser código muerto.
-- Aclara que no debe borrarse nada sin revisión manual.
-- Distingue entre confianza alta, media y baja.
-- Si el reporte dice que no se encontró código muerto, responde eso claramente.
-
-Responde con:
-
-## Resumen
-
-## Posible código muerto
-
-## Confianza
-
-## Qué revisar manualmente
-
-## Recomendación
-"""
-
-            return self.provider_router.ask(prompt)
-        
-        if action == "debug_project":
-            issue = params.get("issue", text)
-            folder_path = params.get("folder_path", ".")
-
-            debug_report = self.tool_registry.execute(
-                "debug_project",
-                issue=issue,
-                folder_path=folder_path
-            )
-
-            self.last_debug_report = debug_report
-
-            return f"""
-            Diagnóstico de depuración:
-
-            {debug_report}
-
-            Si quieres que proponga un cambio automático, escribe algo como:
-
-            genera el fix para el archivo principal usando este diagnóstico
-            """
-        
-        if action == "review_file_deep":
-            file_path = params.get("file_path")
-
-            if not file_path:
-                return "Necesito la ruta del archivo para revisarlo profundamente."
-
-            debug_report = self.tool_registry.execute(
-                "review_file_deep",
-                file_path=file_path,
-                show_unverified=wants_unverified(text)
-            )
-
-            self.last_debug_report = debug_report
-
-            return debug_report
-        
         if action == "smart_refactor":
             file_path = params.get("file_path")
             request = params.get("request", text)

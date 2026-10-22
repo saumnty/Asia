@@ -188,3 +188,126 @@ def find_dependencies(query, raw_results):
 
         Responde breve, claro y práctico.
         """
+
+
+# --- Revisión y depuración --------------------------------------------------
+
+def review_file(file_path, content):
+    return f"""
+        Actúa como revisor de código Python.
+
+        Revisa este archivo buscando:
+        1. Bugs posibles
+        2. Errores de flujo
+        3. Código duplicado
+        4. Riesgos de devolver None
+        5. Mejoras de claridad
+        6. Cambios recomendados
+
+        Archivo:
+        {file_path}
+
+        Contenido:
+        {content}
+
+        Responde en español, claro y práctico.
+        """
+
+
+def review_project(priority_files, per_file_report):
+    return f"""
+Actúa como Senior Software Architect y Debugger.
+
+Realiza una revisión completa de la carpeta o proyecto indicado.
+
+Archivos realmente seleccionados y leídos:
+{priority_files}
+
+Reportes individuales por archivo:
+{per_file_report}
+
+Debes generar un reporte útil, práctico y priorizado.
+
+Incluye obligatoriamente:
+
+## Resumen general
+
+## Hallazgos críticos
+- Archivo
+- Riesgo
+- Evidencia exacta
+- Prioridad
+
+## Posibles bugs
+- Explica causa probable
+- Archivos relacionados
+
+## Problemas de arquitectura
+
+## Mejoras recomendadas
+
+## Siguiente acción recomendada
+
+Reglas anti-alucinación:
+- No inventes código.
+- Solo menciona funciones, clases o líneas que aparezcan literalmente en el contexto.
+- Si no viste el contenido exacto de un archivo, NO propongas código para ese archivo.
+- No uses ejemplos genéricos de OpenAI, response.choices, self.client, ni chat.completions si no aparecen literalmente en el contexto.
+- Si no hay evidencia suficiente, responde "sin evidencia suficiente".
+- No asumas el nombre del proyecto: llama al análisis "carpeta analizada".
+- No reportes bugs provenientes de herramientas de análisis salvo que el usuario pida revisar esas herramientas.
+
+Regla crítica:
+- Solo puedes mencionar archivos presentes en "Archivos realmente seleccionados y leídos".
+- No menciones archivos de test, pruebas o examples si no aparecen en "Archivos realmente seleccionados y leídos".
+- No uses ejemplos de buggy_calculator.py salvo que ese archivo haya sido seleccionado explícitamente.
+- El reporte final solo puede usar evidencia que venga de "Reportes individuales por archivo".
+- No mezcles evidencia entre archivos.
+- Si un archivo no tiene problemas confirmados, no lo pongas en hallazgos críticos.
+
+Reglas de severidad:
+- No marques como crítico un riesgo de seguridad genérico si no hay ejecución remota, servidor público, credenciales expuestas o escritura peligrosa sin confirmación.
+- No llames "inyección de comandos" a un prompt de LLM salvo que haya ejecución directa de comandos del sistema.
+- En un asistente local, prompts de usuario no son vulnerabilidad crítica por sí solos.
+- Prioriza bugs funcionales reales: retornos None, respuestas duplicadas, rutas incorrectas, archivos no encontrados, errores de provider, fallos de parseo, errores de streaming.
+
+Reglas de evidencia:
+- Usa solo los hallazgos de las secciones "Detección automática" y "Citas encontradas en el archivo".
+- "Detección automática" viene de una regla determinista: inclúyelos siempre.
+- "Citas encontradas en el archivo" solo significa que la línea citada existe, no que el bug esté demostrado: no digas que esos hallazgos están "confirmados por evidencia".
+- Si un reporte dice que el modelo no reportó problemas y no tiene detección automática, no inventes hallazgos para ese archivo.
+
+No resumas los hallazgos individuales.
+Si un reporte por archivo tiene varios hallazgos, conserva todos.
+No reduzcas varios bugs a uno solo.
+"""
+
+
+def detect_dead_code(raw_report):
+    return f"""
+Actúa como analizador senior de código Python.
+
+El siguiente reporte fue generado mediante análisis estático básico.
+
+Reporte automático:
+{raw_report}
+
+Tu tarea:
+- Ordena los hallazgos por importancia.
+- Explica por qué podrían ser código muerto.
+- Aclara que no debe borrarse nada sin revisión manual.
+- Distingue entre confianza alta, media y baja.
+- Si el reporte dice que no se encontró código muerto, responde eso claramente.
+
+Responde con:
+
+## Resumen
+
+## Posible código muerto
+
+## Confianza
+
+## Qué revisar manualmente
+
+## Recomendación
+"""
