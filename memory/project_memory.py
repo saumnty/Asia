@@ -1,3 +1,4 @@
+from core.atomic_write import write_text_atomic
 from core.paths import PROJECTS_DIR
 
 
@@ -13,8 +14,8 @@ class ProjectMemory:
     def save_project_summary(self, project_name: str, content: str):
         path = self._project_path(project_name)
 
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(content)
+        # Atómico: un corte a mitad no pierde el resumen anterior.
+        write_text_atomic(path, content)
 
         return path
 

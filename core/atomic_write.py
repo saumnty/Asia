@@ -1,7 +1,7 @@
-"""Escritura atómica de JSON: o queda el archivo nuevo completo o el viejo.
+"""Escritura atómica: o queda el archivo nuevo completo o el viejo.
 
 open(ruta, "w") vacía el archivo al abrirlo; si el proceso se interrumpe a
-mitad de json.dump, el archivo queda vacío o cortado. Aquí se escribe a un
+mitad de la escritura, el archivo queda vacío o cortado. Aquí se escribe a un
 temporal en la misma carpeta (misma partición, así os.replace es un
 renombrado atómico) y solo al final se reemplaza el destino.
 """
@@ -13,13 +13,13 @@ import tempfile
 from pathlib import Path
 
 
-def write_json_atomic(path, data, *, indent=4, ensure_ascii=False):
-    """Escribe data como JSON en path sin dejarlo nunca a medias.
+def write_text_atomic(path, text: str, encoding="utf-8"):
+    """Escribe text en path sin dejarlo nunca a medias.
 
-    El formato es el mismo que json.dump con open(path, "w", encoding="utf-8")
-    (modo texto, así que en Windows los saltos de línea siguen siendo \\r\\n).
-    Si algo falla antes del reemplazo, path queda intacto y el temporal se
-    borra; la excepción se propaga.
+    Los bytes son los mismos que con open(path, "w", encoding=encoding) o
+    Path.write_text: modo texto, así que en Windows "\\n" se guarda como
+    "\\r\\n". Si algo falla antes del reemplazo, path queda intacto y el
+    temporal se borra; la excepción se propaga.
     """
     path = Path(path)
 
@@ -30,8 +30,8 @@ def write_json_atomic(path, data, *, indent=4, ensure_ascii=False):
     )
 
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=indent, ensure_ascii=ensure_ascii)
+        with os.fdopen(fd, "w", encoding=encoding) as f:
+            f.write(text)
             f.flush()
             os.fsync(f.fileno())
 
@@ -46,3 +46,12 @@ def write_json_atomic(path, data, *, indent=4, ensure_ascii=False):
         with contextlib.suppress(FileNotFoundError):
             os.remove(temp_name)
         raise
+
+
+def write_json_atomic(path, data, *, indent=4, ensure_ascii=False):
+    """Escribe data como JSON en path con write_text_atomic.
+
+    json.dumps produce el mismo texto que json.dump con las mismas opciones;
+    si data no se puede serializar, falla antes de crear el temporal.
+    """
+    write_text_atomic(path, json.dumps(data, indent=indent, ensure_ascii=ensure_ascii))

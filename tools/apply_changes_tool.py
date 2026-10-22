@@ -4,6 +4,7 @@ import json
 import re
 from datetime import datetime
 
+from core.atomic_write import write_text_atomic
 from core.paths import BACKUPS_DIR, PENDING_CHANGE_FILE, PROJECT_ROOT
 
 
@@ -46,9 +47,10 @@ class ApplyChangesTool:
             "created_at": datetime.now().isoformat(timespec="seconds")
         }
 
-        self.pending_file.write_text(
-            json.dumps(pending_change, indent=2, ensure_ascii=False),
-            encoding="utf-8"
+        # Atómico: un corte a mitad no deja un pending_change.json inválido.
+        write_text_atomic(
+            self.pending_file,
+            json.dumps(pending_change, indent=2, ensure_ascii=False)
         )
 
         return f"""

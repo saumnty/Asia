@@ -4,6 +4,7 @@ import re
 import shutil
 import subprocess
 
+from core.atomic_write import write_json_atomic
 from core.paths import APPS_FILE
 from tools.app_resolver import find_start_app
 
@@ -48,8 +49,8 @@ class AppTool:
     def save_apps(self, apps):
         self.config_file.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(self.config_file, "w", encoding="utf-8") as f:
-            json.dump(apps, f, ensure_ascii=False, indent=4)
+        # Atómico: un corte a mitad de la escritura no deja apps.json vacío.
+        write_json_atomic(self.config_file, apps, ensure_ascii=False, indent=4)
 
     def open_app(self, app_name: str):
         """Abre una app de apps.json o del menú Inicio (Get-StartApps).
