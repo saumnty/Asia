@@ -58,6 +58,79 @@ def wants_synthesis(text, params, default=True) -> bool:
     return default
 
 
+# El IntentEngine inventa rutas cuando el mensaje no trae ninguna
+# ("path/to/your/file.py", "path_to_your_file.py") y la acción intentaba
+# leerlas. Una ruta solo se usa si sale del mensaje del usuario.
+FILE_PARAMS = ("file_path",)
+FOLDER_PARAMS = ("folder_path", "project_path")
+CURRENT_FOLDER = {"", ".", "./", ".\\"}
+
+# El mensaje habla de un archivo concreto: "este archivo", "el script", "x.py".
+FILE_WORDS = re.compile(
+    r"\b(archivo|fichero|file|script|m[oó]dulo)s?\b|\b[\w-]+\.[a-z][a-z0-9]{0,4}\b",
+    re.IGNORECASE
+)
+
+MISSING_FILE_MESSAGE = (
+    "Necesito la ruta del archivo: escríbela en el mensaje o adjúntalo con @ruta."
+)
+
+
+def path_in_text(value: str, text: str) -> bool:
+    """True si la ruta value sale del mensaje del usuario.
+
+    Vale la ruta tal cual, su nombre con extensión ("core/brain.py" si el
+    usuario escribió "brain.py") o, si la ruta existe, su nombre sin extensión
+    ("explica el archivo brain", "revisa utils" para core/utils).
+    """
+    def norm(s):
+        return s.replace("\\", "/").lower().strip().strip("\"'")
+
+    path, message = norm(value), norm(text)
+
+    if not path:
+        return False
+
+    # Como palabra completa: "brain.py" no sale de "mybrain.py".
+    def word(w):
+        return bool(w) and re.search(rf"(?<![\w.]){re.escape(w)}(?![\w])", message)
+
+    name = path.rstrip("/").rsplit("/", 1)[-1]
+
+    if word(path) or ("." in name and word(name)):
+        return True
+
+    # Un nombre sin extensión ("archivo", "brain") es una palabra común: solo
+    # cuenta si la ruta existe. Si no, "ruta/al/archivo" pasaría con
+    # "explica este archivo".
+    return Path(value).exists() and (word(name) or word(Path(name).stem))
+
+
+def drop_invented_paths(text: str, params: dict):
+    """Quita de params las rutas que no salen del mensaje.
+
+    Devuelve (params, falta_archivo). Una carpeta inventada pasa a ser la
+    carpeta actual; un archivo inventado se quita y falta_archivo es True.
+    """
+    params = dict(params)
+    missing_file = False
+
+    for key in FILE_PARAMS:
+        value = params.get(key)
+
+        if isinstance(value, str) and not path_in_text(value, text):
+            del params[key]
+            missing_file = True
+
+    for key in FOLDER_PARAMS:
+        value = params.get(key)
+
+        if isinstance(value, str) and value.strip() not in CURRENT_FOLDER and not path_in_text(value, text):
+            params[key] = "."
+
+    return params, missing_file
+
+
 UNVERIFIED_PHRASES = ("sin verificar", "no verificad", "incluye todo", "muestra todo")
 
 
@@ -140,6 +213,13 @@ class Brain:
 
         if not isinstance(params, dict):
             params = {}
+
+        params, missing_file = drop_invented_paths(text, params)
+
+        # Ruta inventada: si el mensaje habla de un archivo se pide la ruta;
+        # si no ("explica qué es una closure"), es conversación normal.
+        if missing_file:
+            return MISSING_FILE_MESSAGE if FILE_WORDS.search(text) else None
 
         key = params.get("key")
         value = params.get("value")

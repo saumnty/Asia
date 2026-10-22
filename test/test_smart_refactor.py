@@ -53,7 +53,7 @@ def test_smart_refactor_rechaza_archivo_protegido(monkeypatch, file_path):
     monkeypatch.chdir(PROJECT_ROOT)
     brain = make_brain(file_path)
 
-    result = brain.process("refactoriza el archivo")
+    result = brain.process(f"refactoriza {file_path}")
 
     assert "archivo protegido" in result
     assert brain.provider_router.prompts == []
