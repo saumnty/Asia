@@ -4,38 +4,14 @@ from tools.tool_registry import ToolRegistry
 from providers.provider_router import ProviderRouter
 from memory.project_memory import ProjectMemory
 from config.settings_manager import SettingsManager
+from core.actions.code import CodeActions
 from core.actions.explore import ExploreActions
 from core.actions.memory import MemoryActions
 # wants_synthesis y wants_unverified se importan desde aquí en las pruebas.
 from core.actions.review import ReviewActions, wants_synthesis, wants_unverified  # noqa: F401
-from core.paths import PROJECT_ROOT
-from tools.import_check import ImportPolicy, check_imports, refusal_message, rewrite_request
 from tools.sandbox import PendingRun, SandboxRunner, format_result, sandbox_import_problems
 from pathlib import Path
-import os
 import re
-
-
-# Archivos de Asia que generate_code nunca propone reescribir.
-PROTECTED_FILES = [
-    PROJECT_ROOT / "core" / "brain.py",
-    PROJECT_ROOT / "core" / "intent_engine.py",
-    PROJECT_ROOT / "tools" / "tool_registry.py",
-]
-
-
-def normalized_path(path) -> str:
-    # normcase: en Windows "CORE\Brain.py" y "core/brain.py" son el mismo archivo.
-    return os.path.normcase(str(Path(path).resolve()))
-
-
-def is_protected_file(file_path: str) -> bool:
-    """Compara rutas resueltas, no texto: "./core/brain.py", "core\\brain.py"
-    o la ruta absoluta apuntan al mismo archivo protegido. Un core/brain.py de
-    otro proyecto (otra carpeta actual) no está protegido.
-    """
-    target = normalized_path(file_path)
-    return any(target == normalized_path(protected) for protected in PROTECTED_FILES)
 
 
 # El IntentEngine inventa rutas cuando el mensaje no trae ninguna
@@ -111,6 +87,18 @@ def drop_invented_paths(text: str, params: dict):
     return params, missing_file
 
 
+DIRECT_TOOL_ACTIONS = [
+    "open_app",
+    "create_file",
+    "read_file",
+    "list_folder",
+    "append_file",
+    "search_files",
+    "search_text",
+    "read_file_preview",
+]
+
+
 # Confirmar o cancelar una ejecución en el sandbox se reconoce por texto
 # exacto, sin el IntentEngine: nada se ejecuta por una mala interpretación.
 RUN_CONFIRM_PHRASES = {"confirmar ejecución", "confirmar ejecucion", "confirmo ejecución", "confirmo ejecucion"}
@@ -121,55 +109,13 @@ def normalized_command(text) -> str:
     return " ".join((text or "").lower().split()).strip(" .!¡")
 
 
-def parse_code_response(response):
-    """Extrae FILE_PATH, CODE y EXPLANATION de una respuesta del LLM.
-
-    Devuelve (file_path, code, explanation), o None si no hay sección CODE.
-    file_path es None si el LLM no lo incluyó.
-    """
-    file_match = re.search(
-        r"FILE_PATH:\s*(.*?)\s*CODE:",
-        response,
-        re.DOTALL
-    )
-
-    file_path = file_match.group(1).strip() if file_match else None
-
-    code_start = response.find("CODE:")
-
-    if code_start == -1:
-        return None
-
-    explanation_pos = response.find("EXPLANATION:")
-    explanation_label = "EXPLANATION:"
-
-    if explanation_pos == -1:
-        explanation_pos = response.find("EXPLANACIÓN:")
-        explanation_label = "EXPLANACIÓN:"
-
-    if explanation_pos == -1:
-        code_text = response[code_start + len("CODE:"):]
-        explanation = ""
-    else:
-        code_text = response[code_start + len("CODE:"):explanation_pos]
-        explanation = response[
-            explanation_pos + len(explanation_label):
-        ].strip()
-
-    code = code_text.strip()
-    code = code.replace("```python", "")
-    code = code.replace("```", "")
-    code = code.strip()
-
-    return file_path, code, explanation
-
-
-class Brain(MemoryActions, ExploreActions, ReviewActions):
+class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions):
     # Acción del IntentEngine -> método que la atiende (ver core/actions).
     HANDLERS = {
         **MemoryActions.HANDLERS,
         **ExploreActions.HANDLERS,
         **ReviewActions.HANDLERS,
+        **CodeActions.HANDLERS,
     }
 
     def __init__(self):
@@ -260,45 +206,6 @@ class Brain(MemoryActions, ExploreActions, ReviewActions):
             f"cambio pendiente para {target}", Path(target).name, pending_change["new_content"]
         )
 
-    def import_policy(self, file_path):
-        """Imports permitidos para file_path (ver tools/import_check.py)."""
-        return ImportPolicy.for_file(
-            file_path or "nuevo.py",
-            Path.cwd(),
-            self.settings.get("allowed_imports", [])
-        )
-
-    def check_generated_imports(self, prompt, file_path, code, explanation):
-        """Comprueba los imports de un .py generado antes de proponerlo.
-
-        Si hay imports no instalados o no permitidos, se pide una reescritura
-        (una sola vez). Devuelve (code, explanation, error); error no es None
-        si ni la reescritura sirve, y entonces no se propone el cambio.
-        """
-        if not str(file_path).lower().endswith(".py"):
-            return code, explanation, None
-
-        policy = self.import_policy(file_path)
-        report = check_imports(code, policy)
-
-        if report.ok:
-            return code, explanation, None
-
-        parsed = parse_code_response(
-            self.provider_router.ask(prompt + rewrite_request(report))
-        )
-
-        if parsed:
-            _, new_code, new_explanation = parsed
-            new_report = check_imports(new_code, policy)
-
-            if new_report.ok:
-                return new_code, new_explanation or explanation, None
-
-            report = new_report
-
-        return code, explanation, refusal_message(file_path, report)
-
     def limit(self, name):
         """Límite de contexto configurado en context_limits (settings)."""
         return self.settings.get("context_limits")[name]
@@ -344,326 +251,8 @@ class Brain(MemoryActions, ExploreActions, ReviewActions):
         if handler:
             return getattr(self, handler)(text, params)
 
-        if action == "smart_refactor":
-            file_path = params.get("file_path")
-            request = params.get("request", text)
-
-            if not file_path:
-                return "Necesito la ruta del archivo para refactorizarlo."
-
-            if not Path(file_path).is_file():
-                return f"No encontré el archivo: {file_path}"
-
-            # Se revisa antes de llamar al LLM: el refactor siempre va al
-            # archivo pedido, así que no tiene sentido generarlo.
-            if is_protected_file(file_path):
-                return (
-                    f"{file_path} es un archivo protegido de Asia.\n"
-                    "No propondré un refactor automático. Edítalo a mano o "
-                    "pide refactorizar un archivo menos crítico."
-                )
-
-            content = self.tool_registry.execute(
-                "read_file",
-                file_path=file_path
-            )
-
-            static_findings = self.tool_registry.execute(
-                "analyze_static",
-                file_path=file_path
-            )
-
-            prompt = f"""
-Actúa como Senior Software Engineer.
-
-El usuario quiere refactorizar este archivo.
-
-Solicitud:
-{request}
-
-Archivo:
-{file_path}
-
-Contenido actual:
-{content}
-
-Hallazgos estáticos:
-{static_findings}
-
-Objetivo:
-Mejorar claridad, mantenibilidad, estructura y estilo SIN cambiar el comportamiento.
-
-Responde EXACTAMENTE con:
-
-FILE_PATH:
-{file_path}
-
-CODE:
-contenido completo del archivo refactorizado
-
-EXPLANATION:
-explicación breve de los cambios
-
-Reglas:
-- No uses markdown.
-- No uses triple backticks.
-- No pongas ```python.
-- Conserva el comportamiento actual.
-- No agregues dependencias innecesarias.
-- Solo puedes importar: {self.import_policy(file_path).describe()}. No inventes ni agregues otras librerías.
-- No elimines funciones públicas.
-- No cambies nombres públicos salvo que el usuario lo pida.
-- Si el archivo ya está bien, conserva el contenido y explica que no se requieren cambios importantes.
-
-Reglas estrictas de refactor:
-- No cambies returns por exceptions.
-- No cambies exceptions por returns.
-- No cambies prints por raises.
-- No cambies valores de retorno.
-- No cambies el comportamiento observable.
-- Solo puedes cambiar formato, nombres internos, comentarios, estructura interna o simplificar lógica equivalente.
-"""
-
-            response = self.provider_router.ask(prompt)
-
-            parsed = parse_code_response(response)
-
-            if not parsed:
-                return f"No pude extraer CODE.\n\nRespuesta recibida:\n{response}"
-
-            # Se ignora el FILE_PATH que devuelva el LLM: el refactor siempre
-            # se aplica al archivo que pidió el usuario.
-            _, code, explanation = parsed
-
-            def normalize_code(value):
-                return "\n".join(
-                    line.rstrip()
-                    for line in value.strip().splitlines()
-                )
-
-            if normalize_code(content) == normalize_code(code):
-                return f"No se requieren cambios reales en {file_path}."
-
-            code, explanation, import_error = self.check_generated_imports(
-                prompt, file_path, code, explanation
-            )
-
-            if import_error:
-                return import_error
-
-            forbidden_changes = [
-                ("return None", "raise "),
-                ("print(", "raise "),
-            ]
-
-            for old_pattern, new_pattern in forbidden_changes:
-
-                if old_pattern in content and new_pattern in code:
-                    return (
-                        "Refactor rechazado automáticamente.\n\n"
-                        "El cambio modifica el comportamiento observable "
-                        "del programa (prints/returns/excepciones)."
-                    )
-
-            apply_tool = self.tool_registry.get_apply_changes_tool()
-
-            diff_message = apply_tool.propose_change(
-                file_path=file_path,
-                new_content=code
-            )
-
-            return f"""
-{explanation}
-
-{diff_message}
-"""
-        
-        if action == "generate_code":
-            request = params.get("request", text)
-            
-            debug_context = ""
-
-            if self.last_debug_report and (
-                "bug" in request.lower()
-                or "bugs" in request.lower()
-                or "diagnóstico" in request.lower()
-                or "diagnostico" in request.lower()
-                or "detectados" in request.lower()
-            ):
-                debug_context = self.last_debug_report
-
-            target_file = None
-            target_match = re.search(r"([\w./\\-]+\.[a-zA-Z0-9]+)", request)
-
-            if target_match:
-                target_file = target_match.group(1).replace("\\", "/")
-
-            project_context = self.tool_registry.execute(
-                "read_folder_context",
-                folder_path=".",
-                **self.limit("generate_code_project")
-            )
-
-            target_file_content = ""
-
-            if target_file and Path(target_file).exists():
-                target_file_content = self.tool_registry.execute(
-                    "read_file_preview",
-                    file_path=target_file,
-                    max_chars=self.limit("generate_code_file")
-                )
-
-            prompt = f"""
-Actúa como Senior Python Developer.
-
-El usuario quiere generar o corregir código para este proyecto.
-
-Solicitud:
-{request}
-
-Archivo objetivo detectado:
-{target_file}
-
-Contenido actual del archivo objetivo:
-{target_file_content}
-
-Contexto del proyecto:
-{project_context}
-
-Diagnóstico previo disponible:
-{debug_context}
-
-Responde EXACTAMENTE con este formato:
-
-FILE_PATH:
-ruta/del/archivo.py
-
-CODE:
-contenido completo del archivo final
-
-EXPLANATION:
-explicación breve del cambio
-
-IMPORTANTE:
-- No traduzcas FILE_PATH.
-- No traduzcas CODE.
-- No traduzcas EXPLANATION.
-- Usa exactamente esas tres etiquetas.
-- No uses markdown.
-- No uses triple backticks.
-- No pongas ```python.
-- CODE debe contener el archivo completo final.
-- Si modificas un archivo existente, conserva sus imports, clases y funciones que no deban cambiarse.
-- Si usas re, agrega import re.
-- Si creas una función nueva, incluye todos los imports necesarios.
-- Solo puedes importar: {self.import_policy(target_file).describe()}. No inventes ni agregues otras librerías.
-- Si el usuario menciona un archivo .py específico, usa ese archivo como FILE_PATH.
-- Si el usuario quiere crear una tool nueva, usa una ruta dentro de tools/.
-- Si el usuario quiere modificar Brain, usa core/brain.py.
-- Si el usuario quiere modificar IntentEngine, usa core/intent_engine.py.
-- Si no estás seguro de la ruta, usa pruebas/generated_code.py.
-- Si solo propones cambios menores de tipado, formato o comentarios, dilo explícitamente como "cambio menor".
-"""
-
-            response = self.provider_router.ask(prompt)
-
-            parsed = parse_code_response(response)
-
-            if not parsed:
-                return f"No pude extraer CODE.\n\nRespuesta recibida:\n{response}"
-
-            file_path, code, explanation = parsed
-
-            # Si el usuario nombró un archivo existente, el cambio va a ese
-            # archivo aunque el LLM devuelva otra ruta.
-            if target_file and Path(target_file).is_file():
-                file_path = target_file
-
-            if not file_path:
-                return f"No pude extraer FILE_PATH.\n\nRespuesta recibida:\n{response}"
-
-            code, explanation, import_error = self.check_generated_imports(
-                prompt, file_path, code, explanation
-            )
-
-            if import_error:
-                return import_error
-
-            forbidden_changes = [
-                ("return None", "raise "),
-                ("print(", "raise "),
-            ]
-
-            old_content = ""
-
-            if Path(file_path).exists():
-                old_content = Path(file_path).read_text(encoding="utf-8").strip()
-
-            new_code = code
-
-            for old_pattern, new_pattern in forbidden_changes:
-
-                if old_pattern in old_content and new_pattern in new_code:
-                    return (
-                        "Refactor rechazado automáticamente.\n\n"
-                        "El cambio modifica el comportamiento observable "
-                        "del programa (prints/returns/excepciones)."
-                    )
-
-            if "re." in code and "import re" not in code:
-                code = "import re\n\n" + code
-
-            if not file_path or not code:
-                return f"Faltan datos para proponer el cambio.\n\nRespuesta recibida:\n{response}"
-            
-            if is_protected_file(file_path):
-                return f"""
-            Asia generó un cambio para un archivo protegido:
-
-            {file_path}
-
-            Por seguridad no lo aplicaré automáticamente todavía.
-            Primero revisa el cambio manualmente o pide modificar un archivo menos crítico.
-            """
-
-            if old_content == code.strip():
-                return f"No se requieren cambios en {file_path}."
-
-            apply_tool = self.tool_registry.get_apply_changes_tool()
-
-            diff_message = apply_tool.propose_change(
-                file_path=file_path,
-                new_content=code
-            )
-
-            return f"""
-{explanation}
-
-{diff_message}
-"""
-        
-        if action == "apply_change":
-            apply_tool = self.tool_registry.get_apply_changes_tool()
-            return apply_tool.apply_pending_change()
-
-        if action == "cancel_change":
-            apply_tool = self.tool_registry.get_apply_changes_tool()
-            return apply_tool.cancel_pending_change()
-        
-        if action == "show_pending_change":
-            apply_tool = self.tool_registry.get_apply_changes_tool()
-            return apply_tool.show_pending_change()
-
-        if action in [
-            "open_app",
-            "create_file",
-            "read_file",
-            "list_folder",
-            "append_file",
-            "search_files",
-            "search_text",
-            "read_file_preview"
-        ]:
+        # Acciones que van directo a una tool con los parámetros del IntentEngine.
+        if action in DIRECT_TOOL_ACTIONS:
             return self.tool_registry.execute(action, **params)
 
         # "chat" o acción no reconocida: conversación normal. El launcher la

@@ -311,3 +311,112 @@ Responde con:
 
 ## Recomendación
 """
+
+
+# --- Generación de código ---------------------------------------------------
+
+def smart_refactor(request, file_path, content, static_findings, allowed_imports):
+    return f"""
+Actúa como Senior Software Engineer.
+
+El usuario quiere refactorizar este archivo.
+
+Solicitud:
+{request}
+
+Archivo:
+{file_path}
+
+Contenido actual:
+{content}
+
+Hallazgos estáticos:
+{static_findings}
+
+Objetivo:
+Mejorar claridad, mantenibilidad, estructura y estilo SIN cambiar el comportamiento.
+
+Responde EXACTAMENTE con:
+
+FILE_PATH:
+{file_path}
+
+CODE:
+contenido completo del archivo refactorizado
+
+EXPLANATION:
+explicación breve de los cambios
+
+Reglas:
+- No uses markdown.
+- No uses triple backticks.
+- No pongas ```python.
+- Conserva el comportamiento actual.
+- No agregues dependencias innecesarias.
+- Solo puedes importar: {allowed_imports}. No inventes ni agregues otras librerías.
+- No elimines funciones públicas.
+- No cambies nombres públicos salvo que el usuario lo pida.
+- Si el archivo ya está bien, conserva el contenido y explica que no se requieren cambios importantes.
+
+Reglas estrictas de refactor:
+- No cambies returns por exceptions.
+- No cambies exceptions por returns.
+- No cambies prints por raises.
+- No cambies valores de retorno.
+- No cambies el comportamiento observable.
+- Solo puedes cambiar formato, nombres internos, comentarios, estructura interna o simplificar lógica equivalente.
+"""
+
+
+def generate_code(request, target_file, target_file_content, project_context, debug_context, allowed_imports):
+    return f"""
+Actúa como Senior Python Developer.
+
+El usuario quiere generar o corregir código para este proyecto.
+
+Solicitud:
+{request}
+
+Archivo objetivo detectado:
+{target_file}
+
+Contenido actual del archivo objetivo:
+{target_file_content}
+
+Contexto del proyecto:
+{project_context}
+
+Diagnóstico previo disponible:
+{debug_context}
+
+Responde EXACTAMENTE con este formato:
+
+FILE_PATH:
+ruta/del/archivo.py
+
+CODE:
+contenido completo del archivo final
+
+EXPLANATION:
+explicación breve del cambio
+
+IMPORTANTE:
+- No traduzcas FILE_PATH.
+- No traduzcas CODE.
+- No traduzcas EXPLANATION.
+- Usa exactamente esas tres etiquetas.
+- No uses markdown.
+- No uses triple backticks.
+- No pongas ```python.
+- CODE debe contener el archivo completo final.
+- Si modificas un archivo existente, conserva sus imports, clases y funciones que no deban cambiarse.
+- Si usas re, agrega import re.
+- Si creas una función nueva, incluye todos los imports necesarios.
+- Solo puedes importar: {allowed_imports}. No inventes ni agregues otras librerías.
+- Si el usuario menciona un archivo .py específico, usa ese archivo como FILE_PATH.
+- Si el usuario quiere crear una tool nueva, usa una ruta dentro de tools/.
+- Si el usuario quiere modificar Brain, usa core/brain.py.
+- Si el usuario quiere modificar IntentEngine, usa core/intent_engine.py.
+- Si no estás seguro de la ruta, usa pruebas/generated_code.py.
+- Si solo propones cambios menores de tipado, formato o comentarios, dilo explícitamente como "cambio menor".
+"""
