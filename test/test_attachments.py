@@ -1,4 +1,5 @@
 import io
+from pathlib import Path
 
 import pytest
 
@@ -124,12 +125,18 @@ def test_file_attachments(project):
 
 
 def test_prompt_de_chat_e_historial():
-    attachments = [make_attachment("a.py", "x = 1", 1000), make_attachment(STDIN_LABEL, "abc", 2)]
+    attachments = [make_attachment("a.py", "x = 1", 1000, path=Path("a.py")), make_attachment(STDIN_LABEL, "abc", 2)]
 
     prompt = build_chat_prompt("explica", attachments)
 
-    assert prompt.startswith("explica\n\nArchivos adjuntos:\n--- a.py ---\nx = 1\n--- fin de a.py ---")
-    assert f"--- {STDIN_LABEL} (recortado) ---\nab\n" in prompt
+    # Los archivos y el texto pegado o de stdin van en secciones distintas:
+    # con todo bajo "Archivos adjuntos", el modelo trataba el texto pegado
+    # como un archivo que no podía abrir.
+    assert prompt == (
+        "explica\n\n"
+        "Archivos adjuntos:\n--- a.py ---\nx = 1\n--- fin de a.py ---\n\n"
+        f"Texto incluido en el mensaje (no es un archivo):\n--- {STDIN_LABEL} (recortado) ---\nab\n--- fin de {STDIN_LABEL} ---"
+    )
 
     history = history_prompt("explica", attachments)
 

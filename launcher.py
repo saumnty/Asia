@@ -180,19 +180,26 @@ class MessageReader:
 
         Si la primera línea termina en << (con o sin espacios al final), lo que
         sigue hasta una línea con FIN sola es el bloque y lo escrito antes de
-        << es la instrucción. Si no, y llegaron más líneas en la misma lectura
-        (un pegado sin <<), todo el pegado es un solo mensaje.
+        << es la instrucción. Si se pegó justo después de << sin pulsar Enter,
+        el bloque empieza en la misma línea: cuenta si la misma lectura trae
+        una línea FIN (así "x = 1 << 3" en un pegado sigue siendo código). Si
+        no, y llegaron más líneas en la misma lectura (un pegado sin <<), todo
+        el pegado es un solo mensaje.
         """
         first = self.next_line("\nTú: ")
         stripped = first.rstrip()
+        marker = first.find(MULTILINE_START)
 
-        if not stripped.endswith(MULTILINE_START):
+        if stripped.endswith(MULTILINE_START):
+            instruction = stripped[: -len(MULTILINE_START)].rstrip()
+            lines = []
+        elif marker != -1 and any(line.strip() == MULTILINE_END for line in self.pending):
+            instruction = first[:marker].rstrip()
+            lines = [first[marker + len(MULTILINE_START):]]
+        else:
             rest = list(self.pending)
             self.pending.clear()
             return "\n".join([first, *rest]), None
-
-        instruction = stripped[: -len(MULTILINE_START)].rstrip()
-        lines = []
 
         while True:
             try:

@@ -102,7 +102,7 @@ def test_stdin_con_mensaje_es_adjunto_y_va_directo_al_chat(cwd):
 
     assert brain.processed == []
     prompt = brain.provider_router.calls[0]["prompt"]
-    assert prompt.startswith("explica esto\n\nArchivos adjuntos:")
+    assert prompt.startswith("explica esto\n\nTexto incluido en el mensaje (no es un archivo):")
     assert f"--- {STDIN_LABEL} ---\ndef f(): pass\n" in prompt
 
 
@@ -301,6 +301,12 @@ def chunks(values):
         (["revisa <<", PASTED_CODE + "FIN\r\nsalir"], [("revisa", EXPECTED_BLOCK), ("salir", None)]),
         # Un pegado de varias líneas sin << es un solo mensaje.
         ([PASTED_CODE], [(EXPECTED_BLOCK, None)]),
+        # Pegado justo después de "<<", sin Enter: el código empieza en la
+        # misma línea que <<.
+        (["explica esto <<" + PASTED_CODE + "FIN"], [("explica esto", EXPECTED_BLOCK)]),
+        (["explica esto <<" + PASTED_CODE + "FIN\r\nsalir"], [("explica esto", EXPECTED_BLOCK), ("salir", None)]),
+        # Un << en medio de la línea sin FIN en el pegado es código, no un bloque.
+        (["x = 1 << 3\r\ny = 2\r\n"], [("x = 1 << 3\ny = 2", None)]),
     ],
 )
 def test_bloque_con_pegados_de_varias_lineas(reads, expected):
@@ -340,10 +346,36 @@ PASTE_START, PASTE_END = "\x1b[200~", "\x1b[201~"
             "revisa <<   \r" + PASTE_START + PASTED_CODE + PASTE_END + "\rFIN\rsalir\r",
             [("revisa", EXPECTED_BLOCK), ("salir", None)],
         ),
+        (
+            "explica esto <<" + PASTE_START + PASTED_CODE + "FIN" + PASTE_END + "\r",
+            [("explica esto", EXPECTED_BLOCK)],
+        ),
     ],
 )
 def test_bloque_con_pegado_real_en_prompt_toolkit(keys, expected):
     assert prompt_toolkit_messages(keys, len(expected)) == expected
+
+
+@pytest.mark.parametrize(
+    "reads",
+    [
+        ["explica esto <<", PASTED_CODE + "FIN", "salir"],
+        ["explica esto <<" + PASTED_CODE + "FIN", "salir"],
+    ],
+)
+def test_bloque_pegado_siempre_llega_al_modelo_como_contenido(cwd, reads):
+    # Aunque el IntentEngine eligiera una acción de archivo (p. ej.
+    # explain_file con una ruta inventada), el bloque no pasa por las
+    # acciones: va al chat con su contenido.
+    brain = FakeBrain("<explicación de otro archivo>")
+
+    launcher.interactive_mode(brain, read=chunks(reads))
+
+    assert brain.processed == []
+    prompt = brain.provider_router.calls[0]["prompt"]
+    assert prompt.startswith("explica esto\n\nTexto incluido en el mensaje (no es un archivo):\n")
+    assert f"--- texto pegado ---\n{EXPECTED_BLOCK}\n--- fin de texto pegado ---" in prompt
+    assert "<<" not in prompt and "FIN\n" not in prompt
 
 
 def test_adjunto_faltante_no_se_envia_y_sugiere(cwd, capsys):

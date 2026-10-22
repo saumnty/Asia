@@ -208,15 +208,30 @@ def truncation_warnings(attachments) -> list[str]:
 
 
 def build_chat_prompt(text: str, attachments) -> str:
-    """Mensaje para el chat con el contenido de los adjuntos al final."""
+    """Mensaje para el chat con el contenido de los adjuntos al final.
+
+    Los archivos (@ruta, --file) y el texto sin archivo (pegado con << o
+    por stdin) van en secciones distintas: con todo bajo "Archivos
+    adjuntos", el modelo a veces respondía que no podía abrir adjuntos.
+    """
     if not attachments:
         return text
 
-    parts = [text, "", "Archivos adjuntos:"]
+    parts = [text]
+    sections = [
+        ("Archivos adjuntos:", [a for a in attachments if a.path is not None]),
+        ("Texto incluido en el mensaje (no es un archivo):", [a for a in attachments if a.path is None]),
+    ]
 
-    for a in attachments:
-        cut = " (recortado)" if a.truncated else ""
-        parts += [f"--- {a.label}{cut} ---", a.content, f"--- fin de {a.label} ---"]
+    for title, group in sections:
+        if not group:
+            continue
+
+        parts += ["", title]
+
+        for a in group:
+            cut = " (recortado)" if a.truncated else ""
+            parts += [f"--- {a.label}{cut} ---", a.content, f"--- fin de {a.label} ---"]
 
     return "\n".join(parts)
 
