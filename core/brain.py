@@ -32,6 +32,21 @@ MISSING_FILE_MESSAGE = (
     "Necesito la ruta del archivo: escríbela en el mensaje o adjúntalo con @ruta."
 )
 
+# Acciones que trabajan sobre un archivo y sin file_path piden la ruta.
+FILE_ACTIONS = {
+    "summarize_file", "explain_file", "review_file", "review_file_deep",
+    "smart_refactor", "read_file", "read_file_preview", "append_file",
+}
+
+
+def is_multiline(text: str) -> bool:
+    """Dos o más líneas con texto: casi siempre código pegado sin <<.
+
+    En código, FILE_WORDS ve nombres de archivo en "self.x" o "df.loc", y
+    pedir la ruta no tiene sentido: el contenido ya está en el mensaje.
+    """
+    return sum(1 for line in text.splitlines() if line.strip()) >= 2
+
 
 def path_in_text(value: str, text: str) -> bool:
     """True si la ruta value sale del mensaje del usuario.
@@ -183,8 +198,13 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         if action == "run_sandbox":
             return self.handle_run_sandbox(text, params)
 
-        # Ruta inventada: si el mensaje habla de un archivo se pide la ruta;
-        # si no ("explica qué es una closure"), es conversación normal.
+        # Varias líneas sin ruta válida: es texto pegado para el chat, no un
+        # archivo que falte.
+        if is_multiline(text) and (missing_file or action in FILE_ACTIONS and not params.get("file_path")):
+            return None
+
+        # Ruta inventada: si el mensaje (corto) habla de un archivo se pide la
+        # ruta; si no ("explica qué es una closure"), es conversación normal.
         if missing_file:
             return MISSING_FILE_MESSAGE if FILE_WORDS.search(text) else None
 

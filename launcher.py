@@ -1,4 +1,5 @@
 import argparse
+import re
 import sys
 from collections import deque
 from pathlib import Path
@@ -42,6 +43,8 @@ DEFAULT_FILE_REQUEST = "Explica el contenido de los archivos adjuntos."
 # Modo multilínea del modo interactivo: "explica esto <<", líneas, "FIN".
 MULTILINE_START = "<<"
 MULTILINE_END = "FIN"
+# FIN como última palabra de una línea ("return x FIN").
+TRAILING_END = re.compile(rf"\s+{MULTILINE_END}\s*$")
 PASTED_LABEL = "texto pegado"
 
 
@@ -162,6 +165,12 @@ class MessageReader:
         self.read = read
         self.pending = deque()
 
+    def closes_read(self, remainder=None):
+        """True si lo que queda de la lectura actual cierra un bloque: una
+        línea FIN sola, o FIN como última palabra de la última línea."""
+        lines = list(self.pending) or [remainder or ""]
+        return any(line.strip() == MULTILINE_END for line in lines) or bool(TRAILING_END.search(lines[-1]))
+
     def next_line(self, prompt):
         if not self.pending:
             chunk = self.read(prompt).replace("\r\n", "\n").replace("\r", "\n")
@@ -179,12 +188,16 @@ class MessageReader:
         """Devuelve (texto, bloque), con bloque None si no es un mensaje con <<.
 
         Si la primera línea termina en << (con o sin espacios al final), lo que
-        sigue hasta una línea con FIN sola es el bloque y lo escrito antes de
-        << es la instrucción. Si se pegó justo después de << sin pulsar Enter,
-        el bloque empieza en la misma línea: cuenta si la misma lectura trae
-        una línea FIN (así "x = 1 << 3" en un pegado sigue siendo código). Si
-        no, y llegaron más líneas en la misma lectura (un pegado sin <<), todo
-        el pegado es un solo mensaje.
+        sigue hasta el cierre es el bloque y lo escrito antes de << es la
+        instrucción. Cierra una línea FIN sola o FIN al final de la última
+        línea de una lectura, tras un espacio ("return x FIN"): así una
+        variable FIN en medio de un pegado no corta el bloque.
+
+        Si se pegó justo después de << sin pulsar Enter, el bloque empieza en
+        la misma línea: cuenta si la misma lectura trae el cierre (así
+        "x = 1 << 3" en un pegado sigue siendo código). Si no, y llegaron más
+        líneas en la misma lectura (un pegado sin <<), todo el pegado es un
+        solo mensaje.
         """
         first = self.next_line("\nTú: ")
         stripped = first.rstrip()
@@ -192,14 +205,17 @@ class MessageReader:
 
         if stripped.endswith(MULTILINE_START):
             instruction = stripped[: -len(MULTILINE_START)].rstrip()
-            lines = []
-        elif marker != -1 and any(line.strip() == MULTILINE_END for line in self.pending):
+        elif marker != -1 and self.closes_read(first[marker + len(MULTILINE_START):]):
             instruction = first[:marker].rstrip()
-            lines = [first[marker + len(MULTILINE_START):]]
+            # El resto de la línea es la primera del bloque; los espacios de
+            # "<< " antes del pegado no son parte del código.
+            self.pending.appendleft(first[marker + len(MULTILINE_START):].lstrip(" "))
         else:
             rest = list(self.pending)
             self.pending.clear()
             return "\n".join([first, *rest]), None
+
+        lines = []
 
         while True:
             try:
@@ -208,6 +224,13 @@ class MessageReader:
                 break
 
             if current.strip() == MULTILINE_END:
+                break
+
+            # FIN como última palabra solo cierra en la última línea leída.
+            end = TRAILING_END.search(current) if not self.pending else None
+
+            if end:
+                lines.append(current[:end.start()])
                 break
 
             lines.append(current)

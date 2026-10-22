@@ -274,6 +274,21 @@ def test_linea_vacia_no_llama_a_asia(cwd):
 PASTED_CODE = "def f(x):\r\n\r\n    if x:\r\n        return 1\r\n    return 0\r\n"
 EXPECTED_BLOCK = "def f(x):\n\n    if x:\n        return 1\n    return 0"
 
+EXACT_PASTE = (
+    "explica esto << def suma(valores):\r\n"
+    "    resultado = []\r\n"
+    "    for v in valores:\r\n"
+    "        resultado.append(v * 2)\r\n"
+    "    return resultado FIN"
+)
+EXACT_BLOCK = (
+    "def suma(valores):\n"
+    "    resultado = []\n"
+    "    for v in valores:\n"
+    "        resultado.append(v * 2)\n"
+    "    return resultado"
+)
+
 
 def chunks(values):
     """read() que devuelve cada valor tal cual (puede traer varias líneas)."""
@@ -307,6 +322,18 @@ def chunks(values):
         (["explica esto <<" + PASTED_CODE + "FIN\r\nsalir"], [("explica esto", EXPECTED_BLOCK), ("salir", None)]),
         # Un << en medio de la línea sin FIN en el pegado es código, no un bloque.
         (["x = 1 << 3\r\ny = 2\r\n"], [("x = 1 << 3\ny = 2", None)]),
+        # El pegado exacto del caso real: "<< " y el código justo después,
+        # con FIN al final de la última línea de código.
+        ([EXACT_PASTE], [("explica esto", EXACT_BLOCK)]),
+        # FIN al final de la última línea, tras "<<" + Enter.
+        (["explica <<", "a = 1\r\nreturn a FIN"], [("explica", "a = 1\nreturn a")]),
+        (["explica <<", "a = 1", "return a FIN"], [("explica", "a = 1\nreturn a")]),
+        (["explica esto << x = 1 FIN"], [("explica esto", "x = 1")]),
+        # Una variable FIN dentro del código no cierra el bloque a mitad.
+        (["explica <<", "FIN = 1\r\nx = FIN\r\nprint(x)\r\n", "FIN"], [("explica", "FIN = 1\nx = FIN\nprint(x)")]),
+        (["explica <<", "x = FIN\r\ny = 2 FIN"], [("explica", "x = FIN\ny = 2")]),
+        # Sin espacio antes, FIN es parte de la palabra.
+        (["explica <<", "x = resultadoFIN", "FIN"], [("explica", "x = resultadoFIN")]),
     ],
 )
 def test_bloque_con_pegados_de_varias_lineas(reads, expected):
@@ -350,6 +377,10 @@ PASTE_START, PASTE_END = "\x1b[200~", "\x1b[201~"
             "explica esto <<" + PASTE_START + PASTED_CODE + "FIN" + PASTE_END + "\r",
             [("explica esto", EXPECTED_BLOCK)],
         ),
+        (
+            "explica esto << " + PASTE_START + EXACT_PASTE[len("explica esto << "):] + PASTE_END + "\r",
+            [("explica esto", EXACT_BLOCK)],
+        ),
     ],
 )
 def test_bloque_con_pegado_real_en_prompt_toolkit(keys, expected):
@@ -361,6 +392,7 @@ def test_bloque_con_pegado_real_en_prompt_toolkit(keys, expected):
     [
         ["explica esto <<", PASTED_CODE + "FIN", "salir"],
         ["explica esto <<" + PASTED_CODE + "FIN", "salir"],
+        ["explica esto << " + PASTED_CODE.rstrip("\r\n") + " FIN", "salir"],
     ],
 )
 def test_bloque_pegado_siempre_llega_al_modelo_como_contenido(cwd, reads):

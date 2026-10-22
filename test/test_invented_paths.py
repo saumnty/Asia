@@ -147,3 +147,57 @@ def test_drop_invented_paths_no_modifica_el_original():
     assert cleaned == {"folder_path": "."}
     assert missing is True
     assert params == {"file_path": "path/to/your/file.py", "folder_path": "."}
+
+
+# --- Mensajes de varias líneas (código pegado sin <<) -------------------------
+
+PASTED = (
+    "explica esto\n"
+    "def suma(valores):\n"
+    "    resultado = []\n"
+    "    for v in valores:\n"
+    "        resultado.append(v * 2)\n"
+    "    return resultado"
+)
+
+
+@pytest.mark.parametrize(
+    "action, params",
+    [
+        ("explain_file", {}),
+        ("explain_file", {"file_path": "path/to/your/file.py"}),
+        ("summarize_file", {}),
+        ("review_file", {}),
+        ("review_file_deep", {"file_path": "suma.py"}),
+        ("smart_refactor", {"request": "explica esto"}),
+        ("read_file_preview", {"file_path": "codigo.py"}),
+    ],
+)
+def test_varias_lineas_sin_ruta_valida_van_al_chat(action, params):
+    # "resultado.append" parece un nombre de archivo para FILE_WORDS y la
+    # acción de archivo sin ruta respondía "Necesito la ruta del archivo".
+    brain = make_brain(action, params)
+
+    assert brain.process(PASTED) is None
+    assert brain.tool_registry.calls == []
+    assert brain.provider_router.prompts == []
+
+
+@pytest.mark.parametrize(
+    "action, params, expected",
+    [
+        ("explain_file", {"file_path": "ruta/al/archivo.py"}, MISSING_FILE_MESSAGE),
+        ("explain_file", {}, "Necesito la ruta del archivo."),
+        ("review_file_deep", {}, "Necesito la ruta del archivo para revisarlo profundamente."),
+    ],
+)
+def test_mensaje_corto_que_habla_de_un_archivo_sigue_pidiendo_la_ruta(action, params, expected):
+    assert make_brain(action, params).process("explica este archivo") == expected
+
+
+def test_varias_lineas_con_ruta_valida_usa_la_accion(tmp_path):
+    target = tmp_path / "a.py"
+    target.write_text("x = 1\n", encoding="utf-8")
+    brain = make_brain("explain_file", {"file_path": str(target)})
+
+    assert brain.process(f"explica {target}\nen detalle\npor favor") == "explicación"
