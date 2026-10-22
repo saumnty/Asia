@@ -18,6 +18,7 @@ para poder revisar o revertir los cambios.
 | — | `review_project` sin síntesis: devuelve los reportes por archivo sin llamar al LLM si el mensaje dice "sin síntesis"/"por archivo", si el IntentEngine manda `synthesis: false` o con `review_project_synthesis: false` en config (default `true`). `smart_refactor` rechaza los archivos protegidos antes de llamar al LLM. | `284c1bdc` |
 | B2. Hallazgos falsos | `review_file_deep` y `review_project_files`: cada hallazgo con línea, cita y claim; la cita se verifica sin LLM, se corrige la línea y se descartan citas inexistentes y repetidos. Solo se muestra "VERIFICADO (cita encontrada)", salvo que se pida "muestra todo". `analyze_static` sale de esos prompts. `ollama_temperature`/`ollama_repeat_penalty` solo en revisiones. Banco de calidad en `test/manual/` (ver "Alucinación en revisiones largas"). | `b4b288c3`, `65b68774`, `be698d1a` |
 | B3. Truncado determinista | La etiqueta pasa a "Citas encontradas en el archivo (análisis del modelo, no verificado)". `tools/write_safety.py`: regla con `ast`, sin LLM, que avisa si un script lee un archivo y luego lo abre con `"w"` sin respaldo ni temporal; va en la sección "Detección automática". Caso negativo `guardar_seguro.py` en el banco. | `46469f71`, `eae58942` |
+| — | Escritura atómica de `memory.json` (`MemoryManager.save`) y `settings.json` (`SettingsManager.set`): temporal en la misma carpeta + `os.replace` (`core/atomic_write.py`). Un fallo a medias deja el original intacto. Mismo formato byte a byte. | `5127354e` |
 
 ## Próximas fases
 
@@ -107,7 +108,15 @@ Dos colecciones nuevas en ChromaDB, separadas de las de proyectos. Usar un prefi
 
   La regla detecta el truncado en las 12 revisiones de `moda.py`/`eliminar.py` y no avisa en ninguna de las 6 de `guardar_seguro.py`. El modelo sigue sin detectar el truncado por su cuenta; lo que aporta es la columna con todos los valores faltantes de `moda.py` (en `deep`, 3 de 3). El prompt del modelo no cambió en B3: la diferencia en sus números frente a B2 es variación entre corridas. Recall 0,67 de la regla = 6 de los 9 reales esperados; los 3 restantes son `moda_vacia`, que no es de escritura.
 
-  La misma regla marca dos archivos de Asia: `memory/memory_manager.py:23` (`save`) y `config/settings_manager.py:73` (`set`) leen el JSON y lo reescriben con `"w"`. Un fallo a medias dejaría `memory.json` o `settings.json` vacíos. Pendiente.
+  La misma regla marcó dos archivos de Asia: `MemoryManager.save` y `SettingsManager.set` leían el JSON y lo reescribían con `"w"`. Corregido en `5127354e` con escritura atómica.
+
+  Pendientes con el mismo patrón (sin cambiar todavía):
+  - `tools/app_tool.py:51` (`save_apps`): lee y reescribe `config/apps.json` con `"w"`. La regla lo marca. Mismo riesgo que los anteriores.
+  - `memory/project_memory.py:16` (`save_project_summary`): sobrescribe el resumen `.md` del proyecto con `"w"`. La regla no lo marca porque no lo lee antes, pero un fallo a medias pierde el resumen anterior.
+  - `tools/apply_changes_tool.py:49`: reescribe `pending_change.json`. La regla no lo marca porque la lectura (`load_pending_change`) está más abajo en el archivo. Impacto bajo: se pierde el cambio pendiente, no el archivo del usuario.
+  - `tools/apply_changes_tool.py:115`: aplica el cambio con `write_text` sobre el archivo del usuario, pero antes guarda un respaldo en `memory/backups/`, así que un fallo a medias se recupera desde ahí.
+
+  Límite de la regla: no distingue funciones ni ámbitos. Compara rutas por nombre de variable y ordena por número de línea, así que da falsos positivos cuando dos funciones usan el mismo nombre (`test/test_atomic_write.py:61`) y falsos negativos cuando la lectura está definida después de la escritura.
 
   Hallazgo de la evaluación: con "si no hay problemas responde solo SIN_HALLAZGOS" al final del prompt, el modelo respondía eso el 100% de las veces (16/16, con y sin ejemplos ni temperatura). Pedir un análisis previo lo evita. También ignora el formato de bloques y escribe listas markdown; el parser acepta ambos.
 
