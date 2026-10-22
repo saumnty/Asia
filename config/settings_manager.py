@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from core.atomic_write import write_json_atomic
 from core.paths import DEFAULTS_FILE, SETTINGS_FILE
 
 
@@ -70,10 +71,5 @@ class SettingsManager:
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump(
-                data,
-                f,
-                indent=4,
-                ensure_ascii=False
-            )
+        # Atómico: un corte a mitad de la escritura no deja settings.json vacío.
+        write_json_atomic(self.path, data, indent=4, ensure_ascii=False)

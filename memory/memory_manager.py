@@ -1,5 +1,6 @@
 import json
 
+from core.atomic_write import write_json_atomic
 from core.paths import MEMORY_FILE
 
 
@@ -19,14 +20,8 @@ class MemoryManager:
             return json.load(f)
 
     def save(self, data):
-
-        with open(self.memory_file, "w", encoding="utf-8") as f:
-            json.dump(
-                data,
-                f,
-                ensure_ascii=False,
-                indent=4
-            )
+        # Atómico: un corte a mitad de la escritura no deja memory.json vacío.
+        write_json_atomic(self.memory_file, data, ensure_ascii=False, indent=4)
 
     def remember(self, key, value):
         data = self.load()
