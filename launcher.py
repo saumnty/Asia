@@ -8,6 +8,7 @@ from pathlib import Path
 # carpeta desde la que llamó a Asia.
 from core.attachments import (
     STDIN_LABEL,
+    MissingAttachment,
     build_chat_prompt,
     decode,
     extract_attachments,
@@ -89,6 +90,10 @@ def prepare_message(brain, text, files=(), block=None, block_label=STDIN_LABEL):
     Devuelve (texto, adjuntos, use_actions). En el texto, cada @ruta y cada
     --file quedan como ruta absoluta para que las acciones de Brain (revisar,
     explicar...) encuentren el archivo.
+
+    Si un adjunto no existe devuelve None: el mensaje no se envía (el modelo
+    respondería sobre un archivo que no vio) y el aviso sugiere nombres
+    parecidos de la carpeta.
     """
     cwd = Session.get_user_cwd()
     max_chars = brain.settings.get("attachment_max_chars", DEFAULT_ATTACHMENT_MAX_CHARS)
@@ -96,6 +101,10 @@ def prepare_message(brain, text, files=(), block=None, block_label=STDIN_LABEL):
     text, attachments, warnings = extract_attachments(text, cwd, max_chars)
     extra, extra_warnings = file_attachments(files, cwd, max_chars)
     warnings += extra_warnings
+
+    if any(isinstance(w, MissingAttachment) for w in warnings):
+        warn(warnings + ["Mensaje no enviado: corrige la ruta y vuelve a intentarlo."])
+        return None
 
     if extra:
         text = (text.strip() or DEFAULT_FILE_REQUEST) + " " + " ".join(
@@ -216,13 +225,13 @@ def interactive_mode(brain=None, read=None):
                 print("Asia apagada.")
                 break
 
-            text, attachments, use_actions = prepare_message(
-                brain, user, block=block, block_label=PASTED_LABEL
-            )
+            prepared = prepare_message(brain, user, block=block, block_label=PASTED_LABEL)
 
-            if not text.strip():
+            # None: un adjunto no existe; el aviso ya se mostró y se vuelve al prompt.
+            if prepared is None or not prepared[0].strip():
                 continue
 
+            text, attachments, use_actions = prepared
             respond(brain, text, prefix="\nAsia: ", attachments=attachments, use_actions=use_actions)
 
     except (KeyboardInterrupt, EOFError):
@@ -287,6 +296,7 @@ def session_overrides(args, parser) -> dict:
 
 
 def main(argv=None, stdin=None, brain_factory=Brain):
+    """Devuelve el código de salida: 1 si un adjunto no existe, 0 si no."""
     parser = build_parser()
     args = parser.parse_intermixed_args(argv)
     SettingsManager.set_overrides(session_overrides(args, parser))
@@ -304,7 +314,12 @@ def main(argv=None, stdin=None, brain_factory=Brain):
 
     brain = brain_factory()
     block = decode(stdin_data) if stdin_data is not None else None
-    text, attachments, use_actions = prepare_message(brain, prompt, args.file, block)
+    prepared = prepare_message(brain, prompt, args.file, block)
+
+    if prepared is None:
+        return 1
+
+    text, attachments, use_actions = prepared
 
     if not text.strip():
         print("No recibí ningún mensaje.", file=sys.stderr)
@@ -314,4 +329,4 @@ def main(argv=None, stdin=None, brain_factory=Brain):
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

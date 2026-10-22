@@ -5,7 +5,9 @@ se clasifica, @ruta se reemplaza por la ruta absoluta, así una acción como
 review_file_deep lee el archivo por su cuenta y el prompt del IntentEngine no
 crece con el contenido.
 """
+import difflib
 import locale
+import os
 import re
 import sys
 from dataclasses import dataclass
@@ -52,6 +54,55 @@ def decode(data: bytes) -> str:
 
 def make_attachment(label: str, text: str, max_chars: int, path: Path | None = None) -> Attachment:
     return Attachment(label=label, content=text[:max_chars], total_chars=len(text), path=path)
+
+
+class MissingAttachment(str):
+    """Aviso de un adjunto que no existe. El launcher no envía el mensaje:
+    sin el archivo, el modelo respondería sobre algo que no vio."""
+
+
+MAX_SUGGESTIONS = 5
+
+
+def suggest_paths(raw: str, cwd: Path) -> list[str]:
+    """Archivos de la carpeta de raw cuyo nombre empieza igual o se parece.
+
+    "mod" -> "moda.py"; "src/ap.py" -> "src/app.py". Primero los que empiezan
+    igual (sin distinguir mayúsculas) y después los parecidos (difflib).
+    """
+    folder_text, _, name = raw.replace("\\", "/").rpartition("/")
+    folder = resolve(folder_text or ".", cwd)
+
+    try:
+        entries = sorted(
+            (e.name + ("/" if e.is_dir() else "") for e in os.scandir(folder) if not e.name.startswith(".")),
+            key=str.lower
+        )
+    except OSError:
+        return []
+
+    by_lower = {entry.lower(): entry for entry in entries}
+    lowered = name.lower()
+    starts = [entry for entry in entries if lowered and entry.lower().startswith(lowered)]
+    close = [by_lower[e] for e in difflib.get_close_matches(lowered, by_lower, n=MAX_SUGGESTIONS, cutoff=0.6)]
+
+    prefix = folder_text + "/" if folder_text else ""
+    unique = list(dict.fromkeys(starts + close))[:MAX_SUGGESTIONS]
+
+    return [prefix + entry for entry in unique]
+
+
+def missing_warning(raw: str, cwd: Path) -> MissingAttachment:
+    message = f"No encontré el archivo adjunto: {raw}"
+    suggestions = [
+        "@" + (f'"{s}"' if " " in s else s)
+        for s in suggest_paths(raw, cwd)
+    ]
+
+    if suggestions:
+        message += f"\n  ¿Quisiste decir {', '.join(suggestions)}?"
+
+    return MissingAttachment(message)
 
 
 def read_attachment(path: Path, max_chars: int) -> Attachment | str:
@@ -108,7 +159,7 @@ def extract_attachments(text: str, cwd: Path, max_chars: int):
             if path.exists():
                 break
         else:
-            warnings.append(f"No encontré el archivo adjunto: {raw}")
+            warnings.append(missing_warning(raw, cwd))
             return match.group(0)
 
         if path not in seen:
@@ -134,7 +185,7 @@ def file_attachments(paths, cwd: Path, max_chars: int):
         path = resolve(raw, cwd)
 
         if not path.exists():
-            warnings.append(f"No encontré el archivo adjunto: {raw}")
+            warnings.append(missing_warning(raw, cwd))
             continue
 
         result = read_attachment(path, max_chars)

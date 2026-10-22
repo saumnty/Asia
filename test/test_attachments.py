@@ -153,3 +153,56 @@ class FakeStdin:
 def test_read_stdin():
     assert read_stdin(FakeStdin(b"contenido")) == b"contenido"
     assert read_stdin(FakeStdin(b"contenido", tty=True)) is None
+
+
+from core.attachments import MissingAttachment, suggest_paths
+
+
+@pytest.fixture
+def practice(tmp_path):
+    for name in ["moda.py", "modelo.txt", "eliminar.py", "vote.arff", ".oculto.py"]:
+        (tmp_path / name).write_text("", encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("", encoding="utf-8")
+    (tmp_path / "mis notas").mkdir()
+    return tmp_path
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("mod", ["moda.py", "modelo.txt"]),
+        ("MOD", ["moda.py", "modelo.txt"]),
+        ("moda.pi", ["moda.py"]),
+        ("elimnar.py", ["eliminar.py"]),
+        ("src/ap.py", ["src/app.py"]),
+        (r"src\ap", ["src/app.py"]),
+        ("mis", ["mis notas/"]),
+        ("zzz.py", []),
+        ("no_existe/x.py", []),
+    ],
+)
+def test_suggest_paths(practice, raw, expected):
+    assert suggest_paths(raw, practice) == expected
+
+
+def test_suggest_paths_no_sugiere_ocultos(practice):
+    assert suggest_paths(".ocul", practice) == []
+    assert ".oculto.py" not in suggest_paths("", practice)
+
+
+def test_aviso_de_adjunto_faltante_con_sugerencias(practice):
+    _, attachments, warnings = extract_attachments("explica @mod y @mis", practice, 1000)
+
+    assert attachments == []
+    assert all(isinstance(w, MissingAttachment) for w in warnings)
+    assert warnings == [
+        "No encontré el archivo adjunto: mod\n  ¿Quisiste decir @moda.py, @modelo.txt?",
+        'No encontré el archivo adjunto: mis\n  ¿Quisiste decir @"mis notas/"?',
+    ]
+
+
+def test_otros_avisos_no_son_adjunto_faltante(practice):
+    _, _, warnings = extract_attachments("mira @src", practice, 1000)
+
+    assert warnings and not isinstance(warnings[0], MissingAttachment)

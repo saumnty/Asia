@@ -344,3 +344,40 @@ PASTE_START, PASTE_END = "\x1b[200~", "\x1b[201~"
 )
 def test_bloque_con_pegado_real_en_prompt_toolkit(keys, expected):
     assert prompt_toolkit_messages(keys, len(expected)) == expected
+
+
+def test_adjunto_faltante_no_se_envia_y_sugiere(cwd, capsys):
+    (cwd / "moda.py").write_text("", encoding="utf-8")
+    brain = FakeBrain()
+
+    code = launcher.main(["explica", "@mod"], stdin=TTY, brain_factory=lambda: brain)
+
+    assert code == 1
+    assert brain.processed == [] and brain.provider_router.calls == []
+    err = capsys.readouterr().err
+    assert "No encontré el archivo adjunto: mod" in err
+    assert "¿Quisiste decir @moda.py?" in err
+    assert "Mensaje no enviado" in err
+
+
+def test_file_faltante_tampoco_se_envia(cwd):
+    brain = FakeBrain()
+
+    assert launcher.main(["--file", "falta.py", "explica"], stdin=TTY, brain_factory=lambda: brain) == 1
+    assert brain.processed == []
+
+
+def test_adjunto_faltante_en_modo_interactivo_vuelve_al_prompt(cwd, capsys):
+    (cwd / "moda.py").write_text("x = 1\n", encoding="utf-8")
+    brain = FakeBrain()
+
+    launcher.interactive_mode(brain, read=reader(["explica @mod", "explica @moda.py", "salir"]))
+
+    # El primer mensaje no llegó a Asia; el corregido sí.
+    assert len(brain.provider_router.calls) == 1
+    assert "x = 1" in brain.provider_router.calls[0]["prompt"]
+    assert "¿Quisiste decir @moda.py?" in capsys.readouterr().err
+
+
+def test_adjunto_valido_no_devuelve_error(cwd):
+    assert launcher.main(["explica", "@a.py"], stdin=TTY, brain_factory=FakeBrain) is None
