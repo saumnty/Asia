@@ -22,6 +22,8 @@ para poder revisar o revertir los cambios.
 | — | Escritura atómica también en `config/apps.json` (`save_apps`), resúmenes de proyecto (`save_project_summary`) y `pending_change.json`. `write_text_atomic` en `core/atomic_write.py`; `write_json_atomic` la reutiliza. | `b40e8a44` |
 | C. CLI tipo chat | Adjuntos con `@ruta` (o `@"ruta con espacios"`), `--file` repetible y stdin (`Get-Content a.py \| jarvis "explica esto"`), con límite `attachment_max_chars` y aviso al recortar; las acciones reciben la ruta absoluta y el chat el contenido; el historial guarda el mensaje sin el contenido. Autocompletado de rutas al escribir `@` (`prompt_toolkit`). Flags `--provider`, `--project` y `--no-stream` solo para esa ejecución (`SettingsManager.overrides`, no escriben `settings.json`). Multilínea en modo interactivo: mensaje que termina en `<<`, cierre con `FIN`. | `af003d2a`, `4f25b229` |
 | — | Fallos de la fase C encontrados en PowerShell real: (1) el multilínea no funcionaba con un pegado real, porque `prompt_toolkit` entrega el pegado entero en una lectura y `FIN` dentro del pegado no cerraba el bloque. Las pruebas simulaban líneas escritas una a una; ahora hay pruebas con una `PromptSession` real y bracketed paste. (2) El IntentEngine inventa rutas (`path/to/your/file.py`, `ruta/al/archivo`) y la acción intentaba leerlas: ahora solo se usan rutas que salen del mensaje; si no, se pide la ruta o se trata como chat. | `26bd6a13`, `9a762c0f` |
+| — | Un `@adjunto` que no existe no se envía al modelo: aviso con sugerencias de nombres parecidos de la carpeta (`@mod` → `moda.py`) y vuelta al prompt; código de salida 1 en una sola ejecución. | `f502c43b` |
+| D. Código generado | Asia no ejecutaba código generado: el chequeo de imports va en `generate_code` y `smart_refactor` antes de proponer el cambio. Imports extraídos con `ast` y comprobados con `find_spec` contra la lista permitida (stdlib, módulos locales, `requirements.txt` del proyecto, `allowed_imports`, imports que el archivo ya tenía); si falla se pide una reescritura, y si sigue fallando no se propone. Sandbox: venv desechable con `--without-pip` (solo stdlib, sin descargas), `python -I`, carpeta temporal, entorno mínimo y límite de tiempo; solo con comando explícito y "confirmar ejecución". Nunca `pip install`. | `ee2ca2cd`, `04025f94` |
 
 ## Próximas fases
 
@@ -148,11 +150,12 @@ Ciclo: planear -> generar -> ejecutar en sandbox -> verificar -> reparar, con cr
 - Una librería que no existe se detecta al ejecutar (`ModuleNotFoundError`). Una API que existe pero cambió solo se detecta si una prueba la ejercita.
 - Riesgo de seguridad (*slopsquatting*): nunca hacer `pip install` automático de lo que el modelo inventó. Solo lista permitida o confirmación del usuario.
 - Pasos, de menor a mayor costo:
-  1. Antes de ejecutar, extraer los imports con `ast` y comprobar `importlib.util.find_spec`. Si falta alguno, pedir reescritura sin esa librería.
-  2. Lista permitida de dependencias (stdlib + `requirements.txt`) dentro del prompt.
-  3. Sandbox en un venv desechable, sin tocar el entorno real.
+  1. ~~Extraer los imports con `ast` y comprobar `importlib.util.find_spec`; si falta alguno, pedir reescritura.~~ Hecho en `ee2ca2cd`, antes de proponer el cambio (Asia no ejecuta el código generado por su cuenta).
+  2. ~~Lista permitida de dependencias dentro del prompt.~~ Hecho en `ee2ca2cd`.
+  3. ~~Sandbox en un venv desechable.~~ Hecho en `04025f94`: solo stdlib, comando explícito y confirmación. Un venv aísla paquetes, no el sistema: el código corre con los permisos del usuario.
   4. Fijar versiones en el prompt cuando la API cambie entre versiones.
   5. Indexar la documentación de las librerías usadas en `asia__knowledge`.
+- Pendiente del sandbox: código que use paquetes (pandas, numpy) no se puede probar, porque instalar en el venv desechable descargaría de PyPI. Opciones: `--system-site-packages` (ve los paquetes de Asia, sin descargar) o instalar con confirmación del usuario. Tampoco hay aislamiento real de archivos ni de red; para eso haría falta un contenedor o un usuario restringido.
 
 ### Confidencialidad
 
