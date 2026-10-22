@@ -19,6 +19,7 @@ MEMORY_DIR = PROJECT_ROOT / "memory"
 MEMORY_FILE = MEMORY_DIR / "memory.json"
 PROJECTS_DIR = MEMORY_DIR / "projects"
 PENDING_CHANGE_FILE = MEMORY_DIR / "pending_change.json"
+PENDING_RUN_FILE = MEMORY_DIR / "pending_run.json"
 BACKUPS_DIR = MEMORY_DIR / "backups"
 
 DATA_DIR = PROJECT_ROOT / "data"

@@ -59,6 +59,7 @@ show_pending_change,
 debug_project,
 review_file_deep,
 smart_refactor,
+run_sandbox,
 
 Formato exacto:
 {
@@ -84,6 +85,7 @@ Reglas:
 - Si el usuario dice "revisa", "analiza", "audita" o "encuentra bugs" sobre una carpeta/proyecto, usa review_project.
 - Si además pide "sin síntesis", "sin resumen" o "solo los reportes por archivo", agrega "synthesis": false a review_project.
 - Si el usuario pide refactorizar, limpiar, mejorar estilo, ordenar, simplificar o hacer más mantenible un archivo específico, usa smart_refactor.
+- Si el usuario pide ejecutar, correr o probar un script o el cambio pendiente ("en el sandbox"), usa run_sandbox. Sin archivo, params vacío: se prueba el cambio pendiente.
 
 Ejemplos:
 Usuario: recuerda que mi universidad es la Universidad Autónoma Metropolitana (UAM)
@@ -307,6 +309,15 @@ Usuario: genera una función para limpiar texto
 
 Usuario: crea código para listar proyectos guardados
 {"action":"generate_code","params":{"request":"crea código para listar proyectos guardados"}}
+
+Usuario: prueba el cambio pendiente
+{"action":"run_sandbox","params":{}}
+
+Usuario: ejecuta el código propuesto en el sandbox
+{"action":"run_sandbox","params":{}}
+
+Usuario: corre pruebas/buggy_calculator.py en el sandbox
+{"action":"run_sandbox","params":{"file_path":"pruebas/buggy_calculator.py"}}
 
 Usuario: confirmar cambio
 {"action":"apply_change","params":{}}
