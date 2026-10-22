@@ -24,16 +24,16 @@ para poder revisar o revertir los cambios.
 | — | Fallos de la fase C encontrados en PowerShell real: (1) el multilínea no funcionaba con un pegado real, porque `prompt_toolkit` entrega el pegado entero en una lectura y `FIN` dentro del pegado no cerraba el bloque. Las pruebas simulaban líneas escritas una a una; ahora hay pruebas con una `PromptSession` real y bracketed paste. (2) El IntentEngine inventa rutas (`path/to/your/file.py`, `ruta/al/archivo`) y la acción intentaba leerlas: ahora solo se usan rutas que salen del mensaje; si no, se pide la ruta o se trata como chat. | `26bd6a13`, `9a762c0f` |
 | — | Un `@adjunto` que no existe no se envía al modelo: aviso con sugerencias de nombres parecidos de la carpeta (`@mod` → `moda.py`) y vuelta al prompt; código de salida 1 en una sola ejecución. | `f502c43b` |
 | D. Código generado | Asia no ejecutaba código generado: el chequeo de imports va en `generate_code` y `smart_refactor` antes de proponer el cambio. Imports extraídos con `ast` y comprobados con `find_spec` contra la lista permitida (stdlib, módulos locales, `requirements.txt` del proyecto, `allowed_imports`, imports que el archivo ya tenía); si falla se pide una reescritura, y si sigue fallando no se propone. Sandbox: venv desechable con `--without-pip` (solo stdlib, sin descargas), `python -I`, carpeta temporal, entorno mínimo y límite de tiempo; solo con comando explícito y "confirmar ejecución". Nunca `pip install`. | `ee2ca2cd`, `04025f94` |
+| E. Refactor de Brain | Prueba de caracterización primero (77 casos con el prompt exacto, las llamadas y la respuesta de cada acción; `test/golden/brain_process.json`). `Brain.process` pasa de ~1000 líneas de `if action ==` a un despacho por `HANDLERS` con las acciones en `core/actions/` (memoria, exploración, revisión, código, sandbox) y los prompts en `core/prompts.py`, copiados por script y comprobados idénticos; el golden pasó sin regenerar en los 5 commits. Atajos de texto exacto, sin IntentEngine, para confirmar/cancelar/mostrar el cambio pendiente; `jarvis salir` ya no crea Brain. Prompt del IntentEngine de 368 a 214 líneas con las reglas contradictorias resueltas: 14 de 14 mensajes con la misma acción (`test/manual/check_intents.py`). | `5b81711e`, `af9d66b5`, `7888d66d`, `79a09479`, `985aec71`, `eefdbca9`, `19ed2810`, `9dd3b2d0` |
 
 ## Próximas fases
 
-### Fase 5: Refactor de Brain
+### Pendientes menores
 
-- `Brain.process` es un único método de ~1000 líneas con más de 30 `if action == ...`: pasar a un diccionario de handlers y sacar los prompts a un módulo.
-- Atajos sin LLM para comandos fijos (salir, confirmar/cancelar cambio, mostrar cambio pendiente).
-- Recortar el prompt del IntentEngine (~350 líneas por mensaje) y resolver reglas que se contradicen ("corrige/mejora" apunta a `generate_code`, `smart_refactor` y `debug_project`).
-- Pendiente menor detectado en la fase 3:
-  - "Proyecto activo" es solo un nombre; asociarle una ruta permitiría limitar la escritura al proyecto y no solo a la carpeta actual.
+- "Proyecto activo" es solo un nombre; asociarle una ruta permitiría limitar la escritura al proyecto y no solo a la carpeta actual (detectado en la fase 3).
+- Las respuestas de `debug_project` y la de archivo protegido de `generate_code` llegan al usuario con 12 espacios de indentación en cada línea (heredado de cómo estaban escritas; se conservó en el refactor de la fase E por ser comportamiento).
+- "muéstrame un resumen del archivo X" va a `read_file_preview` (las primeras líneas), no a `summarize_file`. Se dejó así en la fase E para no cambiar la acción.
+- `remember`, `recall` y `forget` sin `key` caen al chat sin aviso.
 
 ## Fases futuras (diseño pendiente)
 
