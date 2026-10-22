@@ -1,0 +1,1824 @@
+{
+ "remember": {
+  "results": [
+   "Entendido. Recordaré que color es azul."
+  ],
+  "events": [
+   [
+    "process",
+    "recuerda que mi color es azul"
+   ],
+   [
+    "remember",
+    "color",
+    "azul"
+   ]
+  ]
+ },
+ "remember_sin_valor": {
+  "results": [
+   null
+  ],
+  "events": [
+   [
+    "process",
+    "recuerda mi color"
+   ]
+  ]
+ },
+ "recall": {
+  "results": [
+   "color: azul"
+  ],
+  "events": [
+   [
+    "process",
+    "cuál es mi color"
+   ]
+  ]
+ },
+ "recall_sin_dato": {
+  "results": [
+   "No tengo guardado ningún dato para: perro."
+  ],
+  "events": [
+   [
+    "process",
+    "cuál es mi perro"
+   ]
+  ]
+ },
+ "forget": {
+  "results": [
+   "Listo. Olvidé el dato: color."
+  ],
+  "events": [
+   [
+    "process",
+    "olvida mi color"
+   ],
+   [
+    "forget",
+    "color"
+   ]
+  ]
+ },
+ "forget_sin_dato": {
+  "results": [
+   "No tenía guardado ningún dato para: perro."
+  ],
+  "events": [
+   [
+    "process",
+    "olvida mi perro"
+   ],
+   [
+    "forget",
+    "perro"
+   ]
+  ]
+ },
+ "show_settings": {
+  "results": [
+   "Provider actual: ollama\nModelo: qwen2.5-coder:7b\nFallback: ollama\nStreaming: False\nProyecto activo: asia"
+  ],
+  "events": [
+   [
+    "process",
+    "muestra la configuración"
+   ]
+  ]
+ },
+ "set_provider": {
+  "results": [
+   "Provider cambiado a: gemini"
+  ],
+  "events": [
+   [
+    "process",
+    "usa Gemini"
+   ],
+   [
+    "settings.set",
+    "default_provider",
+    "gemini"
+   ]
+  ]
+ },
+ "set_provider_alias": {
+  "results": [
+   "Provider cambiado a: ollama"
+  ],
+  "events": [
+   [
+    "process",
+    "usa olama"
+   ],
+   [
+    "settings.set",
+    "default_provider",
+    "ollama"
+   ]
+  ]
+ },
+ "set_provider_desconocido": {
+  "results": [
+   "Provider no disponible todavía: openai"
+  ],
+  "events": [
+   [
+    "process",
+    "usa openai"
+   ]
+  ]
+ },
+ "set_provider_vacio": {
+  "results": [
+   "Necesito saber qué provider quieres usar."
+  ],
+  "events": [
+   [
+    "process",
+    "cambia el provider"
+   ]
+  ]
+ },
+ "set_active_project": {
+  "results": [
+   "Proyecto activo cambiado a: pt"
+  ],
+  "events": [
+   [
+    "process",
+    "cambia al proyecto BolitaBot"
+   ],
+   [
+    "settings.set",
+    "active_project",
+    "pt"
+   ]
+  ]
+ },
+ "set_active_project_vacio": {
+  "results": [
+   "Necesito saber a qué proyecto quieres cambiar."
+  ],
+  "events": [
+   [
+    "process",
+    "cambia de proyecto"
+   ]
+  ]
+ },
+ "show_active_project": {
+  "results": [
+   "Proyecto activo: asia"
+  ],
+  "events": [
+   [
+    "process",
+    "cuál es el proyecto activo"
+   ]
+  ]
+ },
+ "summarize_and_save_project": {
+  "results": [
+   "Resumen actualizado y guardado para el proyecto asia."
+  ],
+  "events": [
+   [
+    "process",
+    "resume y guarda el proyecto"
+   ],
+   [
+    "tool",
+    "read_folder_context",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "max_chars_per_file",
+      "1500"
+     ],
+     [
+      "max_files",
+      "15"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nCrea un resumen actualizado del proyecto.\n\nDebe incluir:\n- Nombre del proyecto\n- Objetivo\n- Arquitectura actual\n- Componentes importantes\n- Estado actual\n- Siguientes pasos recomendados\n\nProyecto:\nasia\n\nContenido:\n<read_folder_context>\n",
+    false
+   ],
+   [
+    "save_project_summary",
+    "asia",
+    "respuesta-llm"
+   ]
+  ]
+ },
+ "ask_project_memory": {
+  "results": [
+   "respuesta-llm"
+  ],
+  "events": [
+   [
+    "process",
+    "de qué trata el proyecto"
+   ],
+   [
+    "ask",
+    "\nResponde la pregunta usando el resumen guardado del proyecto.\n\nProyecto:\nasia\n\nResumen guardado:\nResumen de asia\n\nPregunta:\nde qué trata\n",
+    false
+   ]
+  ]
+ },
+ "ask_project_memory_sin_resumen": {
+  "results": [
+   "Proyecto activo cambiado a: otro",
+   "No tengo resumen guardado para el proyecto otro."
+  ],
+  "events": [
+   [
+    "process",
+    "cambia al proyecto otro"
+   ],
+   [
+    "settings.set",
+    "active_project",
+    "otro"
+   ],
+   [
+    "process",
+    "de qué trata el proyecto"
+   ]
+  ]
+ },
+ "update_project_memory": {
+  "results": [
+   "Memoria del proyecto asia actualizada."
+  ],
+  "events": [
+   [
+    "process",
+    "anota que falta X"
+   ],
+   [
+    "append_project_note",
+    "asia",
+    "falta X"
+   ]
+  ]
+ },
+ "update_project_memory_vacio": {
+  "results": [
+   "Necesito una nota para actualizar la memoria del proyecto."
+  ],
+  "events": [
+   [
+    "process",
+    "anota algo"
+   ]
+  ]
+ },
+ "index_project_rag": {
+  "results": [
+   "<index_project_rag>"
+  ],
+  "events": [
+   [
+    "process",
+    "indexa el proyecto"
+   ],
+   [
+    "tool",
+    "index_project_rag",
+    [
+     [
+      "project_name",
+      "'asia'"
+     ],
+     [
+      "project_path",
+      "'.'"
+     ]
+    ]
+   ]
+  ]
+ },
+ "search_project_rag": {
+  "results": [
+   "respuesta-llm"
+  ],
+  "events": [
+   [
+    "process",
+    "dónde se usa ollama"
+   ],
+   [
+    "tool",
+    "search_project_rag",
+    [
+     [
+      "n_results",
+      "5"
+     ],
+     [
+      "project_name",
+      "'asia'"
+     ],
+     [
+      "question",
+      "'dónde se usa ollama'"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nResponde la pregunta del usuario usando únicamente estos fragmentos del proyecto.\n\nProyecto activo:\nasia\n\nPregunta:\ndónde se usa ollama\n\nFragmentos encontrados:\n<search_project_rag>\n\nInstrucciones:\n- Responde claro y breve.\n- Menciona los archivos relevantes.\n- Si los fragmentos no alcanzan para responder, dilo.\n",
+    false
+   ]
+  ]
+ },
+ "summarize_file": {
+  "results": [
+   "respuesta-llm"
+  ],
+  "events": [
+   [
+    "process",
+    "resume a.py"
+   ],
+   [
+    "tool",
+    "read_file_preview",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ],
+     [
+      "max_chars",
+      "6000"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nResume este archivo de forma clara.\n\nRuta del archivo:\na.py\n\nContenido:\ndef f():\n    print(\"hola\")\n    return None\n\n",
+    false
+   ]
+  ]
+ },
+ "summarize_file_vacio": {
+  "results": [
+   "Necesito la ruta del archivo para resumirlo."
+  ],
+  "events": [
+   [
+    "process",
+    "resume"
+   ]
+  ]
+ },
+ "summarize_folder": {
+  "results": [
+   "respuesta-llm"
+  ],
+  "events": [
+   [
+    "process",
+    "resume la carpeta src"
+   ],
+   [
+    "tool",
+    "read_folder_context",
+    [
+     [
+      "folder_path",
+      "'src'"
+     ],
+     [
+      "max_chars_per_file",
+      "1200"
+     ],
+     [
+      "max_files",
+      "12"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nResume esta carpeta/proyecto de forma clara y breve.\n\nCarpeta:\nsrc\n\nContenido:\n<read_folder_context>\n",
+    false
+   ]
+  ]
+ },
+ "explain_file": {
+  "results": [
+   "respuesta-llm"
+  ],
+  "events": [
+   [
+    "process",
+    "explica a.py"
+   ],
+   [
+    "tool",
+    "read_file_preview",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ],
+     [
+      "max_chars",
+      "8000"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\n        Actúa como arquitecto de software.\n\n        Explica este archivo.\n\n        Incluye:\n\n        1. Objetivo del archivo\n        2. Clases principales\n        3. Métodos importantes\n        4. Cómo interactúa con otros componentes\n        5. Posibles mejoras\n\n        Archivo:\n        a.py\n\n        Contenido:\n        def f():\n    print(\"hola\")\n    return None\n\n        ",
+    false
+   ]
+  ]
+ },
+ "explain_file_vacio": {
+  "results": [
+   "Necesito la ruta del archivo."
+  ],
+  "events": [
+   [
+    "process",
+    "explica"
+   ]
+  ]
+ },
+ "find_references": {
+  "results": [
+   "respuesta-llm"
+  ],
+  "events": [
+   [
+    "process",
+    "dónde se usa foo"
+   ],
+   [
+    "tool",
+    "search_text",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "query",
+      "'foo'"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\n        Actúa como asistente de desarrollo.\n\n        El usuario quiere encontrar referencias de:\n        foo\n\n        Resultados encontrados:\n        <search_text>\n\n        Explica:\n        1. En qué archivos aparece\n        2. Para qué parece usarse\n        3. Qué archivo parece más importante\n        4. Si no hay resultados útiles, dilo claramente\n\n        Responde breve y claro.\n        ",
+    false
+   ]
+  ]
+ },
+ "find_references_vacio": {
+  "results": [
+   "Necesito saber qué referencia quieres buscar."
+  ],
+  "events": [
+   [
+    "process",
+    "busca referencias"
+   ]
+  ]
+ },
+ "explain_symbol": {
+  "results": [
+   "respuesta-llm"
+  ],
+  "events": [
+   [
+    "process",
+    "explica Brain en src"
+   ],
+   [
+    "tool",
+    "search_text",
+    [
+     [
+      "folder_path",
+      "'src'"
+     ],
+     [
+      "query",
+      "'Brain'"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\n        Actúa como asistente de desarrollo.\n\n        El usuario quiere entender este símbolo de código:\n        Brain\n\n        Resultados encontrados:\n        <search_text>\n\n        Explica:\n        1. Qué parece ser: clase, función, método, variable o configuración\n        2. En qué archivos aparece\n        3. Qué hace según el contexto\n        4. Cómo se relaciona con el proyecto\n        5. Posibles mejoras o cuidado al modificarlo\n\n        Responde claro y breve.\n        ",
+    false
+   ]
+  ]
+ },
+ "explain_symbol_vacio": {
+  "results": [
+   "Necesito saber qué clase, función o método quieres explicar."
+  ],
+  "events": [
+   [
+    "process",
+    "explica el símbolo"
+   ]
+  ]
+ },
+ "map_project": {
+  "results": [
+   "respuesta-llm"
+  ],
+  "events": [
+   [
+    "process",
+    "mapea el proyecto"
+   ],
+   [
+    "tool",
+    "read_folder_context",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "max_chars_per_file",
+      "800"
+     ],
+     [
+      "max_files",
+      "30"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\n        Actúa como arquitecto de software.\n\n        Analiza este proyecto y genera:\n\n        1. Estructura general\n        2. Componentes principales\n        3. Relaciones entre componentes\n        4. Flujo de ejecución\n        5. Resumen de arquitectura\n\n        Contenido:\n        <read_folder_context>\n        ",
+    false
+   ]
+  ]
+ },
+ "find_dependencies": {
+  "results": [
+   "respuesta-llm"
+  ],
+  "events": [
+   [
+    "process",
+    "quién depende de os"
+   ],
+   [
+    "tool",
+    "search_text",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "query",
+      "'os'"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\n        Actúa como analizador de dependencias de código.\n\n        El usuario quiere saber qué partes del proyecto dependen de:\n        os\n\n        Resultados encontrados:\n        <search_text>\n\n        Explica:\n        1. Qué archivos lo importan o lo usan\n        2. Qué relación tienen con os\n        3. Cuál parece ser el flujo de dependencia\n        4. Qué archivo parece más importante\n\n        Responde breve, claro y práctico.\n        ",
+    false
+   ]
+  ]
+ },
+ "find_dependencies_vacio": {
+  "results": [
+   "Necesito saber qué dependencia, clase o módulo quieres buscar."
+  ],
+  "events": [
+   [
+    "process",
+    "dependencias"
+   ]
+  ]
+ },
+ "review_file": {
+  "results": [
+   "respuesta-llm"
+  ],
+  "events": [
+   [
+    "process",
+    "revisa a.py"
+   ],
+   [
+    "tool",
+    "read_file_preview",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ],
+     [
+      "max_chars",
+      "10000"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\n        Actúa como revisor de código Python.\n\n        Revisa este archivo buscando:\n        1. Bugs posibles\n        2. Errores de flujo\n        3. Código duplicado\n        4. Riesgos de devolver None\n        5. Mejoras de claridad\n        6. Cambios recomendados\n\n        Archivo:\n        a.py\n\n        Contenido:\n        def f():\n    print(\"hola\")\n    return None\n\n\n        Responde en español, claro y práctico.\n        ",
+    true
+   ]
+  ]
+ },
+ "review_file_vacio": {
+  "results": [
+   "Necesito la ruta del archivo para revisarlo."
+  ],
+  "events": [
+   [
+    "process",
+    "revisa"
+   ]
+  ]
+ },
+ "review_project": {
+  "results": [
+   "respuesta-llm"
+  ],
+  "events": [
+   [
+    "process",
+    "revisa el proyecto"
+   ],
+   [
+    "tool",
+    "select_project_files",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "max_files",
+      "15"
+     ]
+    ]
+   ],
+   [
+    "tool",
+    "review_project_files",
+    [
+     [
+      "file_paths",
+      "['a.py', 'src/b.py']"
+     ],
+     [
+      "max_chars",
+      "3000"
+     ],
+     [
+      "show_unverified",
+      "False"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nActúa como Senior Software Architect y Debugger.\n\nRealiza una revisión completa de la carpeta o proyecto indicado.\n\nArchivos realmente seleccionados y leídos:\n['a.py', 'src/b.py']\n\nReportes individuales por archivo:\n<review_project_files>\n\nDebes generar un reporte útil, práctico y priorizado.\n\nIncluye obligatoriamente:\n\n## Resumen general\n\n## Hallazgos críticos\n- Archivo\n- Riesgo\n- Evidencia exacta\n- Prioridad\n\n## Posibles bugs\n- Explica causa probable\n- Archivos relacionados\n\n## Problemas de arquitectura\n\n## Mejoras recomendadas\n\n## Siguiente acción recomendada\n\nReglas anti-alucinación:\n- No inventes código.\n- Solo menciona funciones, clases o líneas que aparezcan literalmente en el contexto.\n- Si no viste el contenido exacto de un archivo, NO propongas código para ese archivo.\n- No uses ejemplos genéricos de OpenAI, response.choices, self.client, ni chat.completions si no aparecen literalmente en el contexto.\n- Si no hay evidencia suficiente, responde \"sin evidencia suficiente\".\n- No asumas el nombre del proyecto: llama al análisis \"carpeta analizada\".\n- No reportes bugs provenientes de herramientas de análisis salvo que el usuario pida revisar esas herramientas.\n\nRegla crítica:\n- Solo puedes mencionar archivos presentes en \"Archivos realmente seleccionados y leídos\".\n- No menciones archivos de test, pruebas o examples si no aparecen en \"Archivos realmente seleccionados y leídos\".\n- No uses ejemplos de buggy_calculator.py salvo que ese archivo haya sido seleccionado explícitamente.\n- El reporte final solo puede usar evidencia que venga de \"Reportes individuales por archivo\".\n- No mezcles evidencia entre archivos.\n- Si un archivo no tiene problemas confirmados, no lo pongas en hallazgos críticos.\n\nReglas de severidad:\n- No marques como crítico un riesgo de seguridad genérico si no hay ejecución remota, servidor público, credenciales expuestas o escritura peligrosa sin confirmación.\n- No llames \"inyección de comandos\" a un prompt de LLM salvo que haya ejecución directa de comandos del sistema.\n- En un asistente local, prompts de usuario no son vulnerabilidad crítica por sí solos.\n- Prioriza bugs funcionales reales: retornos None, respuestas duplicadas, rutas incorrectas, archivos no encontrados, errores de provider, fallos de parseo, errores de streaming.\n\nReglas de evidencia:\n- Usa solo los hallazgos de las secciones \"Detección automática\" y \"Citas encontradas en el archivo\".\n- \"Detección automática\" viene de una regla determinista: inclúyelos siempre.\n- \"Citas encontradas en el archivo\" solo significa que la línea citada existe, no que el bug esté demostrado: no digas que esos hallazgos están \"confirmados por evidencia\".\n- Si un reporte dice que el modelo no reportó problemas y no tiene detección automática, no inventes hallazgos para ese archivo.\n\nNo resumas los hallazgos individuales.\nSi un reporte por archivo tiene varios hallazgos, conserva todos.\nNo reduzcas varios bugs a uno solo.\n",
+    true
+   ]
+  ]
+ },
+ "review_project_sin_sintesis": {
+  "results": [
+   "Reportes por archivo de . (sin síntesis).\n\nArchivos revisados:\n- a.py\n- src/b.py\n<review_project_files>"
+  ],
+  "events": [
+   [
+    "process",
+    "revisa el proyecto sin síntesis"
+   ],
+   [
+    "tool",
+    "select_project_files",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "max_files",
+      "15"
+     ]
+    ]
+   ],
+   [
+    "tool",
+    "review_project_files",
+    [
+     [
+      "file_paths",
+      "['a.py', 'src/b.py']"
+     ],
+     [
+      "max_chars",
+      "3000"
+     ],
+     [
+      "show_unverified",
+      "False"
+     ]
+    ]
+   ]
+  ]
+ },
+ "review_project_muestra_todo": {
+  "results": [
+   "Reportes por archivo de src (sin síntesis).\n\nArchivos revisados:\n- a.py\n- src/b.py\n<review_project_files>"
+  ],
+  "events": [
+   [
+    "process",
+    "revisa src, muestra todo"
+   ],
+   [
+    "tool",
+    "select_project_files",
+    [
+     [
+      "folder_path",
+      "'src'"
+     ],
+     [
+      "max_files",
+      "15"
+     ]
+    ]
+   ],
+   [
+    "tool",
+    "review_project_files",
+    [
+     [
+      "file_paths",
+      "['a.py', 'src/b.py']"
+     ],
+     [
+      "max_chars",
+      "3000"
+     ],
+     [
+      "show_unverified",
+      "True"
+     ]
+    ]
+   ]
+  ]
+ },
+ "detect_dead_code": {
+  "results": [
+   "respuesta-llm"
+  ],
+  "events": [
+   [
+    "process",
+    "busca código muerto"
+   ],
+   [
+    "tool",
+    "detect_dead_code",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nActúa como analizador senior de código Python.\n\nEl siguiente reporte fue generado mediante análisis estático básico.\n\nReporte automático:\n<detect_dead_code>\n\nTu tarea:\n- Ordena los hallazgos por importancia.\n- Explica por qué podrían ser código muerto.\n- Aclara que no debe borrarse nada sin revisión manual.\n- Distingue entre confianza alta, media y baja.\n- Si el reporte dice que no se encontró código muerto, responde eso claramente.\n\nResponde con:\n\n## Resumen\n\n## Posible código muerto\n\n## Confianza\n\n## Qué revisar manualmente\n\n## Recomendación\n",
+    false
+   ]
+  ]
+ },
+ "debug_project": {
+  "results": [
+   "\n            Diagnóstico de depuración:\n\n            <debug_project>\n\n            Si quieres que proponga un cambio automático, escribe algo como:\n\n            genera el fix para el archivo principal usando este diagnóstico\n            "
+  ],
+  "events": [
+   [
+    "process",
+    "por qué aparece None"
+   ],
+   [
+    "tool",
+    "debug_project",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "issue",
+      "'aparece None'"
+     ]
+    ]
+   ]
+  ]
+ },
+ "review_file_deep": {
+  "results": [
+   "<review_file_deep>"
+  ],
+  "events": [
+   [
+    "process",
+    "revisa a fondo a.py"
+   ],
+   [
+    "tool",
+    "review_file_deep",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ],
+     [
+      "show_unverified",
+      "False"
+     ]
+    ]
+   ]
+  ]
+ },
+ "review_file_deep_muestra_todo": {
+  "results": [
+   "<review_file_deep>"
+  ],
+  "events": [
+   [
+    "process",
+    "revisa a fondo a.py, muestra todo"
+   ],
+   [
+    "tool",
+    "review_file_deep",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ],
+     [
+      "show_unverified",
+      "True"
+     ]
+    ]
+   ]
+  ]
+ },
+ "review_file_deep_vacio": {
+  "results": [
+   "Necesito la ruta del archivo para revisarlo profundamente."
+  ],
+  "events": [
+   [
+    "process",
+    "revisa a fondo"
+   ]
+  ]
+ },
+ "smart_refactor": {
+  "results": [
+   "\nlimpio\n\n<diff a.py>\n"
+  ],
+  "events": [
+   [
+    "process",
+    "refactoriza a.py"
+   ],
+   [
+    "tool",
+    "read_file",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ]
+    ]
+   ],
+   [
+    "tool",
+    "analyze_static",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nActúa como Senior Software Engineer.\n\nEl usuario quiere refactorizar este archivo.\n\nSolicitud:\nrefactoriza a.py\n\nArchivo:\na.py\n\nContenido actual:\ndef f():\n    print(\"hola\")\n    return None\n\n\nHallazgos estáticos:\n<analyze_static>\n\nObjetivo:\nMejorar claridad, mantenibilidad, estructura y estilo SIN cambiar el comportamiento.\n\nResponde EXACTAMENTE con:\n\nFILE_PATH:\na.py\n\nCODE:\ncontenido completo del archivo refactorizado\n\nEXPLANATION:\nexplicación breve de los cambios\n\nReglas:\n- No uses markdown.\n- No uses triple backticks.\n- No pongas ```python.\n- Conserva el comportamiento actual.\n- No agregues dependencias innecesarias.\n- Solo puedes importar: biblioteca estándar de Python, módulos del propio proyecto y estos paquetes: ninguno. No inventes ni agregues otras librerías.\n- No elimines funciones públicas.\n- No cambies nombres públicos salvo que el usuario lo pida.\n- Si el archivo ya está bien, conserva el contenido y explica que no se requieren cambios importantes.\n\nReglas estrictas de refactor:\n- No cambies returns por exceptions.\n- No cambies exceptions por returns.\n- No cambies prints por raises.\n- No cambies valores de retorno.\n- No cambies el comportamiento observable.\n- Solo puedes cambiar formato, nombres internos, comentarios, estructura interna o simplificar lógica equivalente.\n",
+    false
+   ],
+   [
+    "propose_change",
+    "a.py",
+    "def f():\n    print('hola')\n    return 1"
+   ]
+  ]
+ },
+ "smart_refactor_sin_cambios": {
+  "results": [
+   "No se requieren cambios reales en a.py."
+  ],
+  "events": [
+   [
+    "process",
+    "refactoriza a.py"
+   ],
+   [
+    "tool",
+    "read_file",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ]
+    ]
+   ],
+   [
+    "tool",
+    "analyze_static",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nActúa como Senior Software Engineer.\n\nEl usuario quiere refactorizar este archivo.\n\nSolicitud:\nrefactoriza a.py\n\nArchivo:\na.py\n\nContenido actual:\ndef f():\n    print(\"hola\")\n    return None\n\n\nHallazgos estáticos:\n<analyze_static>\n\nObjetivo:\nMejorar claridad, mantenibilidad, estructura y estilo SIN cambiar el comportamiento.\n\nResponde EXACTAMENTE con:\n\nFILE_PATH:\na.py\n\nCODE:\ncontenido completo del archivo refactorizado\n\nEXPLANATION:\nexplicación breve de los cambios\n\nReglas:\n- No uses markdown.\n- No uses triple backticks.\n- No pongas ```python.\n- Conserva el comportamiento actual.\n- No agregues dependencias innecesarias.\n- Solo puedes importar: biblioteca estándar de Python, módulos del propio proyecto y estos paquetes: ninguno. No inventes ni agregues otras librerías.\n- No elimines funciones públicas.\n- No cambies nombres públicos salvo que el usuario lo pida.\n- Si el archivo ya está bien, conserva el contenido y explica que no se requieren cambios importantes.\n\nReglas estrictas de refactor:\n- No cambies returns por exceptions.\n- No cambies exceptions por returns.\n- No cambies prints por raises.\n- No cambies valores de retorno.\n- No cambies el comportamiento observable.\n- Solo puedes cambiar formato, nombres internos, comentarios, estructura interna o simplificar lógica equivalente.\n",
+    false
+   ]
+  ]
+ },
+ "smart_refactor_prohibido": {
+  "results": [
+   "Refactor rechazado automáticamente.\n\nEl cambio modifica el comportamiento observable del programa (prints/returns/excepciones)."
+  ],
+  "events": [
+   [
+    "process",
+    "refactoriza a.py"
+   ],
+   [
+    "tool",
+    "read_file",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ]
+    ]
+   ],
+   [
+    "tool",
+    "analyze_static",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nActúa como Senior Software Engineer.\n\nEl usuario quiere refactorizar este archivo.\n\nSolicitud:\nrefactoriza a.py\n\nArchivo:\na.py\n\nContenido actual:\ndef f():\n    print(\"hola\")\n    return None\n\n\nHallazgos estáticos:\n<analyze_static>\n\nObjetivo:\nMejorar claridad, mantenibilidad, estructura y estilo SIN cambiar el comportamiento.\n\nResponde EXACTAMENTE con:\n\nFILE_PATH:\na.py\n\nCODE:\ncontenido completo del archivo refactorizado\n\nEXPLANATION:\nexplicación breve de los cambios\n\nReglas:\n- No uses markdown.\n- No uses triple backticks.\n- No pongas ```python.\n- Conserva el comportamiento actual.\n- No agregues dependencias innecesarias.\n- Solo puedes importar: biblioteca estándar de Python, módulos del propio proyecto y estos paquetes: ninguno. No inventes ni agregues otras librerías.\n- No elimines funciones públicas.\n- No cambies nombres públicos salvo que el usuario lo pida.\n- Si el archivo ya está bien, conserva el contenido y explica que no se requieren cambios importantes.\n\nReglas estrictas de refactor:\n- No cambies returns por exceptions.\n- No cambies exceptions por returns.\n- No cambies prints por raises.\n- No cambies valores de retorno.\n- No cambies el comportamiento observable.\n- Solo puedes cambiar formato, nombres internos, comentarios, estructura interna o simplificar lógica equivalente.\n",
+    false
+   ]
+  ]
+ },
+ "smart_refactor_import_malo": {
+  "results": [
+   "No propongo el cambio para a.py: el código generado, aun después de pedir una reescritura, tiene imports que no se pueden usar:\n- línea 1: import paquete_inventado_xyz (no está instalada)\n\nAsia no instala paquetes. Si de verdad hace falta una librería, agrégala al requirements.txt del proyecto (o a allowed_imports en la configuración) e instálala tú."
+  ],
+  "events": [
+   [
+    "process",
+    "refactoriza a.py"
+   ],
+   [
+    "tool",
+    "read_file",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ]
+    ]
+   ],
+   [
+    "tool",
+    "analyze_static",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nActúa como Senior Software Engineer.\n\nEl usuario quiere refactorizar este archivo.\n\nSolicitud:\nrefactoriza a.py\n\nArchivo:\na.py\n\nContenido actual:\ndef f():\n    print(\"hola\")\n    return None\n\n\nHallazgos estáticos:\n<analyze_static>\n\nObjetivo:\nMejorar claridad, mantenibilidad, estructura y estilo SIN cambiar el comportamiento.\n\nResponde EXACTAMENTE con:\n\nFILE_PATH:\na.py\n\nCODE:\ncontenido completo del archivo refactorizado\n\nEXPLANATION:\nexplicación breve de los cambios\n\nReglas:\n- No uses markdown.\n- No uses triple backticks.\n- No pongas ```python.\n- Conserva el comportamiento actual.\n- No agregues dependencias innecesarias.\n- Solo puedes importar: biblioteca estándar de Python, módulos del propio proyecto y estos paquetes: ninguno. No inventes ni agregues otras librerías.\n- No elimines funciones públicas.\n- No cambies nombres públicos salvo que el usuario lo pida.\n- Si el archivo ya está bien, conserva el contenido y explica que no se requieren cambios importantes.\n\nReglas estrictas de refactor:\n- No cambies returns por exceptions.\n- No cambies exceptions por returns.\n- No cambies prints por raises.\n- No cambies valores de retorno.\n- No cambies el comportamiento observable.\n- Solo puedes cambiar formato, nombres internos, comentarios, estructura interna o simplificar lógica equivalente.\n",
+    false
+   ],
+   [
+    "ask",
+    "\nActúa como Senior Software Engineer.\n\nEl usuario quiere refactorizar este archivo.\n\nSolicitud:\nrefactoriza a.py\n\nArchivo:\na.py\n\nContenido actual:\ndef f():\n    print(\"hola\")\n    return None\n\n\nHallazgos estáticos:\n<analyze_static>\n\nObjetivo:\nMejorar claridad, mantenibilidad, estructura y estilo SIN cambiar el comportamiento.\n\nResponde EXACTAMENTE con:\n\nFILE_PATH:\na.py\n\nCODE:\ncontenido completo del archivo refactorizado\n\nEXPLANATION:\nexplicación breve de los cambios\n\nReglas:\n- No uses markdown.\n- No uses triple backticks.\n- No pongas ```python.\n- Conserva el comportamiento actual.\n- No agregues dependencias innecesarias.\n- Solo puedes importar: biblioteca estándar de Python, módulos del propio proyecto y estos paquetes: ninguno. No inventes ni agregues otras librerías.\n- No elimines funciones públicas.\n- No cambies nombres públicos salvo que el usuario lo pida.\n- Si el archivo ya está bien, conserva el contenido y explica que no se requieren cambios importantes.\n\nReglas estrictas de refactor:\n- No cambies returns por exceptions.\n- No cambies exceptions por returns.\n- No cambies prints por raises.\n- No cambies valores de retorno.\n- No cambies el comportamiento observable.\n- Solo puedes cambiar formato, nombres internos, comentarios, estructura interna o simplificar lógica equivalente.\n\n\nTu respuesta anterior no se puede usar:\n- línea 1: import paquete_inventado_xyz (no está instalada)\n\nReescribe el código sin esas librerías, usando solo la biblioteca estándar o\nlas dependencias permitidas. No inventes librerías. Responde con el mismo\nformato FILE_PATH / CODE / EXPLANATION.\n",
+    false
+   ]
+  ]
+ },
+ "smart_refactor_sin_code": {
+  "results": [
+   "No pude extraer CODE.\n\nRespuesta recibida:\nno sé"
+  ],
+  "events": [
+   [
+    "process",
+    "refactoriza a.py"
+   ],
+   [
+    "tool",
+    "read_file",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ]
+    ]
+   ],
+   [
+    "tool",
+    "analyze_static",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nActúa como Senior Software Engineer.\n\nEl usuario quiere refactorizar este archivo.\n\nSolicitud:\nrefactoriza a.py\n\nArchivo:\na.py\n\nContenido actual:\ndef f():\n    print(\"hola\")\n    return None\n\n\nHallazgos estáticos:\n<analyze_static>\n\nObjetivo:\nMejorar claridad, mantenibilidad, estructura y estilo SIN cambiar el comportamiento.\n\nResponde EXACTAMENTE con:\n\nFILE_PATH:\na.py\n\nCODE:\ncontenido completo del archivo refactorizado\n\nEXPLANATION:\nexplicación breve de los cambios\n\nReglas:\n- No uses markdown.\n- No uses triple backticks.\n- No pongas ```python.\n- Conserva el comportamiento actual.\n- No agregues dependencias innecesarias.\n- Solo puedes importar: biblioteca estándar de Python, módulos del propio proyecto y estos paquetes: ninguno. No inventes ni agregues otras librerías.\n- No elimines funciones públicas.\n- No cambies nombres públicos salvo que el usuario lo pida.\n- Si el archivo ya está bien, conserva el contenido y explica que no se requieren cambios importantes.\n\nReglas estrictas de refactor:\n- No cambies returns por exceptions.\n- No cambies exceptions por returns.\n- No cambies prints por raises.\n- No cambies valores de retorno.\n- No cambies el comportamiento observable.\n- Solo puedes cambiar formato, nombres internos, comentarios, estructura interna o simplificar lógica equivalente.\n",
+    false
+   ]
+  ]
+ },
+ "smart_refactor_vacio": {
+  "results": [
+   "Necesito la ruta del archivo para refactorizarlo."
+  ],
+  "events": [
+   [
+    "process",
+    "refactoriza"
+   ]
+  ]
+ },
+ "smart_refactor_no_existe": {
+  "results": [
+   "No encontré el archivo: b.py"
+  ],
+  "events": [
+   [
+    "process",
+    "refactoriza b.py"
+   ]
+  ]
+ },
+ "generate_code": {
+  "results": [
+   "\nlimpio\n\n<diff a.py>\n"
+  ],
+  "events": [
+   [
+    "process",
+    "corrige a.py"
+   ],
+   [
+    "tool",
+    "read_folder_context",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "max_chars_per_file",
+      "800"
+     ],
+     [
+      "max_files",
+      "25"
+     ]
+    ]
+   ],
+   [
+    "tool",
+    "read_file_preview",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ],
+     [
+      "max_chars",
+      "12000"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nActúa como Senior Python Developer.\n\nEl usuario quiere generar o corregir código para este proyecto.\n\nSolicitud:\ncorrige a.py\n\nArchivo objetivo detectado:\na.py\n\nContenido actual del archivo objetivo:\ndef f():\n    print(\"hola\")\n    return None\n\n\nContexto del proyecto:\n<read_folder_context>\n\nDiagnóstico previo disponible:\n\n\nResponde EXACTAMENTE con este formato:\n\nFILE_PATH:\nruta/del/archivo.py\n\nCODE:\ncontenido completo del archivo final\n\nEXPLANATION:\nexplicación breve del cambio\n\nIMPORTANTE:\n- No traduzcas FILE_PATH.\n- No traduzcas CODE.\n- No traduzcas EXPLANATION.\n- Usa exactamente esas tres etiquetas.\n- No uses markdown.\n- No uses triple backticks.\n- No pongas ```python.\n- CODE debe contener el archivo completo final.\n- Si modificas un archivo existente, conserva sus imports, clases y funciones que no deban cambiarse.\n- Si usas re, agrega import re.\n- Si creas una función nueva, incluye todos los imports necesarios.\n- Solo puedes importar: biblioteca estándar de Python, módulos del propio proyecto y estos paquetes: ninguno. No inventes ni agregues otras librerías.\n- Si el usuario menciona un archivo .py específico, usa ese archivo como FILE_PATH.\n- Si el usuario quiere crear una tool nueva, usa una ruta dentro de tools/.\n- Si el usuario quiere modificar Brain, usa core/brain.py.\n- Si el usuario quiere modificar IntentEngine, usa core/intent_engine.py.\n- Si no estás seguro de la ruta, usa pruebas/generated_code.py.\n- Si solo propones cambios menores de tipado, formato o comentarios, dilo explícitamente como \"cambio menor\".\n",
+    false
+   ],
+   [
+    "propose_change",
+    "a.py",
+    "def f():\n    print('hola')\n    return 1"
+   ]
+  ]
+ },
+ "generate_code_con_diagnostico": {
+  "results": [
+   "<review_file_deep>",
+   "\nlimpio\n\n<diff a.py>\n"
+  ],
+  "events": [
+   [
+    "process",
+    "revisa a fondo a.py"
+   ],
+   [
+    "tool",
+    "review_file_deep",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ],
+     [
+      "show_unverified",
+      "False"
+     ]
+    ]
+   ],
+   [
+    "process",
+    "corrige los bugs de a.py"
+   ],
+   [
+    "tool",
+    "read_folder_context",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "max_chars_per_file",
+      "800"
+     ],
+     [
+      "max_files",
+      "25"
+     ]
+    ]
+   ],
+   [
+    "tool",
+    "read_file_preview",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ],
+     [
+      "max_chars",
+      "12000"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nActúa como Senior Python Developer.\n\nEl usuario quiere generar o corregir código para este proyecto.\n\nSolicitud:\ncorrige los bugs de a.py\n\nArchivo objetivo detectado:\na.py\n\nContenido actual del archivo objetivo:\ndef f():\n    print(\"hola\")\n    return None\n\n\nContexto del proyecto:\n<read_folder_context>\n\nDiagnóstico previo disponible:\n<review_file_deep>\n\nResponde EXACTAMENTE con este formato:\n\nFILE_PATH:\nruta/del/archivo.py\n\nCODE:\ncontenido completo del archivo final\n\nEXPLANATION:\nexplicación breve del cambio\n\nIMPORTANTE:\n- No traduzcas FILE_PATH.\n- No traduzcas CODE.\n- No traduzcas EXPLANATION.\n- Usa exactamente esas tres etiquetas.\n- No uses markdown.\n- No uses triple backticks.\n- No pongas ```python.\n- CODE debe contener el archivo completo final.\n- Si modificas un archivo existente, conserva sus imports, clases y funciones que no deban cambiarse.\n- Si usas re, agrega import re.\n- Si creas una función nueva, incluye todos los imports necesarios.\n- Solo puedes importar: biblioteca estándar de Python, módulos del propio proyecto y estos paquetes: ninguno. No inventes ni agregues otras librerías.\n- Si el usuario menciona un archivo .py específico, usa ese archivo como FILE_PATH.\n- Si el usuario quiere crear una tool nueva, usa una ruta dentro de tools/.\n- Si el usuario quiere modificar Brain, usa core/brain.py.\n- Si el usuario quiere modificar IntentEngine, usa core/intent_engine.py.\n- Si no estás seguro de la ruta, usa pruebas/generated_code.py.\n- Si solo propones cambios menores de tipado, formato o comentarios, dilo explícitamente como \"cambio menor\".\n",
+    false
+   ],
+   [
+    "propose_change",
+    "a.py",
+    "def f():\n    print('hola')\n    return 1"
+   ]
+  ]
+ },
+ "generate_code_sin_cambios": {
+  "results": [
+   "No se requieren cambios en a.py."
+  ],
+  "events": [
+   [
+    "process",
+    "corrige a.py"
+   ],
+   [
+    "tool",
+    "read_folder_context",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "max_chars_per_file",
+      "800"
+     ],
+     [
+      "max_files",
+      "25"
+     ]
+    ]
+   ],
+   [
+    "tool",
+    "read_file_preview",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ],
+     [
+      "max_chars",
+      "12000"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nActúa como Senior Python Developer.\n\nEl usuario quiere generar o corregir código para este proyecto.\n\nSolicitud:\ncorrige a.py\n\nArchivo objetivo detectado:\na.py\n\nContenido actual del archivo objetivo:\ndef f():\n    print(\"hola\")\n    return None\n\n\nContexto del proyecto:\n<read_folder_context>\n\nDiagnóstico previo disponible:\n\n\nResponde EXACTAMENTE con este formato:\n\nFILE_PATH:\nruta/del/archivo.py\n\nCODE:\ncontenido completo del archivo final\n\nEXPLANATION:\nexplicación breve del cambio\n\nIMPORTANTE:\n- No traduzcas FILE_PATH.\n- No traduzcas CODE.\n- No traduzcas EXPLANATION.\n- Usa exactamente esas tres etiquetas.\n- No uses markdown.\n- No uses triple backticks.\n- No pongas ```python.\n- CODE debe contener el archivo completo final.\n- Si modificas un archivo existente, conserva sus imports, clases y funciones que no deban cambiarse.\n- Si usas re, agrega import re.\n- Si creas una función nueva, incluye todos los imports necesarios.\n- Solo puedes importar: biblioteca estándar de Python, módulos del propio proyecto y estos paquetes: ninguno. No inventes ni agregues otras librerías.\n- Si el usuario menciona un archivo .py específico, usa ese archivo como FILE_PATH.\n- Si el usuario quiere crear una tool nueva, usa una ruta dentro de tools/.\n- Si el usuario quiere modificar Brain, usa core/brain.py.\n- Si el usuario quiere modificar IntentEngine, usa core/intent_engine.py.\n- Si no estás seguro de la ruta, usa pruebas/generated_code.py.\n- Si solo propones cambios menores de tipado, formato o comentarios, dilo explícitamente como \"cambio menor\".\n",
+    false
+   ]
+  ]
+ },
+ "generate_code_prohibido": {
+  "results": [
+   "Refactor rechazado automáticamente.\n\nEl cambio modifica el comportamiento observable del programa (prints/returns/excepciones)."
+  ],
+  "events": [
+   [
+    "process",
+    "corrige a.py"
+   ],
+   [
+    "tool",
+    "read_folder_context",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "max_chars_per_file",
+      "800"
+     ],
+     [
+      "max_files",
+      "25"
+     ]
+    ]
+   ],
+   [
+    "tool",
+    "read_file_preview",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ],
+     [
+      "max_chars",
+      "12000"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nActúa como Senior Python Developer.\n\nEl usuario quiere generar o corregir código para este proyecto.\n\nSolicitud:\ncorrige a.py\n\nArchivo objetivo detectado:\na.py\n\nContenido actual del archivo objetivo:\ndef f():\n    print(\"hola\")\n    return None\n\n\nContexto del proyecto:\n<read_folder_context>\n\nDiagnóstico previo disponible:\n\n\nResponde EXACTAMENTE con este formato:\n\nFILE_PATH:\nruta/del/archivo.py\n\nCODE:\ncontenido completo del archivo final\n\nEXPLANATION:\nexplicación breve del cambio\n\nIMPORTANTE:\n- No traduzcas FILE_PATH.\n- No traduzcas CODE.\n- No traduzcas EXPLANATION.\n- Usa exactamente esas tres etiquetas.\n- No uses markdown.\n- No uses triple backticks.\n- No pongas ```python.\n- CODE debe contener el archivo completo final.\n- Si modificas un archivo existente, conserva sus imports, clases y funciones que no deban cambiarse.\n- Si usas re, agrega import re.\n- Si creas una función nueva, incluye todos los imports necesarios.\n- Solo puedes importar: biblioteca estándar de Python, módulos del propio proyecto y estos paquetes: ninguno. No inventes ni agregues otras librerías.\n- Si el usuario menciona un archivo .py específico, usa ese archivo como FILE_PATH.\n- Si el usuario quiere crear una tool nueva, usa una ruta dentro de tools/.\n- Si el usuario quiere modificar Brain, usa core/brain.py.\n- Si el usuario quiere modificar IntentEngine, usa core/intent_engine.py.\n- Si no estás seguro de la ruta, usa pruebas/generated_code.py.\n- Si solo propones cambios menores de tipado, formato o comentarios, dilo explícitamente como \"cambio menor\".\n",
+    false
+   ]
+  ]
+ },
+ "generate_code_agrega_re": {
+  "results": [
+   "\nusa re\n\n<diff nuevo.py>\n"
+  ],
+  "events": [
+   [
+    "process",
+    "crea nuevo.py"
+   ],
+   [
+    "tool",
+    "read_folder_context",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "max_chars_per_file",
+      "800"
+     ],
+     [
+      "max_files",
+      "25"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nActúa como Senior Python Developer.\n\nEl usuario quiere generar o corregir código para este proyecto.\n\nSolicitud:\ncrea nuevo.py\n\nArchivo objetivo detectado:\nnuevo.py\n\nContenido actual del archivo objetivo:\n\n\nContexto del proyecto:\n<read_folder_context>\n\nDiagnóstico previo disponible:\n\n\nResponde EXACTAMENTE con este formato:\n\nFILE_PATH:\nruta/del/archivo.py\n\nCODE:\ncontenido completo del archivo final\n\nEXPLANATION:\nexplicación breve del cambio\n\nIMPORTANTE:\n- No traduzcas FILE_PATH.\n- No traduzcas CODE.\n- No traduzcas EXPLANATION.\n- Usa exactamente esas tres etiquetas.\n- No uses markdown.\n- No uses triple backticks.\n- No pongas ```python.\n- CODE debe contener el archivo completo final.\n- Si modificas un archivo existente, conserva sus imports, clases y funciones que no deban cambiarse.\n- Si usas re, agrega import re.\n- Si creas una función nueva, incluye todos los imports necesarios.\n- Solo puedes importar: biblioteca estándar de Python, módulos del propio proyecto y estos paquetes: ninguno. No inventes ni agregues otras librerías.\n- Si el usuario menciona un archivo .py específico, usa ese archivo como FILE_PATH.\n- Si el usuario quiere crear una tool nueva, usa una ruta dentro de tools/.\n- Si el usuario quiere modificar Brain, usa core/brain.py.\n- Si el usuario quiere modificar IntentEngine, usa core/intent_engine.py.\n- Si no estás seguro de la ruta, usa pruebas/generated_code.py.\n- Si solo propones cambios menores de tipado, formato o comentarios, dilo explícitamente como \"cambio menor\".\n",
+    false
+   ],
+   [
+    "propose_change",
+    "nuevo.py",
+    "import re\n\nx = re.compile('a')"
+   ]
+  ]
+ },
+ "generate_code_protegido": {
+  "results": [
+   "\ntoca brain\n\n<diff core/brain.py>\n"
+  ],
+  "events": [
+   [
+    "process",
+    "cambia el cerebro"
+   ],
+   [
+    "tool",
+    "read_folder_context",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "max_chars_per_file",
+      "800"
+     ],
+     [
+      "max_files",
+      "25"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nActúa como Senior Python Developer.\n\nEl usuario quiere generar o corregir código para este proyecto.\n\nSolicitud:\ncambia el cerebro\n\nArchivo objetivo detectado:\nNone\n\nContenido actual del archivo objetivo:\n\n\nContexto del proyecto:\n<read_folder_context>\n\nDiagnóstico previo disponible:\n\n\nResponde EXACTAMENTE con este formato:\n\nFILE_PATH:\nruta/del/archivo.py\n\nCODE:\ncontenido completo del archivo final\n\nEXPLANATION:\nexplicación breve del cambio\n\nIMPORTANTE:\n- No traduzcas FILE_PATH.\n- No traduzcas CODE.\n- No traduzcas EXPLANATION.\n- Usa exactamente esas tres etiquetas.\n- No uses markdown.\n- No uses triple backticks.\n- No pongas ```python.\n- CODE debe contener el archivo completo final.\n- Si modificas un archivo existente, conserva sus imports, clases y funciones que no deban cambiarse.\n- Si usas re, agrega import re.\n- Si creas una función nueva, incluye todos los imports necesarios.\n- Solo puedes importar: biblioteca estándar de Python, módulos del propio proyecto y estos paquetes: ninguno. No inventes ni agregues otras librerías.\n- Si el usuario menciona un archivo .py específico, usa ese archivo como FILE_PATH.\n- Si el usuario quiere crear una tool nueva, usa una ruta dentro de tools/.\n- Si el usuario quiere modificar Brain, usa core/brain.py.\n- Si el usuario quiere modificar IntentEngine, usa core/intent_engine.py.\n- Si no estás seguro de la ruta, usa pruebas/generated_code.py.\n- Si solo propones cambios menores de tipado, formato o comentarios, dilo explícitamente como \"cambio menor\".\n",
+    false
+   ],
+   [
+    "propose_change",
+    "core/brain.py",
+    "x = 1"
+   ]
+  ]
+ },
+ "generate_code_sin_code": {
+  "results": [
+   "No pude extraer CODE.\n\nRespuesta recibida:\nno sé"
+  ],
+  "events": [
+   [
+    "process",
+    "corrige a.py"
+   ],
+   [
+    "tool",
+    "read_folder_context",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "max_chars_per_file",
+      "800"
+     ],
+     [
+      "max_files",
+      "25"
+     ]
+    ]
+   ],
+   [
+    "tool",
+    "read_file_preview",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ],
+     [
+      "max_chars",
+      "12000"
+     ]
+    ]
+   ],
+   [
+    "ask",
+    "\nActúa como Senior Python Developer.\n\nEl usuario quiere generar o corregir código para este proyecto.\n\nSolicitud:\ncorrige a.py\n\nArchivo objetivo detectado:\na.py\n\nContenido actual del archivo objetivo:\ndef f():\n    print(\"hola\")\n    return None\n\n\nContexto del proyecto:\n<read_folder_context>\n\nDiagnóstico previo disponible:\n\n\nResponde EXACTAMENTE con este formato:\n\nFILE_PATH:\nruta/del/archivo.py\n\nCODE:\ncontenido completo del archivo final\n\nEXPLANATION:\nexplicación breve del cambio\n\nIMPORTANTE:\n- No traduzcas FILE_PATH.\n- No traduzcas CODE.\n- No traduzcas EXPLANATION.\n- Usa exactamente esas tres etiquetas.\n- No uses markdown.\n- No uses triple backticks.\n- No pongas ```python.\n- CODE debe contener el archivo completo final.\n- Si modificas un archivo existente, conserva sus imports, clases y funciones que no deban cambiarse.\n- Si usas re, agrega import re.\n- Si creas una función nueva, incluye todos los imports necesarios.\n- Solo puedes importar: biblioteca estándar de Python, módulos del propio proyecto y estos paquetes: ninguno. No inventes ni agregues otras librerías.\n- Si el usuario menciona un archivo .py específico, usa ese archivo como FILE_PATH.\n- Si el usuario quiere crear una tool nueva, usa una ruta dentro de tools/.\n- Si el usuario quiere modificar Brain, usa core/brain.py.\n- Si el usuario quiere modificar IntentEngine, usa core/intent_engine.py.\n- Si no estás seguro de la ruta, usa pruebas/generated_code.py.\n- Si solo propones cambios menores de tipado, formato o comentarios, dilo explícitamente como \"cambio menor\".\n",
+    false
+   ]
+  ]
+ },
+ "apply_change": {
+  "results": [
+   "<aplicado>"
+  ],
+  "events": [
+   [
+    "process",
+    "confirmar cambio"
+   ],
+   [
+    "apply_pending_change"
+   ]
+  ]
+ },
+ "cancel_change": {
+  "results": [
+   "<cancelado>"
+  ],
+  "events": [
+   [
+    "process",
+    "cancelar cambio"
+   ],
+   [
+    "cancel_pending_change"
+   ]
+  ]
+ },
+ "show_pending_change": {
+  "results": [
+   "<pendiente>"
+  ],
+  "events": [
+   [
+    "process",
+    "muestra el cambio pendiente"
+   ],
+   [
+    "show_pending_change"
+   ]
+  ]
+ },
+ "open_app": {
+  "results": [
+   "<open_app>"
+  ],
+  "events": [
+   [
+    "process",
+    "abre chrome"
+   ],
+   [
+    "tool",
+    "open_app",
+    [
+     [
+      "app_name",
+      "'chrome'"
+     ]
+    ]
+   ]
+  ]
+ },
+ "create_file": {
+  "results": [
+   "<create_file>"
+  ],
+  "events": [
+   [
+    "process",
+    "crea notas.txt con hola"
+   ],
+   [
+    "tool",
+    "create_file",
+    [
+     [
+      "content",
+      "'hola'"
+     ],
+     [
+      "file_path",
+      "'notas.txt'"
+     ]
+    ]
+   ]
+  ]
+ },
+ "read_file": {
+  "results": [
+   "def f():\n    print(\"hola\")\n    return None\n"
+  ],
+  "events": [
+   [
+    "process",
+    "lee a.py"
+   ],
+   [
+    "tool",
+    "read_file",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ]
+    ]
+   ]
+  ]
+ },
+ "list_folder": {
+  "results": [
+   "<list_folder>"
+  ],
+  "events": [
+   [
+    "process",
+    "lista la carpeta src"
+   ],
+   [
+    "tool",
+    "list_folder",
+    [
+     [
+      "folder_path",
+      "'src'"
+     ]
+    ]
+   ]
+  ]
+ },
+ "append_file": {
+  "results": [
+   "<append_file>"
+  ],
+  "events": [
+   [
+    "process",
+    "agrega adiós a notas.txt"
+   ],
+   [
+    "tool",
+    "append_file",
+    [
+     [
+      "content",
+      "'adiós'"
+     ],
+     [
+      "file_path",
+      "'notas.txt'"
+     ]
+    ]
+   ]
+  ]
+ },
+ "search_files": {
+  "results": [
+   "<search_files>"
+  ],
+  "events": [
+   [
+    "process",
+    "busca archivos hola"
+   ],
+   [
+    "tool",
+    "search_files",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "query",
+      "'hola'"
+     ]
+    ]
+   ]
+  ]
+ },
+ "search_text": {
+  "results": [
+   "<search_text>"
+  ],
+  "events": [
+   [
+    "process",
+    "busca Ollama"
+   ],
+   [
+    "tool",
+    "search_text",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ],
+     [
+      "query",
+      "'Ollama'"
+     ]
+    ]
+   ]
+  ]
+ },
+ "read_file_preview": {
+  "results": [
+   "def f():\n    print(\"hola\")\n    return None\n"
+  ],
+  "events": [
+   [
+    "process",
+    "vista previa de a.py"
+   ],
+   [
+    "tool",
+    "read_file_preview",
+    [
+     [
+      "file_path",
+      "'a.py'"
+     ],
+     [
+      "max_chars",
+      "10"
+     ]
+    ]
+   ]
+  ]
+ },
+ "chat": {
+  "results": [
+   null
+  ],
+  "events": [
+   [
+    "process",
+    "hola, ¿cómo estás?"
+   ]
+  ]
+ },
+ "accion_desconocida": {
+  "results": [
+   null
+  ],
+  "events": [
+   [
+    "process",
+    "haz algo raro"
+   ]
+  ]
+ },
+ "ruta_inventada_chat": {
+  "results": [
+   null
+  ],
+  "events": [
+   [
+    "process",
+    "qué es una closure"
+   ]
+  ]
+ },
+ "ruta_inventada_pide_ruta": {
+  "results": [
+   "Necesito la ruta del archivo: escríbela en el mensaje o adjúntalo con @ruta."
+  ],
+  "events": [
+   [
+    "process",
+    "explica este archivo"
+   ]
+  ]
+ },
+ "carpeta_inventada": {
+  "results": [
+   "<list_folder>"
+  ],
+  "events": [
+   [
+    "process",
+    "lista la carpeta"
+   ],
+   [
+    "tool",
+    "list_folder",
+    [
+     [
+      "folder_path",
+      "'.'"
+     ]
+    ]
+   ]
+  ]
+ },
+ "run_sandbox_archivo": {
+  "results": [
+   "Ejecución preparada: s.py (1 líneas).\nCorrerá en un venv desechable solo con la biblioteca estándar, en una carpeta temporal, sin stdin y con un límite de 20 s.\nOjo: el sandbox aísla paquetes, no el sistema. El código corre con tus permisos y puede leer o modificar tus archivos y usar la red.\nEscribe \"confirmar ejecución\" para correrlo o \"cancelar ejecución\".",
+   "Resultado del sandbox (s.py): código de salida 0, 0.2 s.\n--- stdout ---\nsalida"
+  ],
+  "events": [
+   [
+    "process",
+    "ejecuta s.py en el sandbox"
+   ],
+   [
+    "process",
+    "confirmar ejecución"
+   ],
+   [
+    "sandbox.run",
+    "print('sandbox')\n",
+    "s.py"
+   ]
+  ]
+ },
+ "run_sandbox_pendiente_y_cancelar": {
+  "results": [
+   "Ejecución preparada: cambio pendiente para p.py (1 líneas).\nCorrerá en un venv desechable solo con la biblioteca estándar, en una carpeta temporal, sin stdin y con un límite de 20 s.\nOjo: el sandbox aísla paquetes, no el sistema. El código corre con tus permisos y puede leer o modificar tus archivos y usar la red.\nEscribe \"confirmar ejecución\" para correrlo o \"cancelar ejecución\".",
+   "Ejecución cancelada.",
+   "No hay ninguna ejecución pendiente."
+  ],
+  "events": [
+   [
+    "process",
+    "prueba el cambio pendiente"
+   ],
+   [
+    "process",
+    "cancelar ejecución"
+   ],
+   [
+    "process",
+    "confirmar ejecución"
+   ]
+  ]
+ },
+ "run_sandbox_no_python": {
+  "results": [
+   "Solo ejecuto archivos .py en el sandbox (notas.txt no lo es)."
+  ],
+  "events": [
+   [
+    "process",
+    "ejecuta notas.txt"
+   ]
+  ]
+ },
+ "run_sandbox_import_malo": {
+  "results": [
+   "No ejecuto m.py: el sandbox solo tiene la biblioteca estándar y este código importa:\n- línea 1: import numpy\nFallaría con ModuleNotFoundError. Asia no instala paquetes en el sandbox."
+  ],
+  "events": [
+   [
+    "process",
+    "ejecuta m.py en el sandbox"
+   ]
+  ]
+ }
+}
