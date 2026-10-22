@@ -1,58 +1,35 @@
 from pathlib import Path
 
+from config.settings_manager import SettingsManager
+from providers.provider_router import SYSTEM_PROMPT
+from tools.debug_context import build_debug_context, context_note, verify_citations
 from tools.review_findings import FINDING_FORMAT, HONESTY_RULES, numbered, render_report
 from tools.write_safety import find_truncating_rewrites
 
 TRUNCATED_PREVIEW_MARK = "... [archivo recortado]"
 
+# Un problema más largo no deja sitio para los archivos.
+MAX_ISSUE_CHARS = 2000
 
-class DebugAgentTool:
-    name = "debug_project"
-    description = "Investiga bugs buscando archivos relevantes y genera contexto para proponer fixes."
+UNVERIFIED_DIAGNOSIS = (
+    "Diagnóstico NO verificado: es el análisis del modelo. Solo las citas de "
+    "EVIDENCIA se comprobaron contra los archivos."
+)
 
-    def __init__(self, tool_registry, provider_router):
-        self.tool_registry = tool_registry
-        self.provider_router = provider_router
 
-    def debug_project(self, issue: str, folder_path: str = "."):
-        searches = [
-            issue,
-            "return None",
-            "print(",
-            "provider_router.ask",
-            "brain.process",
-            "generate_code",
-            "apply_change",
-        ]
-
-        evidence = []
-
-        for query in searches:
-            result = self.tool_registry.execute(
-                "search_text",
-                query=query,
-                folder_path=folder_path
-            )
-
-            evidence.append(f"\n--- Búsqueda: {query} ---\n{result}")
-
-        context = self.tool_registry.execute(
-            "read_folder_context",
-            folder_path=folder_path,
-            max_files=25,
-            max_chars_per_file=1200
-        )
-
-        prompt = f"""
+def debug_prompt(issue: str, evidence: str, context: str) -> str:
+    # El problema va al principio y se repite al final: si Ollama recortara
+    # el principio del prompt, el final se conserva.
+    return f"""
 Actúa como DebugAgent senior para este proyecto Python.
 
 Problema reportado:
 {issue}
 
-Evidencia encontrada:
-{''.join(evidence)}
+Evidencia encontrada (líneas con ruta:línea):
+{evidence}
 
-Contexto del proyecto:
+Archivos más relacionados con el problema (ordenados por coincidencias):
 {context}
 
 Tu tarea:
@@ -74,11 +51,52 @@ archivos sospechosos con motivo
 LIKELY_CAUSE:
 causa más probable
 
+EVIDENCIA:
+una línea por cada línea de código en que te basas, con el formato
+ruta | línea copiada literalmente del archivo
+
 RECOMMENDED_NEXT_STEP:
 qué archivo revisar o corregir primero
+
+Recuerda: el problema reportado es: {issue}
 """
 
-        return self.provider_router.ask(prompt)
+
+class DebugAgentTool:
+    name = "debug_project"
+    description = "Investiga bugs buscando archivos relevantes y genera contexto para proponer fixes."
+
+    def __init__(self, tool_registry, provider_router):
+        self.tool_registry = tool_registry
+        self.provider_router = provider_router
+
+    def debug_project(self, issue: str, folder_path: str = "."):
+        """Diagnóstico de un bug: una llamada al LLM, sin modificar archivos.
+
+        El contexto entra en ollama_num_ctx (ver tools/debug_context.py) y
+        las citas de EVIDENCIA se comprueban contra los archivos; el resto
+        del diagnóstico no está verificado y el reporte lo dice.
+        """
+        base = Path(folder_path)
+
+        if not base.is_absolute():
+            base = Path.cwd() / base
+
+        if not base.exists():
+            return f"No encontré la carpeta: {base}"
+
+        issue = issue[:MAX_ISSUE_CHARS]
+
+        def render(evidence, context):
+            return debug_prompt(issue, evidence, context)
+
+        ctx = build_debug_context(issue, base, SettingsManager(), render, system_chars=len(SYSTEM_PROMPT))
+        response = self.provider_router.ask(ctx.prompt)
+
+        return (
+            f"{UNVERIFIED_DIAGNOSIS}\n{context_note(ctx)}\n\n"
+            f"{verify_citations(response, ctx.files)}"
+        )
     
     # Las heurísticas de analyze_static (p. ej. "posible índice fuera de rango"
     # en cada df[col]) no entran en estos prompts: el modelo las repetía como

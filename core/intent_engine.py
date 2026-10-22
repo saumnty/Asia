@@ -83,7 +83,8 @@ Archivos y proyecto:
 
 Revisar sin modificar:
 - Revisar un archivo -> review_file. Encontrar todos los bugs, analizar a fondo o revisar profundamente un archivo -> review_file_deep.
-- "revisa", "analiza", "audita", "encuentra bugs" o "encuentra por qué..." sobre una carpeta o el proyecto -> review_project. Si pide "sin síntesis", "sin resumen" o "solo los reportes por archivo", agrega "synthesis": false.
+- "revisa", "analiza", "audita" o "encuentra bugs" sobre una carpeta o el proyecto -> review_project. Si pide "sin síntesis", "sin resumen" o "solo los reportes por archivo", agrega "synthesis": false.
+- "encuentra por qué...", "por qué aparece...", "por qué falla..." o buscar la causa de un bug sin decir en qué archivo está -> debug_project (solo diagnostica, no modifica).
 
 Modificar código:
 - Refactorizar, limpiar, mejorar estilo, ordenar, simplificar o hacer más mantenible un archivo, sin cambiar su comportamiento -> smart_refactor.
@@ -186,7 +187,7 @@ Usuario: revisa la carpeta pruebas
 {"action":"review_project","params":{"folder_path":"pruebas"}}
 
 Usuario: encuentra posibles causas del bug Asia None
-{"action":"review_project","params":{"folder_path":"."}}
+{"action":"debug_project","params":{"issue":"encuentra posibles causas del bug Asia None","folder_path":"."}}
 
 Usuario: revisa el proyecto sin resumen, solo los reportes de cada archivo
 {"action":"review_project","params":{"folder_path":".","synthesis":false}}

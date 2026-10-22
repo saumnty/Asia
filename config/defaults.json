@@ -56,6 +56,7 @@
         "generate_code_file": 12000,
         "review_project_file": 3000,
         "review_project_files": 15,
+        "debug_project_tokens": 6000,
         "summarize_folder": {"max_files": 12, "max_chars_per_file": 1200},
         "save_project_summary": {"max_files": 15, "max_chars_per_file": 1500},
         "map_project": {"max_files": 30, "max_chars_per_file": 800},
