@@ -1,0 +1,136 @@
+"""Lectura y explicación de archivos y proyectos, y búsqueda con RAG."""
+from core import prompts
+
+
+class ExploreActions:
+    HANDLERS = {
+        "summarize_file": "handle_summarize_file",
+        "summarize_folder": "handle_summarize_folder",
+        "index_project_rag": "handle_index_project_rag",
+        "search_project_rag": "handle_search_project_rag",
+        "explain_file": "handle_explain_file",
+        "find_references": "handle_find_references",
+        "explain_symbol": "handle_explain_symbol",
+        "map_project": "handle_map_project",
+        "find_dependencies": "handle_find_dependencies",
+    }
+
+    def handle_summarize_file(self, text, params):
+        file_path = params.get("file_path")
+
+        if not file_path:
+            return "Necesito la ruta del archivo para resumirlo."
+
+        content = self.tool_registry.execute(
+            "read_file_preview",
+            file_path=file_path,
+            max_chars=self.limit("summarize_file")
+        )
+
+        return self.provider_router.ask(prompts.summarize_file(file_path, content))
+
+    def handle_summarize_folder(self, text, params):
+        folder_path = params.get("folder_path", ".")
+
+        content = self.tool_registry.execute(
+            "read_folder_context",
+            folder_path=folder_path,
+            **self.limit("summarize_folder")
+        )
+
+        return self.provider_router.ask(prompts.summarize_folder(folder_path, content))
+
+    def handle_index_project_rag(self, text, params):
+        project_path = params.get("project_path", ".")
+        project_name = self.active_project()
+
+        return self.tool_registry.execute(
+            "index_project_rag",
+            project_path=project_path,
+            project_name=project_name
+        )
+
+    def handle_search_project_rag(self, text, params):
+        question = params.get("question", text)
+        project_name = self.active_project()
+
+        rag_context = self.tool_registry.execute(
+            "search_project_rag",
+            question=question,
+            project_name=project_name,
+            n_results=5
+        )
+
+        return self.provider_router.ask(
+            prompts.search_project_rag(project_name, question, rag_context)
+        )
+
+    def handle_explain_file(self, text, params):
+        file_path = params.get("file_path")
+
+        if not file_path:
+            return "Necesito la ruta del archivo."
+
+        content = self.tool_registry.execute(
+            "read_file_preview",
+            file_path=file_path,
+            max_chars=self.limit("explain_file")
+        )
+
+        return self.provider_router.ask(prompts.explain_file(file_path, content))
+
+    def handle_find_references(self, text, params):
+        query = params.get("query")
+        folder_path = params.get("folder_path", ".")
+
+        if not query:
+            return "Necesito saber qué referencia quieres buscar."
+
+        raw_results = self.tool_registry.execute(
+            "search_text",
+            query=query,
+            folder_path=folder_path
+        )
+
+        return self.provider_router.ask(prompts.find_references(query, raw_results))
+
+    def handle_explain_symbol(self, text, params):
+        symbol = params.get("symbol")
+        folder_path = params.get("folder_path", ".")
+
+        if not symbol:
+            return "Necesito saber qué clase, función o método quieres explicar."
+
+        raw_results = self.tool_registry.execute(
+            "search_text",
+            query=symbol,
+            folder_path=folder_path
+        )
+
+        return self.provider_router.ask(prompts.explain_symbol(symbol, raw_results))
+
+    def handle_map_project(self, text, params):
+        folder_path = params.get("folder_path", ".")
+
+        content = self.tool_registry.execute(
+            "read_folder_context",
+            folder_path=folder_path,
+            **self.limit("map_project")
+        )
+
+        return self.provider_router.ask(prompts.map_project(content))
+
+    def handle_find_dependencies(self, text, params):
+        query = params.get("query")
+        folder_path = params.get("folder_path", ".")
+
+        if not query:
+            return "Necesito saber qué dependencia, clase o módulo quieres buscar."
+
+        raw_results = self.tool_registry.execute(
+            "search_text",
+            query=query,
+            folder_path=folder_path
+        )
+
+        return self.provider_router.ask(prompts.find_dependencies(query, raw_results))
