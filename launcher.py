@@ -1,5 +1,6 @@
 import argparse
 import sys
+from collections import deque
 from pathlib import Path
 
 # No se cambia de carpeta: los datos internos de Asia usan rutas absolutas
@@ -138,34 +139,64 @@ def make_reader():
     return session.prompt
 
 
-def read_message(read):
-    """Lee un mensaje. Devuelve (texto, bloque) con bloque None si es de una línea.
+class MessageReader:
+    """Lee mensajes del modo interactivo, de una línea o en bloque (<< ... FIN).
 
-    Si la línea termina en <<, lo que sigue hasta una línea con FIN sola es un
-    bloque (p. ej. código pegado; con input() cada línea pegada llegaría como
-    un mensaje distinto). Lo escrito antes de << es la instrucción.
+    Una lectura puede traer varias líneas: con prompt_toolkit, un pegado
+    (bracketed paste) llega entero en una sola llamada, con sus saltos de
+    línea; con input() llega línea por línea. Por eso cada lectura se parte en
+    líneas y las que sobran quedan para lo siguiente: así FIN cierra el bloque
+    aunque venga dentro del mismo pegado.
     """
-    line = read("\nTú: ")
-    stripped = line.rstrip()
 
-    if not stripped.endswith(MULTILINE_START):
-        return line, None
+    def __init__(self, read):
+        self.read = read
+        self.pending = deque()
 
-    instruction = stripped[: -len(MULTILINE_START)].rstrip()
-    lines = []
+    def next_line(self, prompt):
+        if not self.pending:
+            chunk = self.read(prompt).replace("\r\n", "\n").replace("\r", "\n")
+            lines = chunk.split("\n")
 
-    while True:
-        try:
-            current = read("... ")
-        except EOFError:
-            break
+            # El salto final de un pegado no es una línea vacía más.
+            if len(lines) > 1 and lines[-1] == "":
+                lines.pop()
 
-        if current.strip() == MULTILINE_END:
-            break
+            self.pending.extend(lines)
 
-        lines.append(current)
+        return self.pending.popleft()
 
-    return instruction, "\n".join(lines)
+    def next_message(self):
+        """Devuelve (texto, bloque), con bloque None si no es un mensaje con <<.
+
+        Si la primera línea termina en << (con o sin espacios al final), lo que
+        sigue hasta una línea con FIN sola es el bloque y lo escrito antes de
+        << es la instrucción. Si no, y llegaron más líneas en la misma lectura
+        (un pegado sin <<), todo el pegado es un solo mensaje.
+        """
+        first = self.next_line("\nTú: ")
+        stripped = first.rstrip()
+
+        if not stripped.endswith(MULTILINE_START):
+            rest = list(self.pending)
+            self.pending.clear()
+            return "\n".join([first, *rest]), None
+
+        instruction = stripped[: -len(MULTILINE_START)].rstrip()
+        lines = []
+
+        while True:
+            try:
+                current = self.next_line("... ")
+            except EOFError:
+                break
+
+            if current.strip() == MULTILINE_END:
+                break
+
+            lines.append(current)
+
+        return instruction, "\n".join(lines)
 
 
 def interactive_mode(brain=None, read=None):
@@ -175,9 +206,11 @@ def interactive_mode(brain=None, read=None):
     print("Asia iniciada")
     print(f"(Para pegar varias líneas termina el mensaje con {MULTILINE_START} y cierra con {MULTILINE_END}.)")
 
+    messages = MessageReader(read)
+
     try:
         while True:
-            user, block = read_message(read)
+            user, block = messages.next_message()
 
             if block is None and user.lower().strip() in EXIT_COMMANDS:
                 print("Asia apagada.")

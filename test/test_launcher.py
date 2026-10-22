@@ -245,7 +245,7 @@ def test_multilinea_salir_dentro_del_bloque_no_sale(cwd):
 
 
 def test_multilinea_fin_solo_si_esta_solo_en_la_linea(cwd):
-    text, block = launcher.read_message(reader(["<<", "x = 'FIN'", "  FIN  "]))
+    text, block = launcher.MessageReader(reader(["<<", "x = 'FIN'", "  FIN  "])).next_message()
 
     assert (text, block) == ("", "x = 'FIN'")
 
@@ -257,7 +257,7 @@ def test_multilinea_eof_cierra_el_bloque(cwd):
         except StopIteration:
             raise EOFError
 
-    assert launcher.read_message(read) == ("analiza", "a = 1")
+    assert launcher.MessageReader(read).next_message() == ("analiza", "a = 1")
 
 
 def test_linea_vacia_no_llama_a_asia(cwd):
@@ -266,3 +266,81 @@ def test_linea_vacia_no_llama_a_asia(cwd):
     launcher.interactive_mode(brain, read=reader(["", "   ", "salir"]))
 
     assert brain.processed == []
+
+
+# Pegado real: con prompt_toolkit un pegado (bracketed paste) llega entero en
+# una sola lectura, con sus saltos de línea. Antes, FIN dentro del pegado no
+# cerraba el bloque y la lectura se quedaba esperando.
+PASTED_CODE = "def f(x):\r\n\r\n    if x:\r\n        return 1\r\n    return 0\r\n"
+EXPECTED_BLOCK = "def f(x):\n\n    if x:\n        return 1\n    return 0"
+
+
+def chunks(values):
+    """read() que devuelve cada valor tal cual (puede traer varias líneas)."""
+    values = iter(values)
+
+    def read(prompt):
+        try:
+            return next(values)
+        except StopIteration:
+            raise EOFError
+
+    return read
+
+
+@pytest.mark.parametrize(
+    "reads, expected",
+    [
+        # "explica <<" escrito; el código y FIN pegados de una vez.
+        (["explica esto <<", PASTED_CODE + "FIN"], [("explica esto", EXPECTED_BLOCK)]),
+        # Todo pegado de una vez, incluida la instrucción.
+        (["explica esto <<\r\n" + PASTED_CODE + "FIN\r\n"], [("explica esto", EXPECTED_BLOCK)]),
+        # << con espacios al final; FIN escrito aparte.
+        (["explica esto <<   ", PASTED_CODE, "FIN"], [("explica esto", EXPECTED_BLOCK)]),
+        # Lo que viene después de FIN en el mismo pegado es el mensaje siguiente.
+        (["revisa <<", PASTED_CODE + "FIN\r\nsalir"], [("revisa", EXPECTED_BLOCK), ("salir", None)]),
+        # Un pegado de varias líneas sin << es un solo mensaje.
+        ([PASTED_CODE], [(EXPECTED_BLOCK, None)]),
+    ],
+)
+def test_bloque_con_pegados_de_varias_lineas(reads, expected):
+    messages = launcher.MessageReader(chunks(reads))
+
+    assert [messages.next_message() for _ in expected] == expected
+
+
+def prompt_toolkit_messages(keys, count):
+    """Mensajes leídos por una PromptSession real a la que se le envía keys."""
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.input import create_pipe_input
+    from prompt_toolkit.output import DummyOutput
+
+    with create_pipe_input() as pipe:
+        pipe.send_text(keys)
+        session = PromptSession(input=pipe, output=DummyOutput())
+        messages = launcher.MessageReader(session.prompt)
+        return [messages.next_message() for _ in range(count)]
+
+
+PASTE_START, PASTE_END = "\x1b[200~", "\x1b[201~"
+
+
+@pytest.mark.parametrize(
+    "keys, expected",
+    [
+        (
+            "explica esto <<\r" + PASTE_START + PASTED_CODE + "FIN" + PASTE_END + "\r",
+            [("explica esto", EXPECTED_BLOCK)],
+        ),
+        (
+            PASTE_START + "explica esto <<\r\n" + PASTED_CODE + "FIN\r\n" + PASTE_END + "\r",
+            [("explica esto", EXPECTED_BLOCK)],
+        ),
+        (
+            "revisa <<   \r" + PASTE_START + PASTED_CODE + PASTE_END + "\rFIN\rsalir\r",
+            [("revisa", EXPECTED_BLOCK), ("salir", None)],
+        ),
+    ],
+)
+def test_bloque_con_pegado_real_en_prompt_toolkit(keys, expected):
+    assert prompt_toolkit_messages(keys, len(expected)) == expected
