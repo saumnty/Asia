@@ -100,6 +100,28 @@ DIRECT_TOOL_ACTIONS = [
 ]
 
 
+# Frases exactas (en minúsculas, sin puntuación final) que no necesitan al
+# IntentEngine: son comandos fijos y una mala clasificación aplicaría o
+# descartaría un cambio por error. "confirmar ejecución" y "cancelar
+# ejecución" están en core/actions/sandbox.py; "salir" lo atiende el launcher.
+SHORTCUT_ACTIONS = {
+    **dict.fromkeys(
+        ["confirmar cambio", "confirmar el cambio", "confirma el cambio",
+         "aplicar cambio", "aplicar el cambio", "aplica el cambio"],
+        "apply_change"
+    ),
+    **dict.fromkeys(
+        ["cancelar cambio", "cancelar el cambio", "cancela el cambio"],
+        "cancel_change"
+    ),
+    **dict.fromkeys(
+        ["muestra el cambio pendiente", "mostrar el cambio pendiente", "mostrar cambio pendiente",
+         "ver el cambio pendiente", "ver cambio pendiente", "cambio pendiente"],
+        "show_pending_change"
+    ),
+}
+
+
 class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxActions):
     # Acción del IntentEngine -> método que la atiende (ver core/actions).
     HANDLERS = {
@@ -134,6 +156,12 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         no reconocida); en ese caso quien llama debe usar provider_router.chat.
         """
         command = normalized_command(text)
+
+        # Comandos fijos: texto exacto, sin pasar por el IntentEngine.
+        shortcut = SHORTCUT_ACTIONS.get(command)
+
+        if shortcut:
+            return getattr(self, self.HANDLERS[shortcut])(text, {})
 
         if command in RUN_CONFIRM_PHRASES:
             return self.confirm_run()

@@ -131,6 +131,9 @@ class FakeApplyTool:
     def load_pending_change(self):
         return self.pending
 
+    def apply_pending_change(self):
+        return "<aplicado>"
+
 
 class FakeToolRegistry:
     def __init__(self, pending=None):

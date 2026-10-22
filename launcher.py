@@ -312,6 +312,11 @@ def main(argv=None, stdin=None, brain_factory=Brain):
         print(f"Carpeta desde donde llamaste a Asia: {Session.get_user_cwd()}")
         return
 
+    # "jarvis salir" no tiene nada que hacer: no se crea Brain ni se llama al modelo.
+    if prompt.lower().strip() in EXIT_COMMANDS and not args.file and stdin_data is None:
+        print("Asia apagada.")
+        return
+
     brain = brain_factory()
     block = decode(stdin_data) if stdin_data is not None else None
     prepared = prepare_message(brain, prompt, args.file, block)
