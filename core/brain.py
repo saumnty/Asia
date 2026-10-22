@@ -4,6 +4,7 @@ from tools.tool_registry import ToolRegistry
 from providers.provider_router import ProviderRouter
 from memory.project_memory import ProjectMemory
 from config.settings_manager import SettingsManager
+from core.actions.memory import MemoryActions
 from core.paths import PROJECT_ROOT
 from tools.import_check import ImportPolicy, check_imports, refusal_message, rewrite_request
 from tools.sandbox import PendingRun, SandboxRunner, format_result, sandbox_import_problems
@@ -195,7 +196,12 @@ def parse_code_response(response):
     return file_path, code, explanation
 
 
-class Brain:
+class Brain(MemoryActions):
+    # Acción del IntentEngine -> método que la atiende (ver core/actions).
+    HANDLERS = {
+        **MemoryActions.HANDLERS,
+    }
+
     def __init__(self):
         self.memory = MemoryManager()
         self.intent_engine = IntentEngine()
@@ -363,28 +369,10 @@ class Brain:
         if missing_file:
             return MISSING_FILE_MESSAGE if FILE_WORDS.search(text) else None
 
-        key = params.get("key")
-        value = params.get("value")
+        handler = self.HANDLERS.get(action)
 
-        if action == "remember" and key and value:
-            self.memory.remember(key, value)
-            return f"Entendido. Recordaré que {key} es {value}."
-
-        if action == "recall" and key:
-            result = self.memory.recall(key)
-
-            if result:
-                return f"{key}: {result}"
-
-            return f"No tengo guardado ningún dato para: {key}."
-
-        if action == "forget" and key:
-            deleted = self.memory.forget(key)
-
-            if deleted:
-                return f"Listo. Olvidé el dato: {key}."
-
-            return f"No tenía guardado ningún dato para: {key}."
+        if handler:
+            return getattr(self, handler)(text, params)
 
         if action == "summarize_file":
             file_path = params.get("file_path")
@@ -430,131 +418,6 @@ Contenido:
 """
 
             return self.provider_router.ask(prompt)
-
-        if action == "summarize_and_save_project":
-            folder_path = params.get("folder_path", ".")
-            project_name = self.active_project()
-
-            content = self.tool_registry.execute(
-                "read_folder_context",
-                folder_path=folder_path,
-                **self.limit("save_project_summary")
-            )
-
-            prompt = f"""
-Crea un resumen actualizado del proyecto.
-
-Debe incluir:
-- Nombre del proyecto
-- Objetivo
-- Arquitectura actual
-- Componentes importantes
-- Estado actual
-- Siguientes pasos recomendados
-
-Proyecto:
-{project_name}
-
-Contenido:
-{content}
-"""
-
-            summary = self.provider_router.ask(prompt)
-
-            self.project_memory.save_project_summary(
-                project_name,
-                summary
-            )
-
-            return f"Resumen actualizado y guardado para el proyecto {project_name}."
-
-        if action == "ask_project_memory":
-            question = params.get("question", text)
-            project_name = self.active_project()
-            project_summary = self.project_memory.load_project_summary(project_name)
-
-            if not project_summary:
-                return f"No tengo resumen guardado para el proyecto {project_name}."
-
-            prompt = f"""
-Responde la pregunta usando el resumen guardado del proyecto.
-
-Proyecto:
-{project_name}
-
-Resumen guardado:
-{project_summary}
-
-Pregunta:
-{question}
-"""
-
-            return self.provider_router.ask(prompt)
-
-        if action == "update_project_memory":
-            note = params.get("note")
-
-            if not note:
-                return "Necesito una nota para actualizar la memoria del proyecto."
-
-            project_name = self.active_project()
-
-            self.project_memory.append_project_note(
-                project_name,
-                note
-            )
-
-            return f"Memoria del proyecto {project_name} actualizada."
-
-        if action == "show_settings":
-            provider = self.settings.get("default_provider")
-            fallback = self.settings.get("fallback_provider")
-            stream = self.settings.get("stream_output", False)
-            model = self.settings.get(f"{provider}_model")
-
-            return (
-                f"Provider actual: {provider}\n"
-                f"Modelo: {model}\n"
-                f"Fallback: {fallback}\n"
-                f"Streaming: {stream}\n"
-                f"Proyecto activo: {self.active_project()}"
-            )
-
-        if action == "set_provider":
-            provider = params.get("provider")
-
-            if not provider:
-                return "Necesito saber qué provider quieres usar."
-
-            provider = provider.lower().strip()
-
-            aliases = self.settings.get("provider_aliases", {})
-            provider = aliases.get(provider, provider)
-
-            if provider not in self.provider_router.provider_factories:
-                return f"Provider no disponible todavía: {provider}"
-
-            self.settings.set("default_provider", provider)
-
-            return f"Provider cambiado a: {provider}"
-
-        if action == "set_active_project":
-            project_name = params.get("project_name")
-
-            if not project_name:
-                return "Necesito saber a qué proyecto quieres cambiar."
-
-            project_name = project_name.lower().strip()
-
-            aliases = self.settings.get("project_aliases", {})
-            project_name = aliases.get(project_name, project_name)
-
-            self.settings.set("active_project", project_name)
-
-            return f"Proyecto activo cambiado a: {project_name}"
-
-        if action == "show_active_project":
-            return f"Proyecto activo: {self.active_project()}"
 
         if action == "index_project_rag":
             project_path = params.get("project_path", ".")
