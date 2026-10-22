@@ -158,3 +158,75 @@ def test_las_citas_del_reporte_completo_se_comprueban(tmp_path):
 
     assert "- a.py:2 | return None  [cita encontrada en el archivo]" in report
     assert "- a.py | return 42  [la cita NO está en el archivo: descartada]" in report
+
+
+# --- Fragmentos alrededor de las coincidencias --------------------------------
+
+def test_fragmentos_alrededor_de_la_coincidencia_y_no_el_principio(tmp_path):
+    body = [f"relleno_{n} = {n}" for n in range(1, 400)]
+    body[299] = "    return f'Asia {None}'"  # línea 300
+    (tmp_path / "largo.py").write_text("\n".join(body) + "\n", encoding="utf-8")
+
+    _, prompt = run(tmp_path)
+    chunk = prompt[prompt.index("--- Archivo: largo.py"):]
+
+    assert "300 |     return f'Asia {None}'" in chunk
+    assert "297 | relleno_297 = 297" in chunk and "303 | relleno_303 = 303" in chunk
+    assert "relleno_1 = 1\n" not in chunk  # el principio ya no va
+
+
+def test_fragmentos_separados_y_con_tope_por_archivo(tmp_path):
+    from tools.debug_context import MAX_CHARS_PER_FILE, FileHits, file_chunk
+
+    content = "\n".join("x = None" if n % 50 == 0 else f"y_{n} = {n}" for n in range(1, 2001))
+    hits = FileHits(relative="a.py", content=content, lines={"None": [(n, "x = None") for n in range(50, 2001, 50)]})
+
+    chunk = file_chunk(hits)
+    body = chunk.split("---\n", 1)[1]
+
+    assert "\n...\n" in body
+    assert len(body) <= MAX_CHARS_PER_FILE
+    assert body.startswith(" 47 | y_47 = 47")  # alineado al ancho de 403
+
+
+def test_sin_coincidencias_muestra_el_principio():
+    from tools.debug_context import FileHits, file_chunk
+
+    assert file_chunk(FileHits(relative="a.py", content="hola = 1\n")).endswith("---\nhola = 1\n")
+
+
+def test_citas_con_el_formato_de_la_evidencia():
+    # Visto con qwen2.5-coder:7b: copia "ruta:línea: código" entre backticks.
+    response = (
+        "EVIDENCIA:\n"
+        "- `core/brain.py:3: def process(text):`\n"
+        "1. core/brain.py:9: return otra_cosa()\n"
+    )
+
+    report = verify_citations(response, FILES)
+
+    assert "- core/brain.py:3 | def process(text):  [cita encontrada en el archivo]" in report
+    assert "- core/brain.py | return otra_cosa()  [la cita NO está en el archivo: descartada]" in report
+
+
+def test_cita_en_la_linea_siguiente_a_la_ruta():
+    response = "EVIDENCIA:\n- core/brain.py:4\n`return None`\n- core/brain.py:1\n`no_existe()`\n"
+
+    report = verify_citations(response, FILES)
+
+    assert "- core/brain.py:4 | return None  [cita encontrada en el archivo]" in report
+    assert "- core/brain.py | no_existe()  [la cita NO está en el archivo: descartada]" in report
+
+
+def test_diagnostico_usa_las_opciones_de_revision(tmp_path):
+    class ReviewRouter(FakeProviderRouter):
+        def ask(self, prompt, review=False):
+            self.review = review
+            return "SUMMARY:\nx"
+
+    (tmp_path / "a.py").write_text("x = None\n", encoding="utf-8")
+    router = ReviewRouter()
+
+    DebugAgentTool(None, router).debug_project(ISSUE, str(tmp_path))
+
+    assert router.review is True

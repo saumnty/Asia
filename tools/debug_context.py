@@ -36,6 +36,11 @@ EVIDENCE_SHARE = 0.35
 
 MAX_CHARS_PER_FILE = 1200
 
+# Líneas de contexto alrededor de cada coincidencia, y lo que suma el prefijo
+# "123 | " y el salto de línea a cada una.
+SNIPPET_RADIUS = 3
+SNIPPET_LINE_OVERHEAD = 10
+
 # Tope propio del prompt (context_limits.debug_project_tokens), además de
 # ollama_num_ctx: con el prompt entero de ~15 000 tokens qwen2.5-coder:7b
 # tardaba 330 s y no seguía el formato pedido.
@@ -136,13 +141,60 @@ def evidence_lines(files: list[FileHits], terms: list[str]) -> list[str]:
     return lines
 
 
+def snippet_lines(f: FileHits) -> list[int]:
+    """Números de línea a mostrar: SNIPPET_RADIUS alrededor de cada
+    coincidencia, primero las del problema, hasta MAX_CHARS_PER_FILE."""
+    lines = f.content.splitlines()
+    issue = [n for term, hits in f.lines.items() if term not in GENERIC_SEARCHES for n, _ in hits]
+    generic = [n for term, hits in f.lines.items() if term in GENERIC_SEARCHES for n, _ in hits]
+    chosen = set()
+    used = 0
+
+    for hit in dict.fromkeys(issue + generic):
+        window = range(max(1, hit - SNIPPET_RADIUS), min(len(lines), hit + SNIPPET_RADIUS) + 1)
+        new = [n for n in window if n not in chosen]
+        cost = sum(len(lines[n - 1]) + SNIPPET_LINE_OVERHEAD for n in new)
+
+        if used + cost > MAX_CHARS_PER_FILE:
+            continue
+
+        chosen.update(new)
+        used += cost
+
+    return sorted(chosen)
+
+
 def file_chunk(f: FileHits) -> str:
-    content = f.content
+    """Fragmentos numerados alrededor de las coincidencias.
 
-    if len(content) > MAX_CHARS_PER_FILE:
-        content = content[:MAX_CHARS_PER_FILE] + TRUNCATED_MARK
+    Antes iban los primeros 1200 caracteres: en archivos largos, el código
+    que coincidía con el problema quedaba fuera. Sin coincidencias, el
+    principio del archivo.
+    """
+    numbers = snippet_lines(f)
 
-    return f"\n--- Archivo: {f.relative} ({f.total} coincidencias) ---\n{content}"
+    if not numbers:
+        content = f.content
+
+        if len(content) > MAX_CHARS_PER_FILE:
+            content = content[:MAX_CHARS_PER_FILE] + TRUNCATED_MARK
+
+        return f"\n--- Archivo: {f.relative} ({f.total} coincidencias) ---\n{content}"
+
+    lines = f.content.splitlines()
+    width = len(str(numbers[-1]))
+    shown = []
+
+    for previous, number in zip([None] + numbers, numbers):
+        if previous is not None and number != previous + 1:
+            shown.append("...")
+
+        shown.append(f"{number:>{width}} | {lines[number - 1]}")
+
+    return (
+        f"\n--- Archivo: {f.relative} ({f.total} coincidencias; "
+        f"fragmentos alrededor de ellas, con número de línea) ---\n" + "\n".join(shown)
+    )
 
 
 @dataclass
@@ -247,7 +299,27 @@ SECTION = re.compile(
     r"^[\s*#]*(SUMMARY|SUSPECT_FILES|LIKELY_CAUSE|EVIDENCIA|RECOMMENDED_NEXT_STEP)[\s*]*:?[\s*]*$",
     re.IGNORECASE | re.MULTILINE,
 )
-CITATION = re.compile(r"^[\s*\-]*`?([^\s|`]+?)`?(?::(\d+))?\s*\|\s*(.+)$")
+# "ruta | cita" (lo pedido) o "ruta:línea: cita" (el formato de las líneas
+# de evidencia, que el modelo copia a menudo), con viñeta o número delante.
+BULLET = r"^\s*(?:[*\-]|\d+[.)])?\s*`?"
+CITATION = re.compile(BULLET + r"([^\s|`]+?)`?(?::(\d+))?\s*\|\s*(.+)$")
+COLON_CITATION = re.compile(BULLET + r"([^\s|`:]+):(\d+):\s*(.+)$")
+# "ruta:línea" sola, con la cita en la línea siguiente.
+PATH_ONLY = re.compile(BULLET + r"([^\s|`:]+):(\d+)`?:?\s*$")
+
+
+def join_split_citations(lines: list[str]) -> list[str]:
+    joined = []
+
+    for line in lines:
+        previous = PATH_ONLY.match(joined[-1]) if joined else None
+
+        if previous and not PATH_ONLY.match(line):
+            joined[-1] = f"{previous.group(1)}:{previous.group(2)}: {line.strip()}"
+        else:
+            joined.append(line)
+
+    return joined
 
 
 def find_file(raw: str, files: list[FileHits]) -> FileHits | None:
@@ -263,7 +335,7 @@ def find_file(raw: str, files: list[FileHits]) -> FileHits | None:
 
 
 def check_citation(line: str, files: list[FileHits]) -> str:
-    match = CITATION.match(line)
+    match = CITATION.match(line) or COLON_CITATION.match(line)
 
     if not match:
         return f"{line.strip()}  [sin formato ruta | cita: no comprobada]"
@@ -296,7 +368,7 @@ def verify_citations(response: str, files: list[FileHits]) -> str:
 
     following = [s.start() for s in sections if s.start() > evidence.start()]
     end = following[0] if following else len(response)
-    lines = [line for line in response[evidence.end():end].splitlines() if line.strip()]
+    lines = join_split_citations([line for line in response[evidence.end():end].splitlines() if line.strip()])
     checked = [check_citation(line, files) for line in lines] or ["el modelo no citó líneas; no hay nada comprobado."]
 
     return (

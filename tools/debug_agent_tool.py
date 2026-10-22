@@ -91,7 +91,9 @@ class DebugAgentTool:
             return debug_prompt(issue, evidence, context)
 
         ctx = build_debug_context(issue, base, SettingsManager(), render, system_chars=len(SYSTEM_PROMPT))
-        response = self.provider_router.ask(ctx.prompt)
+        # Opciones de revisión (temperatura baja): con las del chat el formato
+        # de EVIDENCIA cambiaba de una ejecución a otra.
+        response = self.provider_router.ask(ctx.prompt, review=True)
 
         return (
             f"{UNVERIFIED_DIAGNOSIS}\n{context_note(ctx)}\n\n"
