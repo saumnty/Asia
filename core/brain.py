@@ -5,6 +5,7 @@ from providers.provider_router import ProviderRouter
 from memory.project_memory import ProjectMemory
 from config.settings_manager import SettingsManager
 from core.paths import PROJECT_ROOT
+from tools.import_check import ImportPolicy, check_imports, refusal_message, rewrite_request
 from pathlib import Path
 import os
 import re
@@ -192,6 +193,45 @@ class Brain:
         self.project_memory = ProjectMemory()
         self.settings = SettingsManager()
         self.last_debug_report = None
+
+    def import_policy(self, file_path):
+        """Imports permitidos para file_path (ver tools/import_check.py)."""
+        return ImportPolicy.for_file(
+            file_path or "nuevo.py",
+            Path.cwd(),
+            self.settings.get("allowed_imports", [])
+        )
+
+    def check_generated_imports(self, prompt, file_path, code, explanation):
+        """Comprueba los imports de un .py generado antes de proponerlo.
+
+        Si hay imports no instalados o no permitidos, se pide una reescritura
+        (una sola vez). Devuelve (code, explanation, error); error no es None
+        si ni la reescritura sirve, y entonces no se propone el cambio.
+        """
+        if not str(file_path).lower().endswith(".py"):
+            return code, explanation, None
+
+        policy = self.import_policy(file_path)
+        report = check_imports(code, policy)
+
+        if report.ok:
+            return code, explanation, None
+
+        parsed = parse_code_response(
+            self.provider_router.ask(prompt + rewrite_request(report))
+        )
+
+        if parsed:
+            _, new_code, new_explanation = parsed
+            new_report = check_imports(new_code, policy)
+
+            if new_report.ok:
+                return new_code, new_explanation or explanation, None
+
+            report = new_report
+
+        return code, explanation, refusal_message(file_path, report)
 
     def limit(self, name):
         """Límite de contexto configurado en context_limits (settings)."""
@@ -891,6 +931,7 @@ Reglas:
 - No pongas ```python.
 - Conserva el comportamiento actual.
 - No agregues dependencias innecesarias.
+- Solo puedes importar: {self.import_policy(file_path).describe()}. No inventes ni agregues otras librerías.
 - No elimines funciones públicas.
 - No cambies nombres públicos salvo que el usuario lo pida.
 - Si el archivo ya está bien, conserva el contenido y explica que no se requieren cambios importantes.
@@ -923,7 +964,14 @@ Reglas estrictas de refactor:
 
             if normalize_code(content) == normalize_code(code):
                 return f"No se requieren cambios reales en {file_path}."
-            
+
+            code, explanation, import_error = self.check_generated_imports(
+                prompt, file_path, code, explanation
+            )
+
+            if import_error:
+                return import_error
+
             forbidden_changes = [
                 ("return None", "raise "),
                 ("print(", "raise "),
@@ -1029,6 +1077,7 @@ IMPORTANTE:
 - Si modificas un archivo existente, conserva sus imports, clases y funciones que no deban cambiarse.
 - Si usas re, agrega import re.
 - Si creas una función nueva, incluye todos los imports necesarios.
+- Solo puedes importar: {self.import_policy(target_file).describe()}. No inventes ni agregues otras librerías.
 - Si el usuario menciona un archivo .py específico, usa ese archivo como FILE_PATH.
 - Si el usuario quiere crear una tool nueva, usa una ruta dentro de tools/.
 - Si el usuario quiere modificar Brain, usa core/brain.py.
@@ -1053,6 +1102,13 @@ IMPORTANTE:
 
             if not file_path:
                 return f"No pude extraer FILE_PATH.\n\nRespuesta recibida:\n{response}"
+
+            code, explanation, import_error = self.check_generated_imports(
+                prompt, file_path, code, explanation
+            )
+
+            if import_error:
+                return import_error
 
             forbidden_changes = [
                 ("return None", "raise "),

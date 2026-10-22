@@ -30,6 +30,11 @@ class FakeProviderRouter:
         return "respuesta sin código"
 
 
+class FakeSettings:
+    def get(self, key, default=None):
+        return default
+
+
 def make_brain(file_path):
     brain = Brain.__new__(Brain)
     brain.intent_engine = FakeIntentEngine(
@@ -37,6 +42,7 @@ def make_brain(file_path):
     )
     brain.tool_registry = FakeToolRegistry()
     brain.provider_router = FakeProviderRouter()
+    brain.settings = FakeSettings()
     return brain
 
 
