@@ -20,6 +20,7 @@ para poder revisar o revertir los cambios.
 | B3. Truncado determinista | La etiqueta pasa a "Citas encontradas en el archivo (análisis del modelo, no verificado)". `tools/write_safety.py`: regla con `ast`, sin LLM, que avisa si un script lee un archivo y luego lo abre con `"w"` sin respaldo ni temporal; va en la sección "Detección automática". Caso negativo `guardar_seguro.py` en el banco. | `46469f71`, `eae58942` |
 | — | Escritura atómica de `memory.json` (`MemoryManager.save`) y `settings.json` (`SettingsManager.set`): temporal en la misma carpeta + `os.replace` (`core/atomic_write.py`). Un fallo a medias deja el original intacto. Mismo formato byte a byte. | `5127354e` |
 | — | Escritura atómica también en `config/apps.json` (`save_apps`), resúmenes de proyecto (`save_project_summary`) y `pending_change.json`. `write_text_atomic` en `core/atomic_write.py`; `write_json_atomic` la reutiliza. | `b40e8a44` |
+| C. CLI tipo chat | Adjuntos con `@ruta` (o `@"ruta con espacios"`), `--file` repetible y stdin (`Get-Content a.py \| jarvis "explica esto"`), con límite `attachment_max_chars` y aviso al recortar; las acciones reciben la ruta absoluta y el chat el contenido; el historial guarda el mensaje sin el contenido. Autocompletado de rutas al escribir `@` (`prompt_toolkit`). Flags `--provider`, `--project` y `--no-stream` solo para esa ejecución (`SettingsManager.overrides`, no escriben `settings.json`). Multilínea en modo interactivo: mensaje que termina en `<<`, cierre con `FIN`. | `af003d2a`, `4f25b229` |
 
 ## Próximas fases
 
@@ -129,21 +130,14 @@ Dos colecciones nuevas en ChromaDB, separadas de las de proyectos. Usar un prefi
 - Modelo distinto para la síntesis: ver "Multi-modelo según tipo de tarea". El modo sin síntesis ya existe (`284c1bdc`).
 - Proyectos más grandes que `practica2` pueden superar 16384 tokens en la síntesis (unos 30 reportes). El aviso por stderr lo detecta; si pasa seguido, habrá que procesar en lotes.
 
-### CLI enriquecida
+### CLI: pendientes
 
-- Modo multilínea para pegar bloques largos de código, terminado con `FIN` en una línea sola.
-- Entrada por stdin/pipes: `Get-Content archivo.py | jarvis "explica esto"`.
-- Análisis directo de un archivo: `jarvis "analiza archivo.py"`, con la ruta resuelta contra la carpeta del usuario (`Session.get_user_cwd()`). Las tools de archivos ya resuelven rutas relativas contra esa carpeta desde la fase 2; lo que falta es un camino directo que no dependa de que el IntentEngine acierte la acción.
-- Flags: `--project`, `--provider`, `--no-stream`.
+Hecho en la fase C (`af003d2a`, `4f25b229`): `@ruta`, autocompletado, stdin, `--file`, varios adjuntos con límite y aviso, flags y multilínea. Falta:
+
+- Imágenes desde el portapapeles (`:pegar`): la terminal no pasa imágenes con Ctrl+V. `PIL.ImageGrab.grabclipboard()` (Pillow ya está instalado) guardaría la imagen en una carpeta temporal para adjuntarla. Requiere un modelo con visión (ver "Multi-modelo"); hoy no hay ninguno descargado, así que se deja para después de la fase F.
+- PDF y texto largo vía RAG en vez de recortar.
 - Reemplazar `jarvis.bat` por un ejecutable nativo, para evitar el "¿Desea terminar el trabajo por lotes (S/N)?" de Windows al interrumpir con Ctrl+C.
-
-### CLI tipo chat (adjuntos)
-
-- Archivos por ruta dentro del mensaje: `explica @src/app.py` o `@C:\ruta\foto.png`. Se resuelve contra `Session.get_user_cwd()` y se agrega al contexto.
-- Autocompletado de rutas al escribir `@` (`prompt_toolkit`).
-- Imágenes desde el portapapeles: la terminal no pasa imágenes con Ctrl+V, así que hace falta un atajo propio (p. ej. Alt+V) o un comando `:pegar` que use `PIL.ImageGrab.grabclipboard()`, guarde la imagen en una carpeta temporal y la adjunte. Si el portapapeles trae texto, se pega normal. Ctrl+V exacto requiere reasignar la tecla en Windows Terminal.
-- Varios adjuntos por mensaje, límite de tamaño con aviso al truncar (como el de `num_ctx`) y PDF/texto largo vía RAG.
-- Las imágenes requieren un modelo con visión (ver "Multi-modelo"); el clasificador debe enviar a ese modelo cualquier mensaje con imagen.
+- stdin: si Asia se lanza sin terminal y con un stdin abierto que nunca se cierra (no una tubería real), la lectura espera indefinidamente. Si pasa, agregar un flag `--no-stdin`.
 
 ### Generación de código con verificación
 
