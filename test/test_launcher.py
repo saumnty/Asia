@@ -151,3 +151,118 @@ def test_modo_interactivo_resuelve_arroba(cwd, capsys):
 
     assert "x = 1" in brain.provider_router.calls[0]["prompt"]
     assert "Asia apagada." in capsys.readouterr().out
+
+
+from config.settings_manager import SettingsManager
+
+
+def test_flags_valen_solo_para_la_sesion(cwd):
+    run(["--provider", "Olama", "--project", "BolitaBot", "--no-stream", "hola"])
+
+    # Aliases de config/defaults.json: olama -> ollama, bolitabot -> pt.
+    assert SettingsManager.overrides == {
+        "default_provider": "ollama",
+        "active_project": "pt",
+        "stream_output": False,
+    }
+
+
+def test_sin_flags_no_hay_overrides(cwd):
+    SettingsManager.set_overrides({"stream_output": False})
+
+    run(["hola"])
+
+    assert SettingsManager.overrides == {}
+
+
+def test_provider_desconocido_es_error_de_uso(cwd, capsys):
+    with pytest.raises(SystemExit) as error:
+        run(["--provider", "openai", "hola"])
+
+    assert error.value.code == 2
+    assert "provider no disponible: openai (disponibles: ollama, gemini)" in capsys.readouterr().err
+
+
+def test_no_stream_hace_que_respond_no_use_streaming(cwd):
+    class StreamRouter(FakeRouter):
+        def chat(self, prompt, on_chunk=None, history_prompt=None):
+            self.calls.append({"stream": on_chunk is not None})
+            return "ok"
+
+    class SettingsBrain(FakeBrain):
+        def __init__(self):
+            super().__init__()
+            self.settings = SettingsManager()
+            self.provider_router = StreamRouter()
+
+    brain = SettingsBrain()
+    SettingsManager.set_overrides({"stream_output": True})
+    launcher.respond(brain, "hola")
+
+    run(["--no-stream", "hola"], brain=brain)
+
+    assert brain.provider_router.calls == [{"stream": True}, {"stream": False}]
+
+
+def reader(lines):
+    lines = iter(lines)
+    prompts = []
+
+    def read(prompt):
+        prompts.append(prompt)
+        return next(lines)
+
+    read.prompts = prompts
+    return read
+
+
+def test_multilinea_con_instruccion_es_adjunto_y_va_al_chat(cwd):
+    brain = FakeBrain()
+    read = reader(["explica esto <<", "def f():", "    return 1", "FIN", "salir"])
+
+    launcher.interactive_mode(brain, read=read)
+
+    assert brain.processed == []
+    prompt = brain.provider_router.calls[0]["prompt"]
+    assert "--- texto pegado ---\ndef f():\n    return 1\n--- fin de texto pegado ---" in prompt
+    assert read.prompts == ["\nTú: ", "... ", "... ", "... ", "\nTú: "]
+
+
+def test_multilinea_sin_instruccion_es_el_mensaje(cwd):
+    brain = FakeBrain()
+
+    launcher.interactive_mode(brain, read=reader(["<<", "recuerda que", "mi color es azul", "FIN", "salir"]))
+
+    assert brain.processed == ["recuerda que\nmi color es azul"]
+
+
+def test_multilinea_salir_dentro_del_bloque_no_sale(cwd):
+    brain = FakeBrain()
+
+    launcher.interactive_mode(brain, read=reader(["<<", "salir", "FIN", "salir"]))
+
+    assert brain.processed == ["salir"]
+
+
+def test_multilinea_fin_solo_si_esta_solo_en_la_linea(cwd):
+    text, block = launcher.read_message(reader(["<<", "x = 'FIN'", "  FIN  "]))
+
+    assert (text, block) == ("", "x = 'FIN'")
+
+
+def test_multilinea_eof_cierra_el_bloque(cwd):
+    def read(prompt, lines=iter(["analiza <<", "a = 1"])):
+        try:
+            return next(lines)
+        except StopIteration:
+            raise EOFError
+
+    assert launcher.read_message(read) == ("analiza", "a = 1")
+
+
+def test_linea_vacia_no_llama_a_asia(cwd):
+    brain = FakeBrain()
+
+    launcher.interactive_mode(brain, read=reader(["", "   ", "salir"]))
+
+    assert brain.processed == []

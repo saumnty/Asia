@@ -17,10 +17,12 @@ from core.attachments import (
     read_stdin,
     truncation_warnings,
 )
+from config.settings_manager import SettingsManager
 from core.path_completion import make_completer
 from core.paths import PROJECT_ROOT
 from core.session import Session
 from core.brain import Brain
+from providers.provider_router import ProviderRouter
 
 Session.set_paths(
     project_root=PROJECT_ROOT,
@@ -34,6 +36,11 @@ DEFAULT_ATTACHMENT_MAX_CHARS = 20000
 
 # Instrucción cuando solo llegan archivos (--file) sin texto.
 DEFAULT_FILE_REQUEST = "Explica el contenido de los archivos adjuntos."
+
+# Modo multilínea del modo interactivo: "explica esto <<", líneas, "FIN".
+MULTILINE_START = "<<"
+MULTILINE_END = "FIN"
+PASTED_LABEL = "texto pegado"
 
 
 def warn(messages):
@@ -75,11 +82,12 @@ def respond(brain, text, prefix="", attachments=(), use_actions=True):
         print(f"Error inesperado: {e}")
 
 
-def prepare_message(brain, text, files=(), stdin_data=None):
-    """Resuelve @ruta, --file y stdin. Devuelve (texto, adjuntos, use_actions).
+def prepare_message(brain, text, files=(), block=None, block_label=STDIN_LABEL):
+    """Resuelve @ruta, --file y un bloque de texto (stdin o pegado con <<).
 
-    En el texto, cada @ruta y cada --file quedan como ruta absoluta para que
-    las acciones de Brain (revisar, explicar...) encuentren el archivo.
+    Devuelve (texto, adjuntos, use_actions). En el texto, cada @ruta y cada
+    --file quedan como ruta absoluta para que las acciones de Brain (revisar,
+    explicar...) encuentren el archivo.
     """
     cwd = Session.get_user_cwd()
     max_chars = brain.settings.get("attachment_max_chars", DEFAULT_ATTACHMENT_MAX_CHARS)
@@ -96,15 +104,13 @@ def prepare_message(brain, text, files=(), stdin_data=None):
 
     use_actions = True
 
-    if stdin_data is not None:
-        stdin_text = decode(stdin_data)
-
+    if block is not None:
         if text.strip():
-            attachments.append(make_attachment(STDIN_LABEL, stdin_text, max_chars))
+            attachments.append(make_attachment(block_label, block, max_chars))
             use_actions = False
         else:
-            # Sin instrucción, lo que llega por stdin es el mensaje.
-            text = stdin_text
+            # Sin instrucción, el bloque (stdin o pegado) es el mensaje.
+            text = block
 
     warn(warnings + truncation_warnings(attachments))
 
@@ -132,21 +138,58 @@ def make_reader():
     return session.prompt
 
 
+def read_message(read):
+    """Lee un mensaje. Devuelve (texto, bloque) con bloque None si es de una línea.
+
+    Si la línea termina en <<, lo que sigue hasta una línea con FIN sola es un
+    bloque (p. ej. código pegado; con input() cada línea pegada llegaría como
+    un mensaje distinto). Lo escrito antes de << es la instrucción.
+    """
+    line = read("\nTú: ")
+    stripped = line.rstrip()
+
+    if not stripped.endswith(MULTILINE_START):
+        return line, None
+
+    instruction = stripped[: -len(MULTILINE_START)].rstrip()
+    lines = []
+
+    while True:
+        try:
+            current = read("... ")
+        except EOFError:
+            break
+
+        if current.strip() == MULTILINE_END:
+            break
+
+        lines.append(current)
+
+    return instruction, "\n".join(lines)
+
+
 def interactive_mode(brain=None, read=None):
     brain = brain or Brain()
     read = read or make_reader()
 
     print("Asia iniciada")
+    print(f"(Para pegar varias líneas termina el mensaje con {MULTILINE_START} y cierra con {MULTILINE_END}.)")
 
     try:
         while True:
-            user = read("\nTú: ")
+            user, block = read_message(read)
 
-            if user.lower().strip() in EXIT_COMMANDS:
+            if block is None and user.lower().strip() in EXIT_COMMANDS:
                 print("Asia apagada.")
                 break
 
-            text, attachments, use_actions = prepare_message(brain, user)
+            text, attachments, use_actions = prepare_message(
+                brain, user, block=block, block_label=PASTED_LABEL
+            )
+
+            if not text.strip():
+                continue
+
             respond(brain, text, prefix="\nAsia: ", attachments=attachments, use_actions=use_actions)
 
     except (KeyboardInterrupt, EOFError):
@@ -160,6 +203,8 @@ def build_parser():
             "Asia, asistente local. Sin mensaje abre el modo interactivo. "
             "Adjunta archivos con @ruta dentro del mensaje o con --file; "
             "también acepta contenido por stdin (Get-Content a.py | jarvis \"explica esto\"). "
+            "En el modo interactivo, un mensaje que termina en << sigue en varias "
+            "líneas hasta una línea con FIN. "
             "Usa -- antes de un mensaje que empiece con guion."
         )
     )
@@ -168,11 +213,51 @@ def build_parser():
         "--file", "-f", action="append", default=[], metavar="RUTA",
         help="adjunta un archivo (se puede repetir)"
     )
+    parser.add_argument(
+        "--provider", metavar="NOMBRE",
+        help="provider solo para esta ejecución (no cambia settings.json)"
+    )
+    parser.add_argument(
+        "--project", metavar="NOMBRE",
+        help="proyecto activo solo para esta ejecución (no cambia settings.json)"
+    )
+    parser.add_argument(
+        "--no-stream", action="store_true",
+        help="muestra la respuesta completa al final en vez de en streaming"
+    )
     return parser
 
 
+def session_overrides(args, parser) -> dict:
+    """Valores de los flags, normalizados igual que set_provider y set_active_project."""
+    settings = SettingsManager()
+    overrides = {}
+
+    if args.provider:
+        name = args.provider.lower().strip()
+        name = settings.get("provider_aliases", {}).get(name, name)
+
+        if name not in ProviderRouter.provider_factories:
+            available = ", ".join(ProviderRouter.provider_factories)
+            parser.error(f"provider no disponible: {args.provider} (disponibles: {available})")
+
+        overrides["default_provider"] = name
+
+    if args.project:
+        name = args.project.lower().strip()
+        overrides["active_project"] = settings.get("project_aliases", {}).get(name, name)
+
+    if args.no_stream:
+        overrides["stream_output"] = False
+
+    return overrides
+
+
 def main(argv=None, stdin=None, brain_factory=Brain):
-    args = build_parser().parse_intermixed_args(argv)
+    parser = build_parser()
+    args = parser.parse_intermixed_args(argv)
+    SettingsManager.set_overrides(session_overrides(args, parser))
+
     prompt = " ".join(args.prompt)
     stdin_data = read_stdin(stdin)
 
@@ -185,7 +270,8 @@ def main(argv=None, stdin=None, brain_factory=Brain):
         return
 
     brain = brain_factory()
-    text, attachments, use_actions = prepare_message(brain, prompt, args.file, stdin_data)
+    block = decode(stdin_data) if stdin_data is not None else None
+    text, attachments, use_actions = prepare_message(brain, prompt, args.file, block)
 
     if not text.strip():
         print("No recibí ningún mensaje.", file=sys.stderr)

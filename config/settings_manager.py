@@ -23,7 +23,14 @@ class SettingsManager:
     Los valores locales tienen prioridad. Los diccionarios se combinan un
     nivel, así que basta con sobrescribir la clave que se quiera cambiar
     (p. ej. un solo límite de context_limits).
+
+    Encima de los dos van los valores de sesión (overrides): los flags de la
+    CLI (--provider, --project, --no-stream) valen solo para esa ejecución y
+    no se escriben en ningún archivo. Son de la clase porque cada parte de
+    Asia crea su propio SettingsManager.
     """
+
+    overrides: dict = {}
 
     def __init__(self, defaults_path=DEFAULTS_FILE, path=SETTINGS_FILE):
         self.defaults_path = Path(defaults_path)
@@ -38,7 +45,11 @@ class SettingsManager:
             else:
                 data[key] = value
 
-        return data
+        return {**data, **SettingsManager.overrides}
+
+    @classmethod
+    def set_overrides(cls, values: dict):
+        cls.overrides = dict(values)
 
     def get(self, key, default=None):
         data = self.load()
@@ -73,3 +84,7 @@ class SettingsManager:
 
         # Atómico: un corte a mitad de la escritura no deja settings.json vacío.
         write_json_atomic(self.path, data, indent=4, ensure_ascii=False)
+
+        # Un cambio explícito del usuario ("usa gemini") gana al flag de la
+        # CLI durante el resto de la sesión.
+        SettingsManager.overrides.pop(key, None)

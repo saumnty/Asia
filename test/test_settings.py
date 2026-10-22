@@ -69,3 +69,31 @@ def test_text_extensions_incluye_codigo(tmp_path):
     )
 
     assert settings.text_extensions() == {".py", ".md"}
+
+
+def test_overrides_de_sesion_ganan_y_no_se_escriben(tmp_path):
+    settings = make_settings(
+        tmp_path,
+        {"default_provider": "ollama", "stream_output": True},
+        {"default_provider": "gemini"},
+    )
+
+    SettingsManager.set_overrides({"default_provider": "ollama", "stream_output": False})
+
+    assert settings.get("default_provider") == "ollama"
+    assert settings.get("stream_output") is False
+    # Otro SettingsManager (otra parte de Asia) ve lo mismo.
+    assert SettingsManager(tmp_path / "defaults.json", tmp_path / "settings.json").get("stream_output") is False
+    assert json.loads((tmp_path / "settings.json").read_text(encoding="utf-8")) == {
+        "default_provider": "gemini"
+    }
+
+
+def test_set_explicito_gana_al_override(tmp_path):
+    settings = make_settings(tmp_path, {"default_provider": "ollama"})
+    SettingsManager.set_overrides({"default_provider": "ollama", "stream_output": False})
+
+    settings.set("default_provider", "gemini")
+
+    assert settings.get("default_provider") == "gemini"
+    assert settings.get("stream_output") is False
