@@ -2,6 +2,7 @@
     "default_provider": "ollama",
     "fallback_provider": "ollama",
     "stream_output": false,
+    "attachment_max_chars": 20000,
     "active_project": "asia",
 
     "ollama_host": "http://localhost:11434",

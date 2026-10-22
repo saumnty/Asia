@@ -86,8 +86,12 @@ class ProviderRouter:
         except ProviderError as e:
             return str(e)
 
-    def chat(self, prompt: str, on_chunk=None) -> str:
-        """Conversación con el usuario: incluye memoria, proyecto e historial."""
+    def chat(self, prompt: str, on_chunk=None, history_prompt=None) -> str:
+        """Conversación con el usuario: incluye memoria, proyecto e historial.
+
+        history_prompt es lo que se guarda en el historial en lugar de prompt
+        (p. ej. el mensaje sin el contenido de los archivos adjuntos).
+        """
         system_prompt = f"""{SYSTEM_PROMPT}
 
 Contexto personal:
@@ -112,6 +116,9 @@ Contexto del proyecto:
                 on_chunk(str(e))
 
             return str(e)
+
+        if history_prompt is not None:
+            user_message = {"role": "user", "content": history_prompt}
 
         self.history.append(user_message)
         self.history.append({"role": "assistant", "content": answer})
