@@ -5,7 +5,7 @@ from pathlib import Path
 
 from core import prompts
 from core.paths import PROJECT_ROOT
-from tools.import_check import ImportPolicy, check_imports, refusal_message, rewrite_request
+from tools.import_check import ImportPolicy, check_imports, refusal_message, rewrite_note, rewrite_request
 
 
 # Archivos de Asia que generate_code nunca propone reescribir.
@@ -134,7 +134,8 @@ class CodeActions:
             new_report = check_imports(new_code, policy)
 
             if new_report.ok:
-                return new_code, new_explanation or explanation, None
+                note = rewrite_note(report, code, new_code)
+                return new_code, f"{note}\n\n{new_explanation or explanation}".rstrip(), None
 
             report = new_report
 

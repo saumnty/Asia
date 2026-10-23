@@ -244,6 +244,36 @@ formato FILE_PATH / CODE / EXPLANATION.
 """
 
 
+def module_names(code: str) -> set[str]:
+    try:
+        return {module for module, _ in extract_imports(code)}
+    except SyntaxError:
+        return set()
+
+
+def rewrite_note(report: ImportReport, old_code: str, new_code: str) -> str:
+    """Aviso de que el código se reescribió: qué librería usaba y qué usa ahora.
+
+    Sin él, "genera un código que use superjson_mega" devolvía un código con
+    json sin decir que superjson_mega no se podía usar.
+    """
+    if report.syntax_error:
+        return (
+            f"Aviso: el primer código generado no era Python válido "
+            f"({report.syntax_error}); se pidió una reescritura."
+        )
+
+    used = ", ".join(sorted({f"{i.module} ({i.reason})" for i in report.issues}))
+    added = sorted(module_names(new_code) - module_names(old_code))
+    instead = (
+        f"ahora usa {', '.join(added)} en su lugar"
+        if added
+        else "ahora no usa ninguna librería en su lugar"
+    )
+
+    return f"Aviso: el código generado usaba {used}. Se pidió una reescritura y {instead}."
+
+
 def refusal_message(file_path: str, report: ImportReport) -> str:
     return (
         f"No propongo el cambio para {file_path}: el código generado, aun "

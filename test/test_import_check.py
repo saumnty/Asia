@@ -139,8 +139,8 @@ def test_describe_lista_lo_permitido(project):
 
 # --- Integración con generate_code y smart_refactor -------------------------
 
-def code_response(code, path="nuevo.py"):
-    return f"FILE_PATH:\n{path}\n\nCODE:\n{code}\n\nEXPLANATION:\nexplicación"
+def code_response(code, path="nuevo.py", explanation="explicación"):
+    return f"FILE_PATH:\n{path}\n\nCODE:\n{code}\n\nEXPLANATION:\n{explanation}"
 
 
 class ScriptedRouter:
@@ -266,3 +266,31 @@ def test_smart_refactor_no_propone_imports_inventados(in_project):
     assert "Solo puedes importar" in brain.provider_router.prompts[0]
     assert result.startswith("No propongo el cambio para calc.py")
     assert brain.tool_registry.apply_tool.proposed == []
+
+
+def test_reescritura_dice_que_libreria_usaba_y_cual_la_sustituye(in_project):
+    # "genera un código en prueba.py que use la librería superjson_mega":
+    # salía con json y el mensaje no nombraba superjson_mega.
+    brain = generate([code_response(BAD), code_response(GOOD, explanation="Imprime un JSON.")])
+
+    result = brain.process("crea nuevo.py que imprima json")
+
+    assert (
+        f"Aviso: el código generado usaba {NOT_A_PACKAGE} ({NOT_INSTALLED}). "
+        "Se pidió una reescritura y ahora usa json en su lugar."
+    ) in result
+    assert result.index("Aviso:") < result.index("Imprime un JSON.")
+
+
+def test_reescritura_sin_libreria_en_su_lugar(in_project):
+    brain = generate([code_response(BAD), code_response("print({})")])
+
+    result = brain.process("crea nuevo.py que imprima json")
+
+    assert "ahora no usa ninguna librería en su lugar" in result
+
+
+def test_sin_reescritura_no_hay_aviso(in_project):
+    brain = generate([code_response(GOOD)])
+
+    assert "Aviso:" not in brain.process("crea nuevo.py que imprima json")
