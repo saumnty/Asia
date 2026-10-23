@@ -30,6 +30,7 @@ para poder revisar o revertir los cambios.
 | — | Multilínea con `FIN` al final de la última línea de código (`return resultado FIN`, pegado tras `explica esto << `): no se reconocía el bloque y Asia pedía la ruta. Ahora `FIN` tras un espacio cierra el bloque si es la última palabra de la lectura (se quita del contenido); una variable `FIN` en medio del pegado no lo corta. Un mensaje de varias líneas sin ruta válida (código pegado sin `<<`) va al chat en lugar de pedir la ruta: en código, `FILE_WORDS` veía nombres de archivo en `self.x` y las acciones de archivo sin `file_path` respondían "Necesito la ruta del archivo". | `d5a6d210` |
 | — | `debug_project`: cada archivo va como fragmentos numerados alrededor de las coincidencias (±3 líneas, primero las del problema) dentro de los mismos 1200 caracteres, en lugar de su principio. El verificador acepta también `ruta:línea: cita` y la cita en la línea siguiente a `ruta:línea`, formatos que el modelo usa a menudo. Opciones de revisión (temperatura baja). C:\Asia: 63 s, 2 citas encontradas y 1 inventada descartada. | `ae499002` |
 | — | Arreglos de la tanda de pruebas manuales: (1) `SIN_HALLAZGOS` escrito después de un hallazgo ya no se filtra al reporte de "revisa a fondo". (2) El aviso de "Ejecución preparada" muestra el código numerado (hasta 40 líneas, con aviso si se recorta) antes de pedir "confirmar ejecución". (3) Si el chequeo de imports hace reescribir el código, la explicación empieza con qué librería usaba y cuál la sustituye ("usaba superjson_mega (no está instalado)… ahora usa json"). (4) `debug_project` sin ninguna cita verificada empieza con "Ninguna evidencia se pudo verificar: el diagnóstico es probablemente especulativo" y etiqueta sus secciones como especulativas. | `1de54649`, `763a6d34`, `7d9f5e47`, `d21455ac` |
+| F. Multi-modelo (parte 1) | Modelo por llamada, `models_by_domain`, dominio por palabras clave, modelo pegajoso en el chat, `--model` para la sesión (solo modelos ya descargados) y un modelo de Ollama en memoria a la vez (`ollama_one_model_at_a_time`). Sin modelos nuevos todavía: los tres dominios usan `qwen2.5-coder:7b`, así que el comportamiento no cambia. Probado con Ollama real: con `nomic-embed-text` cargado, el chat lo descargó antes de cargar qwen. | `1231b36b` |
 
 ## Próximas fases
 
@@ -49,13 +50,12 @@ para poder revisar o revertir los cambios.
 
 **Punto de partida:** desde la fase 2 los modelos ya no están en el código: `ollama_model`, `intent_model` y `embedding_model` viven en `config/defaults.json`.
 
+**Hecho (`1231b36b`):** modelo por llamada (`OllamaProvider.complete(..., model=)`, `ProviderRouter.ask(..., domain=)`); `models_by_domain` en config (los tres en `qwen2.5-coder:7b` hasta descargar otros); dominio por reglas de palabras clave (`core/model_selection.py`, opción 2: sin llamadas extra ni cambios al prompt del IntentEngine); modelo pegajoso en el chat (cambia si otro dominio se sostiene 2 mensajes); `--model` para la sesión, comprobando que esté descargado; `ollama_one_model_at_a_time`: antes de cada llamada se descargan los demás modelos cargados.
+
 **Qué falta:**
-- Parametrizar el modelo por llamada: `OllamaProvider.complete(messages, model=...)` y `ProviderRouter.ask/chat(..., model=...)`, con el valor de config como default.
-- Un mapa `dominio -> modelo` en config (`"models_by_domain": {"code": ..., "math": ..., "general": ...}`).
-- Un clasificador de dominio que decida el modelo **antes** de cargarlo. Opciones, de más barata a más cara:
-  1. Que el IntentEngine devuelva también un campo `domain` en el mismo JSON que ya genera (sin llamadas extra).
-  2. Reglas por palabras clave como primer filtro.
-  3. Un modelo clasificador pequeño dedicado.
+- Descargar y configurar los modelos (pendiente de aprobación). Máquina: RTX 3050 de 4 GB de VRAM y poca RAM libre; `qwen2.5-coder:7b` con 16k de contexto ocupa 5,8 GB y corre 59 % en CPU (~7 t/s). Un modelo de ~2,5 GB cabría entero en la GPU.
+- Con un modelo por vez, si `intent_model` y el modelo de la respuesta son distintos, cada mensaje son dos cargas. Lo más barato: que el IntentEngine use el mismo modelo pequeño que el chat, midiendo antes con `test/manual/check_intents.py` que no cambien las acciones.
+- El embedder del RAG (`nomic-embed-text`) no descarga los demás antes de cargarse: pesa 274 MB, pero con poca RAM convendría también.
 
 **Trade-off a documentar en el diseño:**
 - Cambiar de modelo en Ollama no es instantáneo: hay que descargar uno de la VRAM y cargar otro (segundos con un 7B, más con modelos grandes). Ollama mantiene el último modelo cargado unos minutos (`keep_alive`).
