@@ -3,6 +3,7 @@ import sys
 import ollama
 
 from config.settings_manager import SettingsManager
+from providers.ollama_models import unload_others
 
 
 # Medido en prompts reales de Asia: entre 3,3 y 4,1 caracteres por token.
@@ -56,16 +57,18 @@ class OllamaProvider:
         self.settings = SettingsManager()
         self.client = ollama.Client(host=self.settings.get("ollama_host"))
 
-    def complete(self, messages: list[dict], on_chunk=None, review=False) -> str:
+    def complete(self, messages: list[dict], on_chunk=None, review=False, model=None) -> str:
         """Envía los mensajes y devuelve la respuesta completa.
 
         Si se pasa on_chunk, la respuesta se transmite en streaming y cada
         fragmento se entrega a on_chunk a medida que llega. Con review=True
-        se usan las opciones de revisión (review_options).
+        se usan las opciones de revisión (review_options). model elige el
+        modelo de esta llamada; sin él, ollama_model.
         """
         # Se lee en cada llamada para que un cambio en settings.json se
         # aplique sin reiniciar Asia.
-        model = self.settings.get("ollama_model")
+        model = model or self.settings.get("ollama_model")
+        unload_others(self.client, model, self.settings)
         extra = review_options(self.settings) if review else {}
         options = ollama_options(self.settings, messages, **extra)
 

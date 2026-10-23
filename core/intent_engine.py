@@ -3,6 +3,7 @@ import re
 import ollama
 
 from config.settings_manager import SettingsManager
+from providers.ollama_models import unload_others
 from providers.ollama_provider import ollama_options
 
 
@@ -237,6 +238,7 @@ Usuario: muestra el cambio pendiente
         ]
 
         try:
+            unload_others(self.client, self.settings.get("intent_model"), self.settings)
             response = self.client.chat(
                 model=self.settings.get("intent_model"),
                 messages=messages,

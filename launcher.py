@@ -23,6 +23,7 @@ from core.attachments import (
 from config.settings_manager import SettingsManager
 from core.path_completion import make_completer
 from core.paths import PROJECT_ROOT
+from providers.ollama_models import full_name
 from core.session import Session
 from core.brain import Brain
 from providers.provider_router import ProviderRouter
@@ -297,7 +298,23 @@ def build_parser():
         "--no-stream", action="store_true",
         help="muestra la respuesta completa al final en vez de en streaming"
     )
+    parser.add_argument(
+        "--model", metavar="NOMBRE",
+        help="modelo de Ollama para el chat y las acciones de esta ejecución "
+             "(ya descargado; Asia no descarga modelos)"
+    )
     return parser
+
+
+def installed_models():
+    """Modelos descargados en Ollama, o None si Ollama no responde."""
+    try:
+        import ollama
+
+        client = ollama.Client(host=SettingsManager().get("ollama_host"))
+        return [m.model for m in client.list().models]
+    except Exception:
+        return None
 
 
 def session_overrides(args, parser) -> dict:
@@ -321,6 +338,18 @@ def session_overrides(args, parser) -> dict:
 
     if args.no_stream:
         overrides["stream_output"] = False
+
+    if args.model:
+        # Se comprueba que esté descargado: Asia nunca descarga modelos.
+        installed = installed_models()
+
+        if installed is not None and full_name(args.model) not in {full_name(m) for m in installed}:
+            parser.error(
+                f"el modelo {args.model} no está descargado en Ollama "
+                f"(descargados: {', '.join(installed) or 'ninguno'})"
+            )
+
+        overrides["forced_model"] = args.model
 
     return overrides
 

@@ -3,6 +3,7 @@ from memory.memory_manager import MemoryManager
 from memory.project_memory import ProjectMemory
 from config.settings_manager import SettingsManager
 from providers.gemini_provider import GeminiProvider
+from core.model_selection import StickyModel, model_for
 
 
 SYSTEM_PROMPT = (
@@ -32,6 +33,8 @@ class ProviderRouter:
         self.project_memory = ProjectMemory()
         self.providers = {}
         self.history = []
+        # Modelo del chat: se mantiene mientras siga la conversación.
+        self.sticky_model = StickyModel()
 
     def get_provider(self, name: str):
         if name not in self.providers:
@@ -68,13 +71,15 @@ class ProviderRouter:
 
         return summary
 
-    def ask(self, prompt: str, review=False) -> str:
+    def ask(self, prompt: str, review=False, domain="code") -> str:
         """Llamada de un solo turno, sin historial de chat ni contexto personal.
 
         La usan las acciones internas (resúmenes, revisiones, generación de
         código), que ya incluyen en el prompt todo el contexto que necesitan.
         review=True para las revisiones de código: usan temperatura baja y
         penalización de repetición (ver ollama_provider.review_options).
+        domain elige el modelo en models_by_domain: las acciones internas son
+        de código.
         """
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -82,7 +87,7 @@ class ProviderRouter:
         ]
 
         try:
-            return self._complete(messages, review=review)
+            return self._complete(messages, review=review, model=model_for(self.settings, domain))
         except ProviderError as e:
             return str(e)
 
@@ -110,7 +115,8 @@ Contexto del proyecto:
         ]
 
         try:
-            answer = self._complete(messages, on_chunk=on_chunk)
+            model = self.sticky_model.choose(prompt, self.settings)
+            answer = self._complete(messages, on_chunk=on_chunk, model=model)
         except ProviderError as e:
             if on_chunk:
                 on_chunk(str(e))
@@ -126,12 +132,12 @@ Contexto del proyecto:
 
         return answer
 
-    def _complete(self, messages: list[dict], on_chunk=None, review=False) -> str:
+    def _complete(self, messages: list[dict], on_chunk=None, review=False, model=None) -> str:
         provider_name = self.settings.get("default_provider", "ollama")
 
         try:
             provider = self.get_provider(provider_name)
-            return provider.complete(messages, on_chunk=on_chunk, review=review)
+            return provider.complete(messages, on_chunk=on_chunk, review=review, model=model)
         except Exception as e:
             fallback_name = self.settings.get("fallback_provider", None)
 
@@ -142,7 +148,7 @@ Contexto del proyecto:
 
             try:
                 fallback_provider = self.get_provider(fallback_name)
-                response = fallback_provider.complete(messages, review=review)
+                response = fallback_provider.complete(messages, review=review, model=model)
             except Exception as fallback_error:
                 raise ProviderError(
                     "Falló el provider principal y también el fallback. "

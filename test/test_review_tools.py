@@ -2,6 +2,7 @@ from core.brain import Brain, wants_unverified
 from core.paths import DEFAULTS_FILE
 from config.settings_manager import read_json
 from providers.ollama_provider import OllamaProvider
+from core.model_selection import StickyModel
 from providers.provider_router import ProviderRouter
 from tools.debug_agent_tool import DebugAgentTool
 
@@ -138,7 +139,7 @@ class FakeProvider:
     def __init__(self):
         self.reviews = []
 
-    def complete(self, messages, on_chunk=None, review=False):
+    def complete(self, messages, on_chunk=None, review=False, model=None):
         self.reviews.append(review)
         return "ok"
 
@@ -159,6 +160,7 @@ def make_router():
     router.memory = FakeMemory()
     router.providers = {"fake": FakeProvider()}
     router.history = []
+    router.sticky_model = StickyModel()
     return router
 
 
