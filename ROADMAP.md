@@ -54,9 +54,22 @@ para poder revisar o revertir los cambios.
 
 **Medido con `qwen3:4b` (2026-10-23, `d0a093e8`, `07957ee7`):** la etiqueta `qwen3:4b` de Ollama es Qwen3-4B **Thinking-2507**: siempre razona; `think=False` ni `/no_think` lo apagan (el razonamiento sale como texto: 1312 tokens ante "di hola"). Sirve para math (tren: "10:00" correcto en 96 s, 11,4 t/s) pero no para el IntentEngine ni el chat general. Con `num_ctx` 16384 ocupa 5,4 GB y corre 56 % en CPU; con 8192, 4,2 GB y 19,6 t/s; con 4096, 3,5 GB y 25,6 t/s (aún 34 % en CPU). Cambiar `num_ctx` entre llamadas recarga el modelo. Línea base del IntentEngine con `qwen2.5-coder:7b` en 28 mensajes: 27 de 28 correctos, 21,3 s la primera llamada y 3,1 s por mensaje cargado. Clasificador de dominio corregido para código con palabras de matemáticas (`91dab1d3`).
 
+**Medido con `qwen3:4b-instruct-2507-q4_K_M` (2,5 GB, `f8b986df`):** no razona (`think=False` respetado, sin `<think>`). IntentEngine, 28 mensajes: 28 de 28 acciones correctas (7B: 27), 6,6 s la primera llamada y 2,8 s cargado (7B: 21,3 y 3,1). Pero en parámetros es peor: "abre el bloc de notas" da `notebook` o `blocknote`, inestable entre corridas, y Asia no encuentra la app (con "Bloc de notas" sí); además agrega texto inventado al `request` de "corrige X". Por eso el IntentEngine sigue en `qwen2.5-coder:7b`. Chat en español (5 de charla, 3 de código): respuestas más claras y largas, a 12 t/s contra 8 del 7B; el 7B confundió "Asia" con el continente; qwen3 inventó el título de un libro. `math` usa `qwen3:4b` (Thinking) con razonamiento: "3x + 7 = 22" en 84 s desde `ProviderRouter.chat`, sin `<think>` en la respuesta.
+
+**`num_ctx` (generación, memoria, % en CPU):**
+
+| num_ctx | qwen2.5-coder:7b | qwen3:4b-instruct | qwen3:4b (Thinking) | Prompts que no caben (con 1024 de reserva) |
+|---|---|---|---|---|
+| 16384 | 7,0 t/s · 5,8 GB · 59 % | 9,2 t/s · 5,4 GB · 56 % | 11,4 t/s · 5,4 GB · 56 % | ninguno |
+| 8192 | 7,0 t/s · 5,4 GB · 58 % | 11,5 t/s · 4,2 GB · 45 % | 19,6 t/s · 4,2 GB · 45 % | `generate_code` (~10 000 tokens estimados, ~7 800 reales) |
+| 4096 | 7,2 t/s · 5,2 GB · 55 % | 16,8 t/s · 3,5 GB · 34 % | 25,6 t/s · 3,5 GB · 34 % | todos salvo `explain_file` y el IntentEngine |
+
+Prompts más grandes medidos en C:\Asia (tokens estimados por Asia; los reales son ~78 %): `generate_code` 10 017, chat con adjunto de 20 000 caracteres 6 942 (sin historial), síntesis de `review_project` 6 239 (15 archivos con 5 hallazgos cada uno), `debug_project` 5 970 (se ajusta solo al límite), `smart_refactor` 5 907 (`launcher.py`; lee el archivo entero, sin límite), `review_file_deep` 5 345, `explain_file` 2 556, IntentEngine 2 478. Con el 7B, bajar `num_ctx` casi no acelera: pesa el modelo, no el contexto.
+
 **Qué falta:**
-- Para el IntentEngine y el chat general hace falta la variante sin razonamiento (`qwen3:4b-instruct-2507-q4_K_M`, pendiente de aprobación) y medirla con `check_intents.py`, quizá con un `num_ctx` menor para el IntentEngine (su prompt cabe en 8192).
-- Descargar y configurar los modelos (pendiente de aprobación). Máquina: RTX 3050 de 4 GB de VRAM y poca RAM libre; `qwen2.5-coder:7b` con 16k de contexto ocupa 5,8 GB y corre 59 % en CPU (~7 t/s). Un modelo de ~2,5 GB cabría entero en la GPU.
+- Decidir `ollama_num_ctx` (pendiente del usuario).
+- El IntentEngine con qwen3 instruct necesitaría reglas o ejemplos para que copie `app_name` y `request` tal cual; habría que volver a medir los dos modelos.
+- Con un modelo a la vez, cada mensaje de `math` carga qwen3 tras el IntentEngine (7B), y el siguiente mensaje vuelve a cargar el 7B. Máquina: RTX 3050 de 4 GB de VRAM y poca RAM libre; `qwen2.5-coder:7b` con 16k de contexto ocupa 5,8 GB y corre 59 % en CPU (~7 t/s). Un modelo de ~2,5 GB cabría entero en la GPU.
 - Con un modelo por vez, si `intent_model` y el modelo de la respuesta son distintos, cada mensaje son dos cargas. Lo más barato: que el IntentEngine use el mismo modelo pequeño que el chat, midiendo antes con `test/manual/check_intents.py` que no cambien las acciones.
 - El embedder del RAG (`nomic-embed-text`) no descarga los demás antes de cargarse: pesa 274 MB, pero con poca RAM convendría también.
 
