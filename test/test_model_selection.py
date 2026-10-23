@@ -52,11 +52,15 @@ def test_model_for():
     assert model_for(Settings(forced_model="fijo"), "math") == "fijo"
 
 
-def test_defaults_sin_cambio_de_comportamiento():
-    # Hasta descargar otros modelos, todos los dominios usan el mismo.
+def test_defaults_solo_math_usa_otro_modelo():
+    # math usa qwen3:4b (Thinking-2507) con razonamiento; el chat general y
+    # el código siguen en el modelo por defecto hasta que se decida otra cosa.
     defaults = read_json(DEFAULTS_FILE)
+    by_domain = defaults["models_by_domain"]
 
-    assert set(defaults["models_by_domain"].values()) == {defaults["ollama_model"]}
+    assert by_domain["code"] == by_domain["general"] == defaults["ollama_model"]
+    assert by_domain["math"] == "qwen3:4b"
+    assert defaults["think_domains"] == ["math"]
     assert defaults["ollama_one_model_at_a_time"] is True
 
 

@@ -10,7 +10,7 @@
     "intent_model": "qwen2.5-coder:7b",
     "models_by_domain": {
         "code": "qwen2.5-coder:7b",
-        "math": "qwen2.5-coder:7b",
+        "math": "qwen3:4b",
         "general": "qwen2.5-coder:7b"
     },
     "ollama_one_model_at_a_time": true,
