@@ -77,13 +77,46 @@ def test_el_problema_va_al_principio_y_al_final(tmp_path):
 
 
 def test_reporte_dice_que_no_esta_verificado_y_sin_omitidos(tmp_path):
-    (tmp_path / "a.py").write_text("x = None\n", encoding="utf-8")
+    (tmp_path / "a.py").write_text("valor = None\n", encoding="utf-8")
 
-    report, _ = run(tmp_path)
+    report, _ = run(tmp_path, "SUMMARY:\nx\n\nEVIDENCIA:\na.py | valor = None\n")
 
     assert report.startswith(UNVERIFIED_DIAGNOSIS)
     assert "Archivos leídos (1, por coincidencias con el problema): a.py." in report
     assert "Omitidos" not in report
+    assert "especulativo" not in report
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        # Todas las citas descartadas.
+        "SUMMARY:\nx\n\nSUSPECT_FILES:\na.py\n\nLIKELY_CAUSE:\ny\n\nEVIDENCIA:\na.py | return 42\nb.py | z = 1\n\nRECOMMENDED_NEXT_STEP:\nz",
+        # Sin sección EVIDENCIA.
+        "SUMMARY:\nx\n\nLIKELY_CAUSE:\ny",
+    ],
+)
+def test_sin_ninguna_cita_verificada_el_diagnostico_es_especulativo(tmp_path, response):
+    (tmp_path / "a.py").write_text("x = None\n", encoding="utf-8")
+
+    report, _ = run(tmp_path, response)
+
+    assert report.startswith(
+        "Ninguna evidencia se pudo verificar: el diagnóstico es probablemente especulativo.\n"
+        + UNVERIFIED_DIAGNOSIS
+    )
+    assert "SUMMARY (especulativo, sin evidencia verificada):" in report
+    assert "LIKELY_CAUSE (especulativo, sin evidencia verificada):" in report
+    assert "\nSUMMARY:" not in report and "\nLIKELY_CAUSE:" not in report
+
+
+def test_con_una_cita_verificada_no_es_especulativo(tmp_path):
+    (tmp_path / "a.py").write_text("valor = None\n", encoding="utf-8")
+
+    report, _ = run(tmp_path, "SUMMARY:\nx\n\nEVIDENCIA:\na.py | valor = None\na.py | inventado()\n")
+
+    assert report.startswith(UNVERIFIED_DIAGNOSIS)
+    assert "\nSUMMARY:\n" in report
 
 
 def test_sin_pruebas_ni_archivos_que_no_son_codigo(tmp_path):

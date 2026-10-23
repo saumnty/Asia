@@ -2,7 +2,13 @@ from pathlib import Path
 
 from config.settings_manager import SettingsManager
 from providers.provider_router import SYSTEM_PROMPT
-from tools.debug_context import build_debug_context, context_note, verify_citations
+from tools.debug_context import (
+    SPECULATIVE_WARNING,
+    build_debug_context,
+    context_note,
+    mark_speculative,
+    verify_citations,
+)
 from tools.review_findings import FINDING_FORMAT, HONESTY_RULES, numbered, render_report
 from tools.write_safety import find_truncating_rewrites
 
@@ -95,10 +101,12 @@ class DebugAgentTool:
         # de EVIDENCIA cambiaba de una ejecución a otra.
         response = self.provider_router.ask(ctx.prompt, review=True)
 
-        return (
-            f"{UNVERIFIED_DIAGNOSIS}\n{context_note(ctx)}\n\n"
-            f"{verify_citations(response, ctx.files)}"
-        )
+        # Sin ninguna cita encontrada, el aviso va primero y las secciones se
+        # etiquetan como especulativas: no se presentan como un diagnóstico.
+        diagnosis, speculative = mark_speculative(verify_citations(response, ctx.files))
+        header = f"{SPECULATIVE_WARNING}\n{UNVERIFIED_DIAGNOSIS}" if speculative else UNVERIFIED_DIAGNOSIS
+
+        return f"{header}\n{context_note(ctx)}\n\n{diagnosis}"
     
     # Las heurísticas de analyze_static (p. ej. "posible índice fuera de rango"
     # en cada df[col]) no entran en estos prompts: el modelo las repetía como

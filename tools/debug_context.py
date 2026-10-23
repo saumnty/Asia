@@ -351,7 +351,32 @@ def check_citation(line: str, files: list[FileHits]) -> str:
     if number is None:
         return f"- {f.relative} | {quote}  [la cita NO está en el archivo: descartada]"
 
-    return f"- {f.relative}:{number} | {quote}  [cita encontrada en el archivo]"
+    return f"- {f.relative}:{number} | {quote}  {FOUND_MARK}"
+
+
+FOUND_MARK = "[cita encontrada en el archivo]"
+
+SPECULATIVE_WARNING = (
+    "Ninguna evidencia se pudo verificar: el diagnóstico es probablemente especulativo."
+)
+SPECULATIVE_SECTIONS = {"SUMMARY", "SUSPECT_FILES", "LIKELY_CAUSE", "RECOMMENDED_NEXT_STEP"}
+
+
+def mark_speculative(report: str) -> tuple[str, bool]:
+    """Si ninguna cita de EVIDENCIA se encontró en los archivos, las secciones
+    del diagnóstico se etiquetan como especulativas. Devuelve (reporte, es_especulativo)."""
+    if FOUND_MARK in report:
+        return report, False
+
+    def relabel(match):
+        name = match.group(1).upper()
+
+        if name not in SPECULATIVE_SECTIONS:
+            return match.group(0)
+
+        return f"{name} (especulativo, sin evidencia verificada):"
+
+    return SECTION.sub(relabel, report), True
 
 
 def verify_citations(response: str, files: list[FileHits]) -> str:
