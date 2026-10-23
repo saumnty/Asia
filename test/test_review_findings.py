@@ -168,3 +168,16 @@ def test_render_sin_hallazgos_verificables():
 def test_numbered_alinea_numeros():
     assert numbered("a\nb") == "1 | a\n2 | b"
     assert numbered("\n" * 9 + "x").splitlines()[-1] == "10 | x"
+
+
+@pytest.mark.parametrize("tail", ["\n\nSIN_HALLAZGOS", "\nSIN_HALLAZGOS\n", "\n**SIN_HALLAZGOS**", " SIN_HALLAZGOS"])
+def test_sin_hallazgos_despues_de_un_hallazgo_no_se_filtra(tail):
+    # Visto en "revisa a fondo X": el modelo cierra con SIN_HALLAZGOS aunque
+    # haya reportado algo, y quedaba suelto debajo del último hallazgo.
+    response = (
+        "ANALISIS:\nnada raro\n\nHALLAZGOS:\nHALLAZGO:\nLINEA: 16\n"
+        "CITA: json.dump(data, f)\nCLAIM: no es atómico" + tail
+    )
+
+    assert parse_findings(response) == [finding(16, "json.dump(data, f)", "no es atómico")]
+    assert NO_FINDINGS_MARK not in render_report("a.py", response, CONTENT)

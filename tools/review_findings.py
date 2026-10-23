@@ -136,7 +136,11 @@ def parse_findings(response: str) -> list[dict]:
     Acepta los bloques HALLAZGO pedidos y también listas numeradas con la
     cita entre backticks. Si hay una sección HALLAZGOS después del análisis,
     solo se lee esa: el análisis enumera también lo que el modelo descartó.
+
+    SIN_HALLAZGOS se quita antes: el modelo a veces lo escribe después de un
+    hallazgo y quedaba pegado al claim.
     """
+    response = re.sub(rf"\**{NO_FINDINGS_MARK}\**", "", response)
     headers = list(FINDINGS_HEADER.finditer(response))
 
     if headers:
