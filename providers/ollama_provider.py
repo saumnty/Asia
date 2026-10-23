@@ -3,7 +3,7 @@ import sys
 import ollama
 
 from config.settings_manager import SettingsManager
-from providers.ollama_models import unload_others
+from providers.ollama_models import ThinkFilter, strip_think, think_kwargs, unload_others
 
 
 # Medido en prompts reales de Asia: entre 3,3 y 4,1 caracteres por token.
@@ -57,13 +57,15 @@ class OllamaProvider:
         self.settings = SettingsManager()
         self.client = ollama.Client(host=self.settings.get("ollama_host"))
 
-    def complete(self, messages: list[dict], on_chunk=None, review=False, model=None) -> str:
+    def complete(self, messages: list[dict], on_chunk=None, review=False, model=None, think=False) -> str:
         """Envía los mensajes y devuelve la respuesta completa.
 
         Si se pasa on_chunk, la respuesta se transmite en streaming y cada
         fragmento se entrega a on_chunk a medida que llega. Con review=True
         se usan las opciones de revisión (review_options). model elige el
-        modelo de esta llamada; sin él, ollama_model.
+        modelo de esta llamada; sin él, ollama_model. think activa el modo
+        de razonamiento en los modelos que lo tienen; el razonamiento no se
+        devuelve, solo la respuesta.
         """
         # Se lee en cada llamada para que un cambio en settings.json se
         # aplique sin reiniciar Asia.
@@ -71,28 +73,40 @@ class OllamaProvider:
         unload_others(self.client, model, self.settings)
         extra = review_options(self.settings) if review else {}
         options = ollama_options(self.settings, messages, **extra)
+        thinking = think_kwargs(self.client, model, think)
 
         if on_chunk is None:
             response = self.client.chat(
                 model=model,
                 messages=messages,
-                options=options
+                options=options,
+                **thinking
             )
 
-            return response["message"]["content"]
+            return strip_think(response["message"]["content"])
 
         stream = self.client.chat(
             model=model,
             messages=messages,
             stream=True,
-            options=options
+            options=options,
+            **thinking
         )
 
+        visible = ThinkFilter()
         full_response = ""
 
         for chunk in stream:
-            content = chunk["message"]["content"]
-            on_chunk(content)
-            full_response += content
+            content = visible.feed(chunk["message"]["content"] or "")
+
+            if content:
+                on_chunk(content)
+                full_response += content
+
+        rest = visible.flush()
+
+        if rest:
+            on_chunk(rest)
+            full_response += rest
 
         return full_response

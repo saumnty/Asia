@@ -103,7 +103,7 @@ class FakeProvider:
     def __init__(self):
         self.models = []
 
-    def complete(self, messages, on_chunk=None, review=False, model=None):
+    def complete(self, messages, on_chunk=None, review=False, model=None, think=False):
         self.models.append(model)
         return "ok"
 
@@ -259,3 +259,94 @@ def test_codigo_con_palabras_de_matematicas_es_code(text):
 def test_matematicas_sin_codigo_sigue_siendo_math(text):
     assert classify_domain(text) == "math"
 
+
+# --- Modo de razonamiento -----------------------------------------------------
+
+from providers.ollama_models import ThinkFilter, strip_think, think_kwargs
+from core.model_selection import thinks
+
+
+class ShowClient(FakeClient):
+    def __init__(self, capabilities, loaded=()):
+        super().__init__(loaded)
+        self.capabilities = capabilities
+        self.kwargs = []
+
+    def show(self, model):
+        return SimpleNamespace(capabilities=self.capabilities)
+
+    def chat(self, model, messages, options=None, stream=False, **kwargs):
+        self.chats.append(model)
+        self.kwargs.append(kwargs)
+        content = '<think>\nrazono...\n</think>\n\n{"action": "recall", "params": {"key": "nombre"}}'
+
+        if stream:
+            return iter([{"message": {"content": part}} for part in ["<thi", "nk>x</th", "ink>\n\nHola", " mundo"]])
+
+        return {"message": {"content": content}}
+
+
+def test_think_solo_a_modelos_que_lo_soportan():
+    assert think_kwargs(ShowClient(["completion", "thinking"]), "razona:4b", False) == {"think": False}
+    assert think_kwargs(ShowClient(["completion"]), "noraz:7b", True) == {}
+
+
+def test_strip_think_y_filtro_de_streaming():
+    assert strip_think("<think>\na\n</think>\n\nhola") == "hola"
+
+    visible = ThinkFilter()
+    out = "".join(visible.feed(part) for part in ["<thi", "nk>x</th", "ink>\n\nHola", " mundo"]) + visible.flush()
+
+    assert out == "Hola mundo"
+    keep = ThinkFilter()
+    assert keep.feed("a < b") + keep.flush() == "a < b"
+
+
+def test_thinks_solo_en_think_domains():
+    settings = Settings(think_domains=["math"])
+
+    assert thinks(settings, "math") and not thinks(settings, "general") and not thinks(settings, "code")
+
+
+def test_intent_engine_sin_razonamiento_y_json_intacto():
+    engine = IntentEngine.__new__(IntentEngine)
+    engine.settings = Settings(intent_model="think-intent:4b")
+    engine.client = ShowClient(["thinking"])
+
+    assert engine.detect("cómo me llamo") == {"action": "recall", "params": {"key": "nombre"}}
+    assert engine.client.kwargs == [{"think": False}]
+
+
+def test_provider_pasa_think_y_no_devuelve_el_razonamiento():
+    provider = OllamaProvider.__new__(OllamaProvider)
+    provider.settings = Settings()
+    provider.client = ShowClient(["thinking"])
+    chunks = []
+
+    answer = provider.complete([{"role": "user", "content": "x"}], model="think-prov:4b", think=True)
+    streamed = provider.complete([{"role": "user", "content": "x"}], on_chunk=chunks.append, model="think-prov:4b")
+
+    assert "<think>" not in answer and "razono" not in answer
+    assert streamed == "".join(chunks) == "Hola mundo"
+    assert provider.client.kwargs == [{"think": True}, {"think": False}]
+
+
+def test_router_activa_think_solo_en_math():
+    class ThinkProvider(FakeProvider):
+        def __init__(self):
+            super().__init__()
+            self.thinks = []
+
+        def complete(self, messages, on_chunk=None, review=False, model=None, think=False):
+            self.thinks.append(think)
+            return "ok"
+
+    router = make_router(Settings(default_provider="fake", think_domains=["math"],
+                                  models_by_domain={"code": "c", "math": "m", "general": "m"}))
+    router.providers["fake"] = ThinkProvider()
+
+    router.ask("revisa esto")
+    router.chat("hola")
+    router.chat("resuelve 3x + 2 = 11")
+
+    assert router.providers["fake"].thinks == [False, False, True]

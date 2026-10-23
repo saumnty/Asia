@@ -64,6 +64,13 @@ def model_for(settings, domain: str) -> str:
     return by_domain.get(domain) or settings.get("ollama_model")
 
 
+def thinks(settings, domain) -> bool:
+    """Modo de razonamiento solo en think_domains (por defecto "math"): en el
+    resto alarga la respuesta sin mejorarla, y en el IntentEngine rompería
+    el JSON."""
+    return domain in (settings.get("think_domains") or [])
+
+
 class StickyModel:
     """Modelo del chat a lo largo de una sesión."""
 

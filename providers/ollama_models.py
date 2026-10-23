@@ -8,6 +8,9 @@ demás modelos cargados (keep_alive=0). Cambiar de modelo cuesta una recarga
 """
 
 
+import re
+
+
 def full_name(model: str) -> str:
     """"nomic-embed-text" y "nomic-embed-text:latest" son el mismo modelo."""
     return model if ":" in model else f"{model}:latest"
@@ -41,3 +44,83 @@ def unload_others(client, model: str, settings) -> list[str]:
             pass
 
     return unloaded
+
+
+# --- Modo de razonamiento (qwen3 y otros con la capacidad "thinking") -------
+#
+# think solo se envía a los modelos que lo declaran en su ficha (ollama
+# show): a uno sin esa capacidad Ollama le rechaza la llamada. Con think
+# activo, Ollama separa el razonamiento en message.thinking; por si una
+# plantilla lo deja en el contenido, también se quita <think>...</think>.
+
+THINK_BLOCK = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
+THINK_OPEN, THINK_CLOSE = "<think>", "</think>"
+
+_thinking_capable = {}
+
+
+def supports_thinking(client, model: str) -> bool:
+    key = full_name(model)
+
+    if key not in _thinking_capable:
+        try:
+            capabilities = client.show(model).capabilities or []
+        except Exception:
+            capabilities = []
+
+        _thinking_capable[key] = "thinking" in capabilities
+
+    return _thinking_capable[key]
+
+
+def think_kwargs(client, model: str, enabled: bool) -> dict:
+    """{"think": enabled} si el modelo razona; {} si no tiene esa capacidad."""
+    return {"think": bool(enabled)} if supports_thinking(client, model) else {}
+
+
+def strip_think(text: str) -> str:
+    return THINK_BLOCK.sub("", text)
+
+
+class ThinkFilter:
+    """Quita <think>...</think> de una respuesta en streaming.
+
+    Las etiquetas pueden llegar partidas entre fragmentos: se retiene el
+    final de cada fragmento hasta saber si es el inicio de una etiqueta.
+    """
+
+    def __init__(self):
+        self.buffer = ""
+        self.inside = False
+
+    def feed(self, chunk: str) -> str:
+        self.buffer += chunk
+        visible = ""
+
+        while True:
+            if not self.inside:
+                start = self.buffer.find(THINK_OPEN)
+
+                if start == -1:
+                    keep = len(THINK_OPEN) - 1
+                    visible += self.buffer[:-keep] if len(self.buffer) > keep else ""
+                    self.buffer = self.buffer[-keep:] if len(self.buffer) > keep else self.buffer
+                    return visible
+
+                visible += self.buffer[:start]
+                self.buffer = self.buffer[start + len(THINK_OPEN):]
+                self.inside = True
+            else:
+                end = self.buffer.find(THINK_CLOSE)
+
+                if end == -1:
+                    self.buffer = self.buffer[-(len(THINK_CLOSE) - 1):]
+                    return visible
+
+                self.buffer = self.buffer[end + len(THINK_CLOSE):].lstrip()
+                self.inside = False
+
+    def flush(self) -> str:
+        rest = "" if self.inside else self.buffer
+        self.buffer = ""
+        return rest

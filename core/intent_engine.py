@@ -3,7 +3,7 @@ import re
 import ollama
 
 from config.settings_manager import SettingsManager
-from providers.ollama_models import unload_others
+from providers.ollama_models import strip_think, think_kwargs, unload_others
 from providers.ollama_provider import ollama_options
 
 
@@ -238,16 +238,20 @@ Usuario: muestra el cambio pendiente
         ]
 
         try:
-            unload_others(self.client, self.settings.get("intent_model"), self.settings)
+            model = self.settings.get("intent_model")
+            unload_others(self.client, model, self.settings)
+            # Sin razonamiento: con think el modelo tarda más y escribe antes
+            # del JSON (qwen3).
             response = self.client.chat(
-                model=self.settings.get("intent_model"),
+                model=model,
                 messages=messages,
-                options=ollama_options(self.settings, messages, temperature=0)
+                options=ollama_options(self.settings, messages, temperature=0),
+                **think_kwargs(self.client, model, False)
             )
         except Exception:
             return {"action": "chat", "params": {}}
 
-        content = response["message"]["content"].strip()
+        content = strip_think(response["message"]["content"]).strip()
 
         match = re.search(r"\{.*\}", content, re.DOTALL)
 

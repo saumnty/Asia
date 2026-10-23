@@ -14,6 +14,7 @@
         "general": "qwen2.5-coder:7b"
     },
     "ollama_one_model_at_a_time": true,
+    "think_domains": ["math"],
     "ollama_num_ctx": 16384,
     "ollama_temperature": 0.1,
     "ollama_repeat_penalty": 1.15,

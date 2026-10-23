@@ -3,7 +3,7 @@ from memory.memory_manager import MemoryManager
 from memory.project_memory import ProjectMemory
 from config.settings_manager import SettingsManager
 from providers.gemini_provider import GeminiProvider
-from core.model_selection import StickyModel, model_for
+from core.model_selection import StickyModel, model_for, thinks
 
 
 SYSTEM_PROMPT = (
@@ -87,7 +87,10 @@ class ProviderRouter:
         ]
 
         try:
-            return self._complete(messages, review=review, model=model_for(self.settings, domain))
+            return self._complete(
+                messages, review=review, model=model_for(self.settings, domain),
+                think=thinks(self.settings, domain)
+            )
         except ProviderError as e:
             return str(e)
 
@@ -116,7 +119,8 @@ Contexto del proyecto:
 
         try:
             model = self.sticky_model.choose(prompt, self.settings)
-            answer = self._complete(messages, on_chunk=on_chunk, model=model)
+            think = thinks(self.settings, self.sticky_model.domain)
+            answer = self._complete(messages, on_chunk=on_chunk, model=model, think=think)
         except ProviderError as e:
             if on_chunk:
                 on_chunk(str(e))
@@ -132,12 +136,12 @@ Contexto del proyecto:
 
         return answer
 
-    def _complete(self, messages: list[dict], on_chunk=None, review=False, model=None) -> str:
+    def _complete(self, messages: list[dict], on_chunk=None, review=False, model=None, think=False) -> str:
         provider_name = self.settings.get("default_provider", "ollama")
 
         try:
             provider = self.get_provider(provider_name)
-            return provider.complete(messages, on_chunk=on_chunk, review=review, model=model)
+            return provider.complete(messages, on_chunk=on_chunk, review=review, model=model, think=think)
         except Exception as e:
             fallback_name = self.settings.get("fallback_provider", None)
 
@@ -148,7 +152,7 @@ Contexto del proyecto:
 
             try:
                 fallback_provider = self.get_provider(fallback_name)
-                response = fallback_provider.complete(messages, review=review, model=model)
+                response = fallback_provider.complete(messages, review=review, model=model, think=think)
             except Exception as fallback_error:
                 raise ProviderError(
                     "Falló el provider principal y también el fallback. "
