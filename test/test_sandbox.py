@@ -260,3 +260,25 @@ def test_ruta_inventada_usa_el_cambio_pendiente(tmp_path):
     brain = make_brain(tmp_path, {"action": "run_sandbox", "params": {"file_path": "path/to/your/file.py"}}, pending)
 
     assert "Ejecución preparada: cambio pendiente para x.py" in brain.process("prueba el código propuesto")
+
+
+def test_aviso_muestra_el_codigo_antes_de_confirmar(tmp_path):
+    brain = make_brain(tmp_path)
+
+    message = brain.prepare_run("a.py", "a.py", "import os\nprint(os.getcwd())\n")
+
+    assert "Código que se ejecutará:\n1 | import os\n2 | print(os.getcwd())" in message
+    assert message.index("Código que se ejecutará") < message.index('Escribe "confirmar ejecución"')
+    assert "líneas más sin mostrar" not in message
+
+
+def test_aviso_recorta_el_codigo_largo_con_aviso(tmp_path):
+    brain = make_brain(tmp_path)
+    code = "".join(f"print({n})\n" for n in range(1, 46))
+
+    message = brain.prepare_run("largo.py", "largo.py", code)
+
+    assert "40 | print(40)" in message and "print(41)" not in message
+    assert "[... 5 líneas más sin mostrar; se ejecuta el código completo]" in message
+    # Se ejecuta todo, no solo lo mostrado.
+    assert brain.pending_run.load()["code"] == code

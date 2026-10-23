@@ -1759,7 +1759,7 @@
  },
  "run_sandbox_archivo": {
   "results": [
-   "Ejecución preparada: s.py (1 líneas).\nCorrerá en un venv desechable solo con la biblioteca estándar, en una carpeta temporal, sin stdin y con un límite de 20 s.\nOjo: el sandbox aísla paquetes, no el sistema. El código corre con tus permisos y puede leer o modificar tus archivos y usar la red.\nEscribe \"confirmar ejecución\" para correrlo o \"cancelar ejecución\".",
+   "Ejecución preparada: s.py (1 líneas).\n\nCódigo que se ejecutará:\n1 | print('sandbox')\n\nCorrerá en un venv desechable solo con la biblioteca estándar, en una carpeta temporal, sin stdin y con un límite de 20 s.\nOjo: el sandbox aísla paquetes, no el sistema. El código corre con tus permisos y puede leer o modificar tus archivos y usar la red.\nEscribe \"confirmar ejecución\" para correrlo o \"cancelar ejecución\".",
    "Resultado del sandbox (s.py): código de salida 0, 0.2 s.\n--- stdout ---\nsalida"
   ],
   "events": [
@@ -1780,7 +1780,7 @@
  },
  "run_sandbox_pendiente_y_cancelar": {
   "results": [
-   "Ejecución preparada: cambio pendiente para p.py (1 líneas).\nCorrerá en un venv desechable solo con la biblioteca estándar, en una carpeta temporal, sin stdin y con un límite de 20 s.\nOjo: el sandbox aísla paquetes, no el sistema. El código corre con tus permisos y puede leer o modificar tus archivos y usar la red.\nEscribe \"confirmar ejecución\" para correrlo o \"cancelar ejecución\".",
+   "Ejecución preparada: cambio pendiente para p.py (1 líneas).\n\nCódigo que se ejecutará:\n1 | print('pendiente')\n\nCorrerá en un venv desechable solo con la biblioteca estándar, en una carpeta temporal, sin stdin y con un límite de 20 s.\nOjo: el sandbox aísla paquetes, no el sistema. El código corre con tus permisos y puede leer o modificar tus archivos y usar la red.\nEscribe \"confirmar ejecución\" para correrlo o \"cancelar ejecución\".",
    "Ejecución cancelada.",
    "No hay ninguna ejecución pendiente."
   ],

@@ -14,6 +14,25 @@ def normalized_command(text) -> str:
     return " ".join((text or "").lower().split()).strip(" .!¡")
 
 
+# Líneas del código que se muestran antes de pedir "confirmar ejecución".
+PREVIEW_LINES = 40
+
+
+def code_preview(code: str) -> str:
+    """El código que se va a ejecutar, numerado, para revisarlo antes de confirmar."""
+    lines = code.splitlines()
+    width = len(str(min(len(lines), PREVIEW_LINES)))
+    shown = [f"{n:>{width}} | {line}" for n, line in enumerate(lines[:PREVIEW_LINES], start=1)]
+
+    if len(lines) > PREVIEW_LINES:
+        shown.append(
+            f"[... {len(lines) - PREVIEW_LINES} líneas más sin mostrar; "
+            "se ejecuta el código completo]"
+        )
+
+    return "Código que se ejecutará:\n" + "\n".join(shown)
+
+
 class SandboxActions:
     HANDLERS = {
         "run_sandbox": "handle_run_sandbox",
@@ -44,7 +63,8 @@ class SandboxActions:
         lines = len(code.splitlines())
 
         return (
-            f"Ejecución preparada: {label} ({lines} líneas).\n"
+            f"Ejecución preparada: {label} ({lines} líneas).\n\n"
+            f"{code_preview(code)}\n\n"
             f"Correrá en un venv desechable solo con la biblioteca estándar, en una "
             f"carpeta temporal, sin stdin y con un límite de "
             f"{self.settings.get('sandbox_timeout', 20)} s.\n"
