@@ -17,7 +17,15 @@ CODE_WORDS = re.compile(
     r"```|\w+\(\)|\b\w+\.(py|js|ts|java|cs|cpp|go|rs|sql|json)\b|"
     r"\b(def|class|import|return|python|java|javascript|typescript|sql|regex|git|api|"
     r"c[oó]digo|funci[oó]n|m[eé]todo|variable|bug|excepci[oó]n|traceback|"
-    r"compila\w*|script|programa\w*)\b",
+    r"compila\w*|script|programa\w*|"
+    # Estructuras y librerías: "el promedio de una lista", "un DataFrame de pandas".
+    r"listas?|arrays?|arreglos?|diccionarios?|tuplas?|bucles?|loops?|print|range|len|"
+    r"pandas|numpy|dataframes?|html|css|consola|terminal|librer[ií]as?)\b|"
+    r"\bc\+\+|\bc#|"
+    # Sintaxis: llamadas a función salvo las de matemáticas (sen(x), f(x)),
+    # métodos (np.mean), +=, ==, ** y "for x in".
+    r"\b(?!(?:sen|sin|cos|tan|log|ln|exp|sqrt|ra[ií]z)\()[A-Za-z_]\w+\(|"
+    r"\b\w+\.\w+\(|[+\-*/]=|==|\*\*|\bfor\s+\w+\s+in\b",
     re.IGNORECASE,
 )
 

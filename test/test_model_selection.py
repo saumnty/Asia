@@ -219,3 +219,43 @@ def test_flag_model_sin_tag(monkeypatch):
     args = parser.parse_intermixed_args(["--model", "nomic-embed-text", "hola"])
 
     assert launcher.session_overrides(args, parser) == {"forced_model": "nomic-embed-text"}
+
+
+# --- Código que parece matemáticas no va a "math" -------------------------------
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "calcula el promedio en python",
+        "calcula el promedio de una lista",
+        "escribe una función que calcule la derivada",
+        "suma 3 + 4 y guárdalo en una variable",
+        "for i in range(10): total += i",
+        "cómo sumo los elementos de un array",
+        "cuánto es 2 + 2 en javascript",
+        "calcula la desviación estándar de un DataFrame de pandas",
+        "haz un bucle que sume del 1 al 100",
+        "print(2**10)",
+        "numpy.mean de [1,2,3]",
+        "la ecuación de una recta en C++",
+    ],
+)
+def test_codigo_con_palabras_de_matematicas_es_code(text):
+    assert classify_domain(text) == "code"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "resuelve 3x + 2 = 11",
+        "calcula el 15% de 200",
+        "deriva x^2 + 3x",
+        "integral de sen(x)",
+        "f(x) = x^2, ¿cuál es su derivada?",
+        "raíz(16) + log(100)",
+        "calcula la probabilidad de sacar dos seises",
+    ],
+)
+def test_matematicas_sin_codigo_sigue_siendo_math(text):
+    assert classify_domain(text) == "math"
+
