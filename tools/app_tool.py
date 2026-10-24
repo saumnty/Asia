@@ -6,7 +6,7 @@ import subprocess
 
 from core.atomic_write import write_json_atomic
 from core.paths import APPS_FILE
-from tools.app_resolver import find_start_app
+from tools.app_resolver import clarification, close_app, find_start_app, resolve_known_app
 
 
 # "explorer.exe shell:AppsFolder\<AppID>" (o solo "shell:AppsFolder\<AppID>").
@@ -64,7 +64,11 @@ class AppTool:
         apps = self.load_apps()
         app_key = app_name.lower().strip()
 
-        command = apps.get(app_key)
+        # Primero el nombre exacto o una variante conocida ("notebook"), luego
+        # el menú Inicio y, al final, un nombre casi igual de apps.json: así
+        # "notepad++", si está instalado, no se abre como "notepad".
+        known = resolve_known_app(app_name, apps)
+        command = apps.get(known) if known else None
 
         if not command:
             found = find_start_app(app_key)
@@ -75,10 +79,11 @@ class AppTool:
                 self.save_apps(apps)
 
         if not command:
-            return (
-                f"No encontré la aplicación '{app_name}'. "
-                f"Puedes agregarla en config/apps.json."
-            )
+            close = close_app(app_name, apps)
+            command = apps.get(close) if close else None
+
+        if not command:
+            return clarification(app_name, apps)
 
         try:
             launch(command)
