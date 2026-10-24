@@ -124,3 +124,17 @@ class ThinkFilter:
         rest = "" if self.inside else self.buffer
         self.buffer = ""
         return rest
+
+
+def installed_models(host=None):
+    """Modelos descargados en Ollama, o None si Ollama no responde."""
+    try:
+        import ollama
+
+        return [m.model for m in ollama.Client(host=host).list().models]
+    except Exception:
+        return None
+
+
+def is_installed(model: str, installed) -> bool:
+    return full_name(model) in {full_name(m) for m in installed}

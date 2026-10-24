@@ -7,6 +7,7 @@ from config.settings_manager import SettingsManager
 from core.actions.code import CodeActions
 from core.actions.explore import ExploreActions
 from core.actions.memory import MemoryActions
+from core.actions.models import ModelActions, model_command
 # wants_synthesis y wants_unverified se importan desde aquí en las pruebas.
 from core.actions.sandbox import RUN_CANCEL_PHRASES, RUN_CONFIRM_PHRASES, SandboxActions, normalized_command
 from core.actions.review import ReviewActions, wants_synthesis, wants_unverified  # noqa: F401
@@ -137,7 +138,7 @@ SHORTCUT_ACTIONS = {
 }
 
 
-class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxActions):
+class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxActions, ModelActions):
     # Acción del IntentEngine -> método que la atiende (ver core/actions).
     HANDLERS = {
         **MemoryActions.HANDLERS,
@@ -183,6 +184,12 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
         if command in RUN_CANCEL_PHRASES:
             return self.cancel_run()
+
+        # Ver o cambiar el modelo (core/actions/models.py): texto fijo, sin LLM.
+        model_cmd = model_command(text)
+
+        if model_cmd:
+            return self.handle_model_command(*model_cmd)
 
         intent = self.intent_engine.detect(text)
 

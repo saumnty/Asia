@@ -1,6 +1,7 @@
 import argparse
 import re
 import sys
+import textwrap
 from collections import deque
 from pathlib import Path
 
@@ -23,7 +24,7 @@ from core.attachments import (
 from config.settings_manager import SettingsManager
 from core.path_completion import make_completer
 from core.paths import PROJECT_ROOT
-from providers.ollama_models import full_name
+from providers.ollama_models import full_name, installed_models as ollama_installed_models
 from core.session import Session
 from core.brain import Brain
 from providers.provider_router import ProviderRouter
@@ -269,17 +270,33 @@ def interactive_mode(brain=None, read=None):
         print("\nAsia apagada.")
 
 
+MODEL_HELP = """modelos:
+  El chat elige el modelo según el tema (models_by_domain en config: código,
+  matemáticas o general) y lo mantiene mientras siga la conversación. Las
+  acciones de código usan el de código. En el modo interactivo:
+    ¿qué modelo estás usando?        muestra los modelos en uso
+    usa el modelo de matemáticas     fija el chat en ese dominio (también: de código, general)
+    usa el modelo qwen3:4b           fija un modelo descargado para todo
+    vuelve al modelo normal          quita lo fijado
+  Lo que se cambia dura solo la sesión; no se escribe en settings.json.
+"""
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="jarvis",
-        description=(
+        # El epílogo va con su formato (RawDescription); la descripción se
+        # reajusta a mano.
+        description=textwrap.fill(
             "Asia, asistente local. Sin mensaje abre el modo interactivo. "
             "Adjunta archivos con @ruta dentro del mensaje o con --file; "
             "también acepta contenido por stdin (Get-Content a.py | jarvis \"explica esto\"). "
             "En el modo interactivo, un mensaje que termina en << sigue en varias "
-            "líneas hasta una línea con FIN. "
+            "líneas hasta una línea con FIN (o FIN al final de la última línea). "
             "Usa -- antes de un mensaje que empiece con guion."
-        )
+        ),
+        epilog=MODEL_HELP,
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("prompt", nargs="*", help="mensaje para Asia")
     parser.add_argument(
@@ -300,21 +317,16 @@ def build_parser():
     )
     parser.add_argument(
         "--model", metavar="NOMBRE",
-        help="modelo de Ollama para el chat y las acciones de esta ejecución "
-             "(ya descargado; Asia no descarga modelos)"
+        help="modelo de Ollama (p. ej. qwen3:4b) para el chat y las acciones de "
+             "esta ejecución; debe estar descargado, Asia no descarga modelos. "
+             "No cambia settings.json"
     )
     return parser
 
 
 def installed_models():
     """Modelos descargados en Ollama, o None si Ollama no responde."""
-    try:
-        import ollama
-
-        client = ollama.Client(host=SettingsManager().get("ollama_host"))
-        return [m.model for m in client.list().models]
-    except Exception:
-        return None
+    return ollama_installed_models(SettingsManager().get("ollama_host"))
 
 
 def session_overrides(args, parser) -> dict:

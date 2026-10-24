@@ -7,7 +7,10 @@
 - Modelo pegajoso: el chat mantiene el modelo de su primer mensaje y solo
   cambia si otro dominio aparece en SWITCH_AFTER mensajes seguidos, porque
   cada cambio es una recarga en Ollama.
-- forced_model (flag --model) fija el modelo de toda la sesión.
+- forced_model (flag --model o "usa el modelo qwen3:4b") fija el modelo de
+  toda la sesión, también en las acciones; forced_domain ("usa el modelo de
+  matemáticas") fija solo el dominio del chat. Los dos son valores de sesión
+  (SettingsManager.overrides): no se escriben en settings.json.
 """
 import re
 
@@ -80,6 +83,14 @@ class StickyModel:
         self.streak = 0
 
     def choose(self, text: str, settings) -> str:
+        # "usa el modelo de matemáticas": el dominio queda fijo en la sesión.
+        forced = settings.get("forced_domain")
+
+        if forced:
+            self.domain = forced
+            self.candidate, self.streak = None, 0
+            return model_for(settings, forced)
+
         domain = classify_domain(text)
 
         if self.domain is None or model_for(settings, domain) == model_for(settings, self.domain):
