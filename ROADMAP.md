@@ -31,6 +31,7 @@ para poder revisar o revertir los cambios.
 | — | `debug_project`: cada archivo va como fragmentos numerados alrededor de las coincidencias (±3 líneas, primero las del problema) dentro de los mismos 1200 caracteres, en lugar de su principio. El verificador acepta también `ruta:línea: cita` y la cita en la línea siguiente a `ruta:línea`, formatos que el modelo usa a menudo. Opciones de revisión (temperatura baja). C:\Asia: 63 s, 2 citas encontradas y 1 inventada descartada. | `ae499002` |
 | — | Arreglos de la tanda de pruebas manuales: (1) `SIN_HALLAZGOS` escrito después de un hallazgo ya no se filtra al reporte de "revisa a fondo". (2) El aviso de "Ejecución preparada" muestra el código numerado (hasta 40 líneas, con aviso si se recorta) antes de pedir "confirmar ejecución". (3) Si el chequeo de imports hace reescribir el código, la explicación empieza con qué librería usaba y cuál la sustituye ("usaba superjson_mega (no está instalado)… ahora usa json"). (4) `debug_project` sin ninguna cita verificada empieza con "Ninguna evidencia se pudo verificar: el diagnóstico es probablemente especulativo" y etiqueta sus secciones como especulativas. | `1de54649`, `763a6d34`, `7d9f5e47`, `d21455ac` |
 | F. Multi-modelo (parte 1) | Modelo por llamada, `models_by_domain`, dominio por palabras clave, modelo pegajoso en el chat, `--model` para la sesión (solo modelos ya descargados) y un modelo de Ollama en memoria a la vez (`ollama_one_model_at_a_time`). Sin modelos nuevos todavía: los tres dominios usan `qwen2.5-coder:7b`, así que el comportamiento no cambia. Probado con Ollama real: con `nomic-embed-text` cargado, el chat lo descargó antes de cargar qwen. | `1231b36b` |
+| F. Multi-modelo (partes 2 y 3) | Razonamiento solo en `math` (`think_domains`); `math` con `qwen3:4b` (Thinking-2507). Clasificador de dominio que no manda código a `math`. `check_intents.py` con 28 mensajes y acción esperada. `open_app` tolerante a nombres aproximados (`notebook` → Bloc de notas) y con aclaración si no coincide nada. Comandos para ver y cambiar el modelo en la sesión. qwen3:4b-instruct medido y descartado para el IntentEngine (rompía `open_app`). | `91dab1d3`, `d0a093e8`, `07957ee7`, `f8b986df`, `b64c07b6`, `fccf75bd` |
 
 ## Próximas fases
 
@@ -66,11 +67,13 @@ para poder revisar o revertir los cambios.
 
 Prompts más grandes medidos en C:\Asia (tokens estimados por Asia; los reales son ~78 %): `generate_code` 10 017, chat con adjunto de 20 000 caracteres 6 942 (sin historial), síntesis de `review_project` 6 239 (15 archivos con 5 hallazgos cada uno), `debug_project` 5 970 (se ajusta solo al límite), `smart_refactor` 5 907 (`launcher.py`; lee el archivo entero, sin límite), `review_file_deep` 5 345, `explain_file` 2 556, IntentEngine 2 478. Con el 7B, bajar `num_ctx` casi no acelera: pesa el modelo, no el contexto.
 
+**Decidido (2026-10-23):** `ollama_num_ctx` se queda en 16384 (con el 7B bajar el contexto no acelera y `generate_code` dejaría de caber). El IntentEngine y el chat siguen en `qwen2.5-coder:7b`; `qwen3:4b` solo para `math`. `qwen3:4b-instruct-2507-q4_K_M` quedó descargado sin uso (2,5 GB; se puede borrar con `ollama rm`).
+
+**Hecho, parte 3 (`fccf75bd`):** "¿qué modelo estás usando?", "usa el modelo de matemáticas" (o de código, general), "usa el modelo <nombre:tag>" y "vuelve al modelo normal", reconocidos por texto sin el IntentEngine; duran solo la sesión y dicen qué modelo falta si no está descargado. `--help` documenta `--model` y estos comandos.
+
 **Qué falta:**
-- Decidir `ollama_num_ctx` (pendiente del usuario).
-- El IntentEngine con qwen3 instruct necesitaría reglas o ejemplos para que copie `app_name` y `request` tal cual; habría que volver a medir los dos modelos.
-- Con un modelo a la vez, cada mensaje de `math` carga qwen3 tras el IntentEngine (7B), y el siguiente mensaje vuelve a cargar el 7B. Máquina: RTX 3050 de 4 GB de VRAM y poca RAM libre; `qwen2.5-coder:7b` con 16k de contexto ocupa 5,8 GB y corre 59 % en CPU (~7 t/s). Un modelo de ~2,5 GB cabría entero en la GPU.
-- Con un modelo por vez, si `intent_model` y el modelo de la respuesta son distintos, cada mensaje son dos cargas. Lo más barato: que el IntentEngine use el mismo modelo pequeño que el chat, midiendo antes con `test/manual/check_intents.py` que no cambien las acciones.
+- El IntentEngine con qwen3 instruct necesitaría reglas o ejemplos para que copie `app_name` y `request` tal cual; habría que volver a medir los dos modelos. `open_app` ya tolera `notebook`/`blocknote` (`b64c07b6`).
+- Con un modelo a la vez, cada mensaje de `math` carga qwen3 tras el IntentEngine (7B), y el siguiente vuelve a cargar el 7B: unos 10 a 15 s por cambio.
 - El embedder del RAG (`nomic-embed-text`) no descarga los demás antes de cargarse: pesa 274 MB, pero con poca RAM convendría también.
 
 **Trade-off a documentar en el diseño:**
