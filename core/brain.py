@@ -8,6 +8,7 @@ from core.actions.code import CodeActions
 from core.actions.explore import ExploreActions
 from core.actions.memory import MemoryActions
 from core.actions.models import ModelActions, model_command
+from core.provenance import USUARIO, Fragment, request_sources
 # wants_synthesis y wants_unverified se importan desde aquí en las pruebas.
 from core.actions.sandbox import RUN_CANCEL_PHRASES, RUN_CONFIRM_PHRASES, SandboxActions, normalized_command
 from core.actions.review import ReviewActions, wants_synthesis, wants_unverified  # noqa: F401
@@ -170,7 +171,14 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
         Devuelve None si el mensaje es conversación normal (acción "chat" o
         no reconocida); en ese caso quien llama debe usar provider_router.chat.
+
+        Lo que lean las acciones queda anotado con su procedencia
+        (core/provenance.py); si el launcher ya abrió el registro, se suma.
         """
+        with request_sources(Fragment(USUARIO, text)):
+            return self.process_labeled(text)
+
+    def process_labeled(self, text):
         command = normalized_command(text)
 
         # Comandos fijos: texto exacto, sin pasar por el IntentEngine.

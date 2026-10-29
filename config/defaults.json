@@ -15,6 +15,8 @@
     },
     "ollama_one_model_at_a_time": true,
     "think_domains": ["math"],
+
+    "external_allow_memory": false,
     "ollama_num_ctx": 16384,
     "ollama_temperature": 0.1,
     "ollama_repeat_penalty": 1.15,

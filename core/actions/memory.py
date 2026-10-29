@@ -1,5 +1,6 @@
 """Memoria personal, memoria del proyecto y ajustes (provider, proyecto activo)."""
 from core import prompts
+from core.provenance import PROYECTO, Fragment, record
 
 
 class MemoryActions:
@@ -81,6 +82,8 @@ class MemoryActions:
 
         if not project_summary:
             return f"No tengo resumen guardado para el proyecto {project_name}."
+
+        record(Fragment(PROYECTO, project_summary))
 
         return self.provider_router.ask(
             prompts.ask_project_memory(project_name, project_summary, question)

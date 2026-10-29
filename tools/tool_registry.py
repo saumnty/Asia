@@ -1,5 +1,7 @@
 import inspect
 
+from core.provenance import record_tool_result
+
 from tools.app_tool import AppTool
 from tools.file_tool import FileTool
 from tools.rag_tool import RagTool
@@ -63,7 +65,13 @@ class ToolRegistry:
         except TypeError as e:
             return f"Parámetros inválidos para {action}: {e}"
 
-        return tool(**kwargs)
+        result = tool(**kwargs)
+
+        # El contenido de archivos y del RAG queda anotado como local en la
+        # petición en curso (core/provenance.py).
+        record_tool_result(action, result)
+
+        return result
     
     def get_apply_changes_tool(self):
         return self.apply_changes_tool

@@ -23,6 +23,7 @@ from core.attachments import (
 )
 from config.settings_manager import SettingsManager
 from core.path_completion import make_completer
+from core.provenance import ADJUNTO, USUARIO, Fragment, request_sources
 from core.paths import PROJECT_ROOT
 from providers.ollama_models import full_name, installed_models as ollama_installed_models
 from core.session import Session
@@ -55,16 +56,27 @@ def warn(messages):
         print(message, file=sys.stderr)
 
 
-def respond(brain, text, prefix="", attachments=(), use_actions=True):
+def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label=USUARIO):
     """Procesa un mensaje e imprime la respuesta.
 
     Si Brain no reconoce una acción (devuelve None), el mensaje se trata
     como conversación normal con el provider, con el contenido de los
     adjuntos. use_actions=False va directo al chat (p. ej. contenido por
     stdin, que no tiene una ruta que una acción pueda leer).
+
+    El texto y los adjuntos quedan registrados con su procedencia
+    (core/provenance.py) para que el router no los mande afuera sin
+    autorización.
     """
     print(prefix, end="", flush=True)
 
+    sources = [Fragment(text_label, text)] + [Fragment(ADJUNTO, a.content) for a in attachments]
+
+    with request_sources(*sources):
+        respond_in_context(brain, text, attachments, use_actions)
+
+
+def respond_in_context(brain, text, attachments, use_actions):
     try:
         response = brain.process(text) if use_actions else None
 
@@ -96,6 +108,10 @@ def prepare_message(brain, text, files=(), block=None, block_label=STDIN_LABEL):
     --file quedan como ruta absoluta para que las acciones de Brain (revisar,
     explicar...) encuentren el archivo.
 
+    También devuelve la etiqueta del texto (core/provenance.py): "usuario",
+    salvo que el mensaje sea un bloque pegado o stdin sin instrucción, que
+    es "adjunto".
+
     Si un adjunto no existe devuelve None: el mensaje no se envía (el modelo
     respondería sobre un archivo que no vio) y el aviso sugiere nombres
     parecidos de la carpeta.
@@ -118,6 +134,7 @@ def prepare_message(brain, text, files=(), block=None, block_label=STDIN_LABEL):
         attachments += extra
 
     use_actions = True
+    text_label = USUARIO
 
     if block is not None:
         if text.strip():
@@ -126,10 +143,11 @@ def prepare_message(brain, text, files=(), block=None, block_label=STDIN_LABEL):
         else:
             # Sin instrucción, el bloque (stdin o pegado) es el mensaje.
             text = block
+            text_label = ADJUNTO
 
     warn(warnings + truncation_warnings(attachments))
 
-    return text, attachments, use_actions
+    return text, attachments, use_actions, text_label
 
 
 def make_reader():
@@ -263,8 +281,11 @@ def interactive_mode(brain=None, read=None):
             if prepared is None or not prepared[0].strip():
                 continue
 
-            text, attachments, use_actions = prepared
-            respond(brain, text, prefix="\nAsia: ", attachments=attachments, use_actions=use_actions)
+            text, attachments, use_actions, text_label = prepared
+            respond(
+                brain, text, prefix="\nAsia: ", attachments=attachments,
+                use_actions=use_actions, text_label=text_label
+            )
 
     except (KeyboardInterrupt, EOFError):
         print("\nAsia apagada.")
@@ -395,13 +416,13 @@ def main(argv=None, stdin=None, brain_factory=Brain):
     if prepared is None:
         return 1
 
-    text, attachments, use_actions = prepared
+    text, attachments, use_actions, text_label = prepared
 
     if not text.strip():
         print("No recibí ningún mensaje.", file=sys.stderr)
         return
 
-    respond(brain, text, attachments=attachments, use_actions=use_actions)
+    respond(brain, text, attachments=attachments, use_actions=use_actions, text_label=text_label)
 
 
 if __name__ == "__main__":

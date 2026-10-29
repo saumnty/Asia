@@ -160,6 +160,7 @@ def make_router():
     router.memory = FakeMemory()
     router.providers = {"fake": FakeProvider()}
     router.history = []
+    router.history_labels = []
     router.sticky_model = StickyModel()
     return router
 

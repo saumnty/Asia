@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from config.settings_manager import SettingsManager
+from core.provenance import ARCHIVO, Fragment, record
 from providers.provider_router import SYSTEM_PROMPT
 from tools.debug_context import (
     SPECULATIVE_WARNING,
@@ -97,6 +98,8 @@ class DebugAgentTool:
             return debug_prompt(issue, evidence, context)
 
         ctx = build_debug_context(issue, base, SettingsManager(), render, system_chars=len(SYSTEM_PROMPT))
+        # scan() lee los archivos sin pasar por ToolRegistry: se anotan aquí.
+        record(Fragment(ARCHIVO, ctx.prompt))
         # Opciones de revisión (temperatura baja): con las del chat el formato
         # de EVIDENCIA cambiaba de una ejecución a otra.
         response = self.provider_router.ask(ctx.prompt, review=True)

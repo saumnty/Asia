@@ -119,6 +119,7 @@ def make_router(settings):
     router.project_memory = SimpleNamespace(load_project_summary=lambda name: "")
     router.providers = {"fake": FakeProvider()}
     router.history = []
+    router.history_labels = []
     router.sticky_model = StickyModel()
     return router
 

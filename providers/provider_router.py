@@ -4,6 +4,15 @@ from memory.project_memory import ProjectMemory
 from config.settings_manager import SettingsManager
 from providers.gemini_provider import GeminiProvider
 from core.model_selection import StickyModel, model_for, thinks
+from core.provenance import (
+    DESCONOCIDO,
+    MEMORIA,
+    PROYECTO,
+    Fragment,
+    current_fragments,
+    labels_of,
+    most_restrictive,
+)
 
 
 SYSTEM_PROMPT = (
@@ -33,6 +42,9 @@ class ProviderRouter:
         self.project_memory = ProjectMemory()
         self.providers = {}
         self.history = []
+        # Etiqueta de procedencia de cada mensaje de history (core/provenance.py).
+        self.history_labels = []
+        self.last_fragments = None
         # Modelo del chat: se mantiene mientras siga la conversación.
         self.sticky_model = StickyModel()
 
@@ -85,11 +97,15 @@ class ProviderRouter:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt}
         ]
+        # Lo que leyeron las acciones (archivos, RAG, proyecto) está anotado
+        # en la petición en curso; sin registro, todo cuenta como local.
+        fragments = current_fragments() or [Fragment(DESCONOCIDO, prompt)]
+        self.last_fragments = fragments
 
         try:
             return self._complete(
                 messages, review=review, model=model_for(self.settings, domain),
-                think=thinks(self.settings, domain)
+                think=thinks(self.settings, domain), fragments=fragments
             )
         except ProviderError as e:
             return str(e)
@@ -99,14 +115,20 @@ class ProviderRouter:
 
         history_prompt es lo que se guarda en el historial en lugar de prompt
         (p. ej. el mensaje sin el contenido de los archivos adjuntos).
+
+        Procedencia: la memoria y el resumen del proyecto del prompt de
+        sistema, cada mensaje del historial con la etiqueta que heredó su
+        turno y lo que trae este mensaje (usuario, adjuntos...).
         """
+        memory_context = self.build_memory_context()
+        project_context = self.build_project_context()
         system_prompt = f"""{SYSTEM_PROMPT}
 
 Contexto personal:
-{self.build_memory_context()}
+{memory_context}
 
 Contexto del proyecto:
-{self.build_project_context()}
+{project_context}
 """
 
         user_message = {"role": "user", "content": prompt}
@@ -117,10 +139,25 @@ Contexto del proyecto:
             user_message
         ]
 
+        ambient = []
+
+        if self.memory.load():
+            ambient.append(Fragment(MEMORIA, memory_context))
+
+        if project_context:
+            ambient.append(Fragment(PROYECTO, project_context))
+
+        turn = current_fragments() or [Fragment(DESCONOCIDO, prompt)]
+        past = [Fragment(label, m["content"]) for m, label in zip(self.history, self.history_labels)]
+        fragments = ambient + past + turn
+        self.last_fragments = fragments
+
         try:
             model = self.sticky_model.choose(prompt, self.settings)
             think = thinks(self.settings, self.sticky_model.domain)
-            answer = self._complete(messages, on_chunk=on_chunk, model=model, think=think)
+            answer = self._complete(
+                messages, on_chunk=on_chunk, model=model, think=think, fragments=fragments
+            )
         except ProviderError as e:
             if on_chunk:
                 on_chunk(str(e))
@@ -130,13 +167,19 @@ Contexto del proyecto:
         if history_prompt is not None:
             user_message = {"role": "user", "content": history_prompt}
 
+        # El turno (pregunta y respuesta) hereda la etiqueta más restrictiva
+        # de lo que lo originó: una respuesta sobre un adjunto queda local.
+        label = most_restrictive(labels_of(turn) | labels_of(ambient))
+
         self.history.append(user_message)
         self.history.append({"role": "assistant", "content": answer})
+        self.history_labels += [label, label]
         self.history = self.history[-MAX_HISTORY_MESSAGES:]
+        self.history_labels = self.history_labels[-MAX_HISTORY_MESSAGES:]
 
         return answer
 
-    def _complete(self, messages: list[dict], on_chunk=None, review=False, model=None, think=False) -> str:
+    def _complete(self, messages: list[dict], on_chunk=None, review=False, model=None, think=False, fragments=None) -> str:
         provider_name = self.settings.get("default_provider", "ollama")
 
         try:
