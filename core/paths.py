@@ -25,6 +25,10 @@ BACKUPS_DIR = MEMORY_DIR / "backups"
 DATA_DIR = PROJECT_ROOT / "data"
 CHROMA_DIR = DATA_DIR / "chroma"
 
+LOGS_DIR = PROJECT_ROOT / "logs"
+# Una línea por envío a un proveedor externo, sin el texto (fase G).
+EXTERNAL_AUDIT_FILE = LOGS_DIR / "external_audit.jsonl"
+
 
 def has_ignored_part(path: Path, root: Path, ignored: set[str]) -> bool:
     """True si alguna parte de path, relativa a root, está en ignored.

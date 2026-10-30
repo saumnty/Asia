@@ -64,6 +64,8 @@ class OutgoingRequest:
     turn: list
     external_messages: list = None
     omitted: list = field(default_factory=list)
+    # Etiquetas del contexto de fondo que sí van en external_messages (memoria permitida...).
+    exported_ambient: list = field(default_factory=list)
 
     def __post_init__(self):
         if self.external_messages is None:

@@ -12,6 +12,7 @@ from core.confidential import (
     is_local_mode,
     outgoing_messages,
 )
+from core.audit import log_external_send
 from core.model_selection import StickyModel, model_for, thinks
 from core.secrets_filter import describe as describe_secrets, redact_messages, safe_error
 from core.provenance import (
@@ -228,12 +229,16 @@ Contexto del proyecto:
 
         system = SYSTEM_PROMPT + (f"\n\nContexto personal:\n{memory_context}\n" if memory_ok else "")
         history = [m for m, label in zip(self.history, self.history_labels) if label in exportable]
+        exported = {label for label in self.history_labels if label in exportable}
+
+        if memory_ok:
+            exported.add(MEMORIA)
 
         if len(history) < len(self.history):
             omitted.append(f"{len(self.history) - len(history)} mensajes del historial")
 
         external = [{"role": "system", "content": system}, *history, user_message]
-        return OutgoingRequest(messages, turn, external, omitted)
+        return OutgoingRequest(messages, turn, external, omitted, sorted(exported))
 
     # --- Envío con la política del modo confidencial ---------------------------
 
@@ -256,9 +261,11 @@ Contexto del proyecto:
             return provider.complete(request.messages, on_chunk=on_chunk, review=review, model=model, think=think)
 
         decision = check(request, self.settings, authorized)
+        authorization = "una vez" if authorized else "exportable"
 
         if not decision.allowed and self._confirmed_by_flag(name, request, decision):
             decision = check(request, self.settings, authorized=True)
+            authorization = "--allow-external"
 
         if not decision.allowed:
             raise ExternalBlocked(name, decision)
@@ -275,12 +282,17 @@ Contexto del proyecto:
             if on_chunk:
                 on_chunk(notice)
 
+        # La bitácora guarda el envío aunque el proveedor falle: el texto ya salió.
+        labels = labels_of(request.turn) | set(request.exported_ambient)
+
         try:
             answer = provider.complete(messages, on_chunk=on_chunk, review=review, model=model, think=think)
         except Exception as e:
+            log_external_send(name, model, labels, messages, authorization, len(secrets), ok=False)
             # El error de un proveedor externo no debe mostrar la clave.
             raise RuntimeError(safe_error(e)) from None
 
+        log_external_send(name, model, labels, messages, authorization, len(secrets))
         return notice + answer
 
     def _confirmed_by_flag(self, name, request, decision) -> bool:

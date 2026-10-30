@@ -12,3 +12,6 @@ test/data/chroma/
 # Ajustes locales: Asia los escribe al cambiar provider o proyecto.
 # Los valores por defecto viven en config/defaults.json.
 config/settings.json
+
+# Bitácora de envíos externos (fase G): solo metadatos, nunca el texto.
+logs/

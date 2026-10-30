@@ -5,8 +5,10 @@
   autorización vale una vez y no se guarda.
 - "modo local": no sale nada de esta máquina (ni la memoria ni lo
   tecleado) hasta "modo normal" o hasta salir de Asia.
+- "qué has enviado afuera": resumen de logs/external_audit.jsonl.
 """
 from core.actions.models import command_text, set_session
+from core.audit import summary as audit_summary
 from core.confidential import LOCAL_MODE
 
 AUTHORIZE_PHRASES = {
@@ -17,6 +19,10 @@ CONFIRM_PHRASES = {"confirmar envio", "confirmo envio", "confirmo el envio", "co
 CANCEL_PHRASES = {"cancelar envio", "cancela el envio", "cancelar el envio"}
 LOCAL_PHRASES = {"modo local", "activa el modo local", "pasa a modo local"}
 NORMAL_PHRASES = {"modo normal", "sal del modo local", "salir del modo local", "desactiva el modo local"}
+AUDIT_PHRASES = {
+    "que has enviado afuera", "que enviaste afuera", "que has enviado fuera",
+    "que has mandado afuera", "muestra la bitacora de envios", "bitacora de envios",
+}
 
 
 def confidential_command(text: str):
@@ -29,6 +35,7 @@ def confidential_command(text: str):
         ("cancel", CANCEL_PHRASES),
         ("local", LOCAL_PHRASES),
         ("normal", NORMAL_PHRASES),
+        ("audit", AUDIT_PHRASES),
     ):
         if command in phrases:
             return name
@@ -48,6 +55,9 @@ class ConfidentialActions:
 
         if name == "cancel":
             return router.cancel_authorization()
+
+        if name == "audit":
+            return audit_summary()
 
         if name == "local":
             set_session(confidential_mode=LOCAL_MODE)
