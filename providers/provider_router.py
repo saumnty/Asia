@@ -50,8 +50,14 @@ CHAT_RULES = (
 
 BRIEF_REMINDER = "\n\n(Responde en 2 a 5 frases.)"
 
+# En modo voz la respuesta se escucha: más corta, y sin listas. Con "2 a 5
+# frases" el 7B contestaba "sobre el blog de notas" con una lista de 5
+# puntos de varias frases cada uno (284 tokens, 85 s de audio): contaba cada
+# punto como una frase. CHAT_RULES no cambia (el prompt de sistema sigue en caché).
+VOICE_REMINDER = "\n\n(Responde en 1 a 3 frases, en un solo párrafo, sin listas: se va a leer en voz alta.)"
+
 # Los mismos que answer_limits.chat en config/defaults.json, por si falta la clave.
-DEFAULT_CHAT_LIMITS = {"tokens": 350, "detail_tokens": 1500}
+DEFAULT_CHAT_LIMITS = {"tokens": 350, "detail_tokens": 1500, "voice_tokens": 150}
 
 DETAIL_REQUEST = re.compile(
     r"\b(a fondo|en detalle|con detalle|detallad[oa]s?|detalladamente|dame (unos |algunos )?ejemplos"
@@ -208,7 +214,11 @@ Contexto del proyecto:
         # Con la regla solo en el prompt de sistema, el 7B la ignoraba (350
         # tokens ante "qué es un grafo bipartito"): se recuerda al final del
         # mensaje. No se guarda en el historial.
-        reminder = BRIEF_REMINDER if max_tokens and not wants_detail(history_prompt or prompt) else ""
+        reminder = ""
+
+        if max_tokens and not wants_detail(history_prompt or prompt):
+            reminder = VOICE_REMINDER if self.voice_mode() else BRIEF_REMINDER
+
         user_message = {"role": "user", "content": prompt + reminder}
 
         messages = [
@@ -256,7 +266,8 @@ Contexto del proyecto:
         return answer
 
     def chat_max_tokens(self, text, think):
-        """Tope de la respuesta del chat (answer_limits.chat): más alto si se pide detalle.
+        """Tope de la respuesta del chat (answer_limits.chat): más alto si se pide detalle
+        y más bajo en modo voz (voice_tokens).
 
         Con razonamiento (math con qwen3) no hay tope: num_predict cuenta
         también los tokens del razonamiento y lo cortaría.
@@ -265,7 +276,17 @@ Contexto del proyecto:
             return None
 
         limits = {**DEFAULT_CHAT_LIMITS, **((self.settings.get("answer_limits") or {}).get("chat") or {})}
-        return limits["detail_tokens"] if wants_detail(text) else limits["tokens"]
+
+        if wants_detail(text):
+            return limits["detail_tokens"]
+
+        return limits["voice_tokens"] if self.voice_mode() else limits["tokens"]
+
+    def voice_mode(self):
+        """"/voz" o --voz: la respuesta se lee en voz alta."""
+        from core.actions.voice import VOICE_SETTING
+
+        return bool(self.settings.get(VOICE_SETTING))
 
     def external_chat_request(self, messages, turn, memory_context, project_context, user_message):
         """El chat completo y su versión para fuera, sin el contexto de fondo local."""

@@ -19,6 +19,8 @@ HEADER = re.compile(r"^\s{0,3}#{1,6}\s*")
 BULLET = re.compile(r"^\s*(?:[-*+•]|\d+[.)])\s+")
 QUOTE = re.compile(r"^\s*>\s?")
 EMPHASIS = re.compile(r"(\*\*|__|\*|_)(?=\S)(.+?)(?<=\S)\1")
+# Avisos de Asia entre corchetes ("[Respuesta recortada en 150 tokens ...]").
+NOTICE = re.compile(r"^\s*\[[^\]]*\]\s*$")
 
 
 def to_speakable(text: str) -> str:
@@ -35,6 +37,9 @@ def to_speakable(text: str) -> str:
 
         if INDENTED_CODE.match(line):
             had_code = True
+            continue
+
+        if NOTICE.match(line):
             continue
 
         line = HEADER.sub("", line)
