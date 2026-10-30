@@ -53,6 +53,14 @@ def review_options(settings) -> dict:
     }
 
 
+def cut_notice(response, max_tokens) -> str:
+    """Aviso si Ollama cortó la respuesta por el tope (done_reason "length")."""
+    if not max_tokens or response is None or response.get("done_reason") != "length":
+        return ""
+
+    return f"\n\n[Respuesta recortada en {max_tokens} tokens (answer_limits en config).]"
+
+
 class OllamaProvider:
     def __init__(self):
         self.settings = SettingsManager()
@@ -91,7 +99,7 @@ class OllamaProvider:
             )
             ollama_metrics(response)
 
-            return strip_think(response["message"]["content"])
+            return strip_think(response["message"]["content"]) + cut_notice(response, max_tokens)
 
         stream = self.client.chat(
             model=model,
@@ -116,6 +124,8 @@ class OllamaProvider:
         # El último fragmento (done) trae las métricas de la respuesta.
         ollama_metrics(last)
         rest = visible.flush()
+
+        rest += cut_notice(last, max_tokens)
 
         if rest:
             on_chunk(rest)

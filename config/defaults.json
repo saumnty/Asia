@@ -62,8 +62,8 @@
     ],
 
     "answer_limits": {
-        "explain_file": {"words": 300, "tokens": 700},
-        "summarize_file": {"words": 150, "tokens": 400}
+        "explain_file": {"words": 150, "tokens": 450},
+        "summarize_file": {"words": 100, "tokens": 300}
     },
 
     "context_limits": {

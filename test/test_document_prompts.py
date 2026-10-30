@@ -112,3 +112,31 @@ def test_el_router_pasa_el_tope_al_proveedor():
 def test_limits_sin_tope():
     assert OutgoingRequest([], []).limits() == {}
     assert OutgoingRequest([], [], max_tokens=10).limits() == {"max_tokens": 10}
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_aviso_si_ollama_corta_por_el_tope(stream):
+    class Client:
+        def ps(self):
+            raise ConnectionError
+
+        def show(self, model):
+            raise ConnectionError
+
+        def chat(self, stream=False, **kwargs):
+            final = {"message": {"content": "texto"}, "done": True, "done_reason": "length"}
+            return iter([final]) if stream else final
+
+    provider = OllamaProvider.__new__(OllamaProvider)
+    provider.settings = SettingsManager()
+    provider.client = Client()
+    chunks = []
+
+    answer = provider.complete([{"role": "user", "content": "x"}], max_tokens=450,
+                               on_chunk=chunks.append if stream else None)
+
+    assert answer == "texto\n\n[Respuesta recortada en 450 tokens (answer_limits en config).]"
+    assert not stream or "".join(chunks) == answer
+
+    # Sin tope no hay aviso aunque Ollama diga "length" (num_ctx).
+    assert provider.complete([{"role": "user", "content": "x"}]) == "texto"

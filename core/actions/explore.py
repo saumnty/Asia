@@ -5,8 +5,8 @@ from core import prompts
 
 # Los mismos que config/defaults.json, por si falta la clave.
 DEFAULT_ANSWER_LIMITS = {
-    "explain_file": {"words": 300, "tokens": 700},
-    "summarize_file": {"words": 150, "tokens": 400},
+    "explain_file": {"words": 150, "tokens": 450},
+    "summarize_file": {"words": 100, "tokens": 300},
 }
 
 

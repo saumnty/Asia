@@ -74,6 +74,8 @@ Ruta del documento:
 
 Contenido:
 {content}
+
+Responde en {words} palabras como máximo.
 """
 
 
@@ -149,6 +151,8 @@ Documento:
 
 Contenido:
 {content}
+
+Responde en {words} palabras como máximo: resume, no copies el documento.
 """
 
 
