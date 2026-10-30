@@ -9,7 +9,7 @@ class GeminiProvider:
         self.client = genai.Client()
         self.model = self.settings.get("gemini_model", "gemini-2.5-flash")
 
-    def complete(self, messages: list[dict], on_chunk=None, review=False, model=None, think=False) -> str:
+    def complete(self, messages: list[dict], on_chunk=None, review=False, model=None, think=False, max_tokens=None) -> str:
         """Envía los mensajes y devuelve la respuesta completa.
 
         Si se pasa on_chunk, la respuesta se transmite en streaming y cada
@@ -34,7 +34,8 @@ class GeminiProvider:
         ]
 
         config = types.GenerateContentConfig(
-            system_instruction=system_instruction or None
+            system_instruction=system_instruction or None,
+            max_output_tokens=max_tokens
         )
 
         if on_chunk is None:

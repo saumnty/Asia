@@ -1,5 +1,13 @@
 """Lectura y explicación de archivos y proyectos, y búsqueda con RAG."""
+from pathlib import Path
+
 from core import prompts
+
+# Los mismos que config/defaults.json, por si falta la clave.
+DEFAULT_ANSWER_LIMITS = {
+    "explain_file": {"words": 300, "tokens": 700},
+    "summarize_file": {"words": 150, "tokens": 400},
+}
 
 
 class ExploreActions:
@@ -26,8 +34,14 @@ class ExploreActions:
             file_path=file_path,
             max_chars=self.limit("summarize_file")
         )
+        limits = self.answer_limits("summarize_file")
 
-        return self.provider_router.ask(prompts.summarize_file(file_path, content))
+        if self.is_document(file_path):
+            prompt = prompts.summarize_document(file_path, content, limits["words"])
+        else:
+            prompt = prompts.summarize_file(file_path, content)
+
+        return self.provider_router.ask(prompt, max_tokens=limits["tokens"])
 
     def handle_summarize_folder(self, text, params):
         folder_path = params.get("folder_path", ".")
@@ -76,8 +90,25 @@ class ExploreActions:
             file_path=file_path,
             max_chars=self.limit("explain_file")
         )
+        limits = self.answer_limits("explain_file")
 
-        return self.provider_router.ask(prompts.explain_file(file_path, content))
+        # Un .md o .txt no tiene clases ni métodos: plantilla de documento.
+        if self.is_document(file_path):
+            prompt = prompts.explain_document(file_path, content, limits["words"])
+        else:
+            prompt = prompts.explain_file(file_path, content)
+
+        return self.provider_router.ask(prompt, max_tokens=limits["tokens"])
+
+    def is_document(self, file_path):
+        """True si no es código (.md, .txt, .json...): ver code_extensions en config."""
+        code = {ext.lower() for ext in self.settings.get("code_extensions") or []}
+        return bool(code) and Path(file_path).suffix.lower() not in code
+
+    def answer_limits(self, action):
+        """{"words": ..., "tokens": ...} de answer_limits en config (tokens = num_predict)."""
+        configured = (self.settings.get("answer_limits") or {}).get(action)
+        return configured or DEFAULT_ANSWER_LIMITS[action]
 
     def handle_find_references(self, text, params):
         query = params.get("query")

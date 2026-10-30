@@ -175,8 +175,9 @@ class FakeRouter:
         self.recorder = recorder
         self.responses = list(responses)
 
-    def ask(self, prompt, review=False):
-        self.recorder.add("ask", prompt, review)
+    def ask(self, prompt, review=False, **limits):
+        # El tope de la respuesta (max_tokens) solo se registra si se pasa.
+        self.recorder.add("ask", prompt, review, *([limits] if limits else []))
         return self.responses.pop(0) if self.responses else "respuesta-llm"
 
 

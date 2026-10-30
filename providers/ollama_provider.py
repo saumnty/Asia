@@ -58,7 +58,7 @@ class OllamaProvider:
         self.settings = SettingsManager()
         self.client = ollama.Client(host=self.settings.get("ollama_host"))
 
-    def complete(self, messages: list[dict], on_chunk=None, review=False, model=None, think=False) -> str:
+    def complete(self, messages: list[dict], on_chunk=None, review=False, model=None, think=False, max_tokens=None) -> str:
         """Envía los mensajes y devuelve la respuesta completa.
 
         Si se pasa on_chunk, la respuesta se transmite en streaming y cada
@@ -66,13 +66,19 @@ class OllamaProvider:
         se usan las opciones de revisión (review_options). model elige el
         modelo de esta llamada; sin él, ollama_model. think activa el modo
         de razonamiento en los modelos que lo tienen; el razonamiento no se
-        devuelve, solo la respuesta.
+        devuelve, solo la respuesta. max_tokens limita la longitud de la
+        respuesta (num_predict).
         """
         # Se lee en cada llamada para que un cambio en settings.json se
         # aplique sin reiniciar Asia.
         model = model or self.settings.get("ollama_model")
         unload_others(self.client, model, self.settings)
         extra = review_options(self.settings) if review else {}
+
+        # Tope de la respuesta: num_predict no recarga el modelo (num_ctx sí).
+        if max_tokens:
+            extra["num_predict"] = max_tokens
+
         options = ollama_options(self.settings, messages, **extra)
         thinking = think_kwargs(self.client, model, think)
 

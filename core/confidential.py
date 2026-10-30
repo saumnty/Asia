@@ -91,6 +91,12 @@ class OutgoingRequest:
     exported_ambient: list = field(default_factory=list)
     open_messages: list = None
     open_labels: list = field(default_factory=list)
+    # Tope de tokens de la respuesta (num_predict en Ollama); None, sin tope.
+    max_tokens: int = None
+
+    def limits(self) -> dict:
+        """Argumentos para provider.complete: solo si hay tope."""
+        return {"max_tokens": self.max_tokens} if self.max_tokens else {}
 
     def __post_init__(self):
         if self.external_messages is None:

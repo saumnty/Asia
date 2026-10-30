@@ -58,6 +58,25 @@ Contenido:
 """
 
 
+def summarize_document(file_path, content, words):
+    return f"""
+Resume este documento (no es código) en español, en {words} palabras como máximo.
+
+Incluye:
+1. De qué trata, en una o dos frases.
+2. Los puntos o secciones principales.
+
+No hables de clases, métodos ni funciones. Si el documento está recortado,
+resume solo lo que aparece.
+
+Ruta del documento:
+{file_path}
+
+Contenido:
+{content}
+"""
+
+
 def summarize_folder(folder_path, content):
     return f"""
 Resume esta carpeta/proyecto de forma clara y breve.
@@ -110,6 +129,27 @@ def explain_file(file_path, content):
         Contenido:
         {content}
         """
+
+
+def explain_document(file_path, content, words):
+    return f"""
+Explica este documento (no es código) en español, en {words} palabras como máximo.
+
+Incluye:
+1. Para qué sirve el documento y a quién va dirigido.
+2. Cómo está organizado (secciones principales).
+3. Los puntos más importantes.
+4. Qué falta o qué se podría aclarar, si algo resalta.
+
+No hables de clases, métodos ni funciones: es un documento, no un programa.
+Si el documento está recortado, explica solo lo que aparece.
+
+Documento:
+{file_path}
+
+Contenido:
+{content}
+"""
 
 
 def find_references(query, raw_results):

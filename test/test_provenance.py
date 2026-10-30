@@ -99,7 +99,7 @@ class RecordingRouter:
     def __init__(self):
         self.fragments = []
 
-    def ask(self, prompt, review=False, domain="code"):
+    def ask(self, prompt, review=False, domain="code", **limits):
         self.fragments.append(current_fragments())
         return "respuesta"
 

@@ -359,7 +359,10 @@
    [
     "ask",
     "\nResume este archivo de forma clara.\n\nRuta del archivo:\na.py\n\nContenido:\ndef f():\n    print(\"hola\")\n    return None\n\n",
-    false
+    false,
+    {
+     "max_tokens": 400
+    }
    ]
   ]
  },
@@ -434,7 +437,10 @@
    [
     "ask",
     "\n        Actúa como arquitecto de software.\n\n        Explica este archivo.\n\n        Incluye:\n\n        1. Objetivo del archivo\n        2. Clases principales\n        3. Métodos importantes\n        4. Cómo interactúa con otros componentes\n        5. Posibles mejoras\n\n        Archivo:\n        a.py\n\n        Contenido:\n        def f():\n    print(\"hola\")\n    return None\n\n        ",
-    false
+    false,
+    {
+     "max_tokens": 700
+    }
    ]
   ]
  },

@@ -61,6 +61,11 @@
         ".html", ".css", ".sdf", ".urdf", ".launch"
     ],
 
+    "answer_limits": {
+        "explain_file": {"words": 300, "tokens": 700},
+        "summarize_file": {"words": 150, "tokens": 400}
+    },
+
     "context_limits": {
         "summarize_file": 6000,
         "explain_file": 8000,

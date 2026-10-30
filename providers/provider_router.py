@@ -116,7 +116,7 @@ class ProviderRouter:
 
         return summary
 
-    def ask(self, prompt: str, review=False, domain="code") -> str:
+    def ask(self, prompt: str, review=False, domain="code", max_tokens=None) -> str:
         """Llamada de un solo turno, sin historial de chat ni contexto personal.
 
         La usan las acciones internas (resúmenes, revisiones, generación de
@@ -134,7 +134,7 @@ class ProviderRouter:
         # en la petición en curso; sin registro, todo cuenta como local.
         fragments = current_fragments() or [Fragment(DESCONOCIDO, prompt)]
         self.last_fragments = fragments
-        request = OutgoingRequest(messages, fragments)
+        request = OutgoingRequest(messages, fragments, max_tokens=max_tokens)
         options = {
             "review": review,
             "model": model_for(self.settings, domain),
@@ -276,7 +276,7 @@ Contexto del proyecto:
         provider = self.get_provider(name)
 
         if not is_external(name, self.settings):
-            return self._call(name, provider, request.messages, on_chunk=on_chunk, review=review, model=model, think=think)
+            return self._call(name, provider, request.messages, on_chunk=on_chunk, review=review, model=model, think=think, **request.limits())
 
         decision = check(request, self.settings, authorized)
         open_mode = is_open_mode(self.settings)
@@ -311,7 +311,7 @@ Contexto del proyecto:
         labels = labels_of(request.turn) | set(request.open_labels if open_mode else request.exported_ambient)
 
         try:
-            answer = self._call(name, provider, messages, on_chunk=on_chunk, review=review, model=model, think=think)
+            answer = self._call(name, provider, messages, on_chunk=on_chunk, review=review, model=model, think=think, **request.limits())
         except Exception as e:
             log_external_send(name, model, labels, messages, authorization, len(secrets), ok=False)
             # El error de un proveedor externo no debe mostrar la clave.
@@ -366,9 +366,9 @@ Contexto del proyecto:
 
             if on_chunk:
                 on_chunk(f"{notice} Respondo con el modelo local (ollama).{hint}\n\n")
-                answer = self._call("ollama", local, request.messages, on_chunk=on_chunk, review=review, model=model, think=think)
+                answer = self._call("ollama", local, request.messages, on_chunk=on_chunk, review=review, model=model, think=think, **request.limits())
             else:
-                answer = self._call("ollama", local, request.messages, review=review, model=model, think=think)
+                answer = self._call("ollama", local, request.messages, review=review, model=model, think=think, **request.limits())
         except Exception as e:
             raise ProviderError(
                 f"{notice} El modelo local (ollama) tampoco respondió: {e}. "
