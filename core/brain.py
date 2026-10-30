@@ -13,6 +13,8 @@ from core.actions.timing import TimingActions, timing_command
 from core import timing
 from core.commands import is_launcher_command, options_text, resolve as resolve_command, unknown_message as unknown_command
 from core.session import Session
+from core.fast_chat import is_clear_chat
+from tools.app_tool import AppTool
 from core.provenance import USUARIO, Fragment, request_sources
 # wants_synthesis y wants_unverified se importan desde aquí en las pruebas.
 from core.actions.sandbox import RUN_CANCEL_PHRASES, RUN_CONFIRM_PHRASES, SandboxActions, normalized_command
@@ -169,6 +171,13 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         """Límite de contexto configurado en context_limits (settings)."""
         return self.settings.get("context_limits")[name]
 
+    def app_names(self):
+        """Nombres de apps conocidas: con uno en el mensaje decide el IntentEngine."""
+        try:
+            return list(AppTool().known_apps())
+        except Exception:
+            return []
+
     def active_project(self):
         return self.settings.get("active_project").lower().strip()
 
@@ -235,6 +244,11 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
         if timing_cmd:
             return self.handle_timing_command(timing_cmd)
+
+        # Charla clara (saludo, gracias, "qué es X"): directo al chat, sin
+        # los ~20 s del IntentEngine (core/fast_chat.py).
+        if is_clear_chat(text, self.app_names()):
+            return None
 
         with timing.intent_stage():
             intent = self.intent_engine.detect(text)

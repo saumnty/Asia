@@ -23,7 +23,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from config.settings_manager import SettingsManager
+from core.fast_chat import is_clear_chat
 from core.intent_engine import IntentEngine
+from tools.app_tool import AppTool
 
 # Así llegan al IntentEngine los mensajes con @ruta: el launcher cambia
 # @ruta por la ruta absoluta.
@@ -75,12 +77,37 @@ EXPECTED = [
 ]
 assert len(EXPECTED) == len(MESSAGES)
 
+# Charla que debe ir al chat; con la ruta rápida (core/fast_chat.py), sin el
+# IntentEngine.
+CHAT_CASES = [
+    "hola",
+    "buenos días",
+    "qué tal",
+    "si",
+    "ok",
+    "muchas gracias",
+    "qué es un grafo bipartito",
+    "¿qué es una closure en Python?",
+    "quién fue Alan Turing",
+    "cómo funciona la fotosíntesis",
+    "qué significa la complejidad O(n log n)",
+    "cuál es la diferencia entre TCP y UDP",
+]
 
-def classify(engine, runs):
+
+def classify(engine, runs, fast=True):
+    """fast: aplica la ruta rápida como Brain (la charla no llama al IntentEngine)."""
     results = {}
     first_seconds = None
+    apps = list(AppTool().known_apps())
+    expected_by_message = dict(zip(MESSAGES, EXPECTED)) | dict.fromkeys(CHAT_CASES, "chat")
 
-    for message in MESSAGES:
+    for message in expected_by_message:
+        if fast and is_clear_chat(message, apps):
+            results[message] = {"action": "chat", "params": {}, "estable": True, "segundos": 0.0, "ruta": "rápida"}
+            print(f"{'chat (ruta rápida)':22} {message}", flush=True)
+            continue
+
         intents = []
         seconds = []
 
@@ -102,13 +129,14 @@ def classify(engine, runs):
         flag = "" if results[message]["estable"] else f"  INESTABLE: {intents}"
         print(f"{intents[0].get('action'):22} {message}{flag}", flush=True)
 
-    wrong = [(m, e, results[m]["action"]) for m, e in zip(MESSAGES, EXPECTED) if results[m]["action"] != e]
-    print(f"\nAcción correcta: {len(MESSAGES) - len(wrong)} de {len(MESSAGES)}")
+    wrong = [(m, e, results[m]["action"]) for m, e in expected_by_message.items() if results[m]["action"] != e]
+    print(f"\nAcción correcta: {len(results) - len(wrong)} de {len(results)}")
+    print(f"Por la ruta rápida: {sum(1 for r in results.values() if r.get('ruta'))}")
 
     for message, expected, got in wrong:
         print(f"  MAL: {message!r}: {got} (esperada {expected})")
 
-    loaded = [r["segundos"] for r in results.values() if r["segundos"] is not None]
+    loaded = [r["segundos"] for r in results.values() if r["segundos"] is not None and not r.get("ruta")]
     print(f"\nPrimera llamada (con carga del modelo): {first_seconds:.1f} s")
     print(f"Ya cargado: {sum(loaded) / len(loaded):.2f} s por mensaje de media")
 
@@ -120,6 +148,7 @@ def main():
     parser.add_argument("--runs", type=int, default=2)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--compare", type=Path, help="JSON de una medición anterior")
+    parser.add_argument("--sin-ruta-rapida", action="store_true", help="todo pasa por el IntentEngine")
     parser.add_argument("--model", help="intent_model para esta medición (no cambia settings.json)")
     args = parser.parse_args()
 
@@ -127,14 +156,14 @@ def main():
         SettingsManager.set_overrides({"intent_model": args.model})
 
     print(f"intent_model: {SettingsManager().get('intent_model')}\n")
-    results = classify(IntentEngine(), args.runs)
+    results = classify(IntentEngine(), args.runs, fast=not args.sin_ruta_rapida)
 
     if args.out:
         args.out.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
 
     if args.compare:
         before = json.loads(args.compare.read_text(encoding="utf-8"))
-        common = [m for m in MESSAGES if m in before]
+        common = [m for m in results if m in before]
         changed = [m for m in common if before[m].get("action") != results[m]["action"]]
         params = [m for m in common if m not in changed and before[m].get("params") != results[m]["params"]]
         print(f"\n{len(common) - len(changed)} de {len(common)} con la misma acción; "

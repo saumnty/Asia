@@ -195,10 +195,19 @@ def test_el_intent_engine_se_mide(capsys):
     brain = brain_with_ollama()
     brain.intent_engine = SlowIntent()
 
-    launcher.main(["--timing", "hola"], stdin=TTY, brain_factory=lambda: brain)
+    # "hola" iría por la ruta rápida, sin IntentEngine.
+    launcher.main(["--timing", "cuéntame un chiste"], stdin=TTY, brain_factory=lambda: brain)
 
     line = capsys.readouterr().err
     assert "intención 0,0 s" in line
+
+
+def test_la_ruta_rapida_no_mide_intencion(capsys):
+    brain = brain_with_ollama()
+
+    launcher.main(["--timing", "hola"], stdin=TTY, brain_factory=lambda: brain)
+
+    assert "intención —" in capsys.readouterr().err
 
 
 def test_help_documenta_timing(capsys):
