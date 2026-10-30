@@ -66,6 +66,15 @@ Medido con `test/manual/check_speed.py` (una sesión, `qwen2.5-coder:7b`, `num_c
 - La sospecha de la caché no se confirmó: el prompt del IntentEngine tiene 2083–2090 tokens reales y, ya cargado el modelo, se procesa en 0,2–0,9 s cuando Ollama lo tiene en caché y en 3,9–4,6 s cuando no. No explica los ~21 s por mensaje de la sesión del usuario; esos números coinciden con una recarga del modelo antes de cada mensaje (15,8 s de carga + 4,6 s de prompt en la línea base). La línea de tiempos ahora muestra la carga del IntentEngine para confirmarlo. Por eso no se recortó el prompt del IntentEngine ni se le puso `num_predict` (genera 10–20 tokens).
 - Pendiente: averiguar qué descarga el modelo entre mensajes en una sesión interactiva (¿`keep_alive` de 5 minutos entre mensajes espaciados?). Si es eso, un `keep_alive` más largo lo evitaría, a cambio de dejar 5,8 GB ocupados.
 - Lo que más pesa ahora es la generación (5–7 t/s, el 7B corre 59 % en CPU): una respuesta de 200 tokens son ~30 s.
+- Recarga del 7B en la sesión del usuario: con la línea de tiempos nueva, la intención está en 4,3–4,4 s con carga 0,0; los 13 s de carga solo aparecen en el primer mensaje, con el modelo descargado. No es `nomic-embed-text`: solo `search_project_rag` e `index_project_rag` llaman a embeddings, y tres mensajes por el IntentEngine con `ollama ps` antes y después dejaron solo el 7B cargado.
+
+**Segunda tanda** (`e725c0b2`, `8b1267d0`, `01e5545a`, `eda6453b`, y el recordatorio de brevedad): precarga del modelo del IntentEngine al abrir el modo interactivo (en un hilo, con el mismo `num_ctx`: sin él Ollama lo cargaba con 4096 y la primera llamada lo recargaba, 20 s); atajos sin IntentEngine para "abre X" y consultas fijas (`core/fixed_intents.py`; `check_intents.py` 44 de 44 iguales); chat breve por defecto (2 a 5 frases, recordatorio al final del mensaje, `answer_limits.chat`: 350 tokens o 1500 si se pide detalle; sin tope con razonamiento) y sin inventar datos. Medido con `check_speed.py --descargar --espera 15` (modelo descargado y 15 s hasta el primer mensaje):
+
+| Mensaje | Antes | Después |
+|---|---|---|
+| "abre el bloc de notas" (primero) | 21,3 s (intención 21,1: 13,2 de carga) | 0,2 s (atajo; el modelo se carga mientras se escribe) |
+| "muestra el proyecto activo" | 2,5 s (intención) | 0,0 s (atajo) |
+| "qué es un grafo bipartito" | 28,6 s (160 tokens) | 14,6 s (81 tokens, 2 frases) |
 
 ## Fases futuras (diseño pendiente)
 
