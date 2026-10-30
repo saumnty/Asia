@@ -32,6 +32,7 @@ para poder revisar o revertir los cambios.
 | — | Arreglos de la tanda de pruebas manuales: (1) `SIN_HALLAZGOS` escrito después de un hallazgo ya no se filtra al reporte de "revisa a fondo". (2) El aviso de "Ejecución preparada" muestra el código numerado (hasta 40 líneas, con aviso si se recorta) antes de pedir "confirmar ejecución". (3) Si el chequeo de imports hace reescribir el código, la explicación empieza con qué librería usaba y cuál la sustituye ("usaba superjson_mega (no está instalado)… ahora usa json"). (4) `debug_project` sin ninguna cita verificada empieza con "Ninguna evidencia se pudo verificar: el diagnóstico es probablemente especulativo" y etiqueta sus secciones como especulativas. | `1de54649`, `763a6d34`, `7d9f5e47`, `d21455ac` |
 | F. Multi-modelo (parte 1) | Modelo por llamada, `models_by_domain`, dominio por palabras clave, modelo pegajoso en el chat, `--model` para la sesión (solo modelos ya descargados) y un modelo de Ollama en memoria a la vez (`ollama_one_model_at_a_time`). Sin modelos nuevos todavía: los tres dominios usan `qwen2.5-coder:7b`, así que el comportamiento no cambia. Probado con Ollama real: con `nomic-embed-text` cargado, el chat lo descargó antes de cargar qwen. | `1231b36b` |
 | F. Multi-modelo (partes 2 y 3) | Razonamiento solo en `math` (`think_domains`); `math` con `qwen3:4b` (Thinking-2507). Clasificador de dominio que no manda código a `math`. `check_intents.py` con 28 mensajes y acción esperada. `open_app` tolerante a nombres aproximados (`notebook` → Bloc de notas) y con aclaración si no coincide nada. Comandos para ver y cambiar el modelo en la sesión. qwen3:4b-instruct medido y descartado para el IntentEngine (rompía `open_app`). | `91dab1d3`, `d0a093e8`, `07957ee7`, `f8b986df`, `b64c07b6`, `fccf75bd` |
+| G. Modo confidencial | Inventario de las salidas (proveedor principal, fallback, Ollama remoto). Etiquetas de procedencia por petición (`core/provenance.py`): usuario, memoria (`external_allow_memory`, por defecto false), archivo, adjunto, rag, proyecto y emocional (nunca sale). El router no envía contenido local a un proveedor externo: responde el modelo local con aviso, o dice qué pasó si no hay uno; el fallback automático nunca lo lleva; memoria, proyecto y turnos locales del historial se quitan de lo que sale; rutas absolutas por el nombre del archivo. "envía esto a Gemini" + "confirmar envío" o `--allow-external` autorizan una vez, sin guardarse. "modo local"/"modo normal". Ollama fuera de localhost cuenta como externo salvo `trusted_local_hosts`. "cambia el provider" solo para la sesión. Filtro de secretos (`external_secret_policy`: redact/block) y la clave de Gemini fuera de prompts y errores. Bitácora `logs/external_audit.jsonl` sin texto y "qué has enviado afuera". Pruebas (a)-(f) y `test/manual/check_confidencial.py` (6 de 6). | `10e19aa2`, `2689b185`, `774a9308`, `97a2471d`, `9bb4d9da` |
 
 ## Próximas fases
 
@@ -184,9 +185,14 @@ Ciclo: planear -> generar -> ejecutar en sandbox -> verificar -> reparar, con cr
 
 ### Confidencialidad
 
-- Modo solo-local (ningún dato sale a proveedores externos).
-- Modo que entrega a proveedores externos únicamente contexto de memoria, sin código.
-- Registro de auditoría de lo que sale hacia afuera.
+Hecho en la fase G (ver la tabla). Pendientes:
+- Con Ollama en otra máquina (fuera de `trusted_local_hosts`), el IntentEngine recibe lo tecleado con las rutas absolutas: hacen falta para que las acciones encuentren los archivos.
+- "envía esto a Gemini" reenvía solo el último prompt: en una acción de varias llamadas (`review_project`) es la síntesis. Para esas, `--allow-external`.
+- La respuesta de un envío autorizado no se agrega al historial del chat.
+- La procedencia es por petición, no por carácter: si una acción lee un archivo, todo su prompt cuenta como local aunque use una parte. Peca de restrictiva.
+- El filtro de secretos es por patrones: en código da falsos positivos (`token = obtener()`) y no reconoce secretos sin formato conocido.
+- Con Ollama remoto no confiable, el RAG no indexa ni busca; no hay forma de autorizarlo una vez.
+- La etiqueta "emocional" existe pero todavía nada la produce.
 
 ### Voz y avatar
 
