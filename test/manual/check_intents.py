@@ -24,6 +24,7 @@ sys.path.insert(0, str(ROOT))
 
 from config.settings_manager import SettingsManager
 from core.fast_chat import is_clear_chat
+from core.fixed_intents import fixed_intent
 from core.intent_engine import IntentEngine
 from tools.app_tool import AppTool
 
@@ -94,18 +95,34 @@ CHAT_CASES = [
     "cuál es la diferencia entre TCP y UDP",
 ]
 
+# Órdenes fijas que van por un atajo (core/fixed_intents.py), con su acción.
+FIXED_CASES = {
+    "abre chrome": "open_app",
+    "abrir spotify": "open_app",
+    "muestra el proyecto activo": "show_active_project",
+    "¿qué proyecto está activo?": "show_active_project",
+    "qué provider estás usando?": "show_settings",
+}
+
 
 def classify(engine, runs, fast=True):
     """fast: aplica la ruta rápida como Brain (la charla no llama al IntentEngine)."""
     results = {}
     first_seconds = None
     apps = list(AppTool().known_apps())
-    expected_by_message = dict(zip(MESSAGES, EXPECTED)) | dict.fromkeys(CHAT_CASES, "chat")
+    expected_by_message = dict(zip(MESSAGES, EXPECTED)) | dict.fromkeys(CHAT_CASES, "chat") | FIXED_CASES
 
     for message in expected_by_message:
         if fast and is_clear_chat(message, apps):
             results[message] = {"action": "chat", "params": {}, "estable": True, "segundos": 0.0, "ruta": "rápida"}
             print(f"{'chat (ruta rápida)':22} {message}", flush=True)
+            continue
+
+        fixed = fixed_intent(message) if fast else None
+
+        if fixed:
+            results[message] = {**fixed, "estable": True, "segundos": 0.0, "ruta": "atajo"}
+            print(f"{fixed['action'] + ' (atajo)':22} {message}", flush=True)
             continue
 
         intents = []
@@ -131,7 +148,8 @@ def classify(engine, runs, fast=True):
 
     wrong = [(m, e, results[m]["action"]) for m, e in expected_by_message.items() if results[m]["action"] != e]
     print(f"\nAcción correcta: {len(results) - len(wrong)} de {len(results)}")
-    print(f"Por la ruta rápida: {sum(1 for r in results.values() if r.get('ruta'))}")
+    print(f"Por la ruta rápida: {sum(1 for r in results.values() if r.get('ruta') == 'rápida')}")
+    print(f"Por un atajo: {sum(1 for r in results.values() if r.get('ruta') == 'atajo')}")
 
     for message, expected, got in wrong:
         print(f"  MAL: {message!r}: {got} (esperada {expected})")

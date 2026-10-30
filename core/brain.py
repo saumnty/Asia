@@ -14,6 +14,7 @@ from core import timing
 from core.commands import is_launcher_command, options_text, resolve as resolve_command, unknown_message as unknown_command
 from core.session import Session
 from core.fast_chat import is_clear_chat
+from core.fixed_intents import fixed_intent
 from tools.app_tool import AppTool
 from core.provenance import USUARIO, Fragment, request_sources
 # wants_synthesis y wants_unverified se importan desde aquí en las pruebas.
@@ -262,8 +263,13 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         if is_clear_chat(text, self.app_names()):
             return None
 
-        with timing.intent_stage():
-            intent = self.intent_engine.detect(text)
+        # Órdenes inequívocas ("abre X", "muestra el proyecto activo"): sin
+        # IntentEngine (core/fixed_intents.py).
+        intent = fixed_intent(text)
+
+        if intent is None:
+            with timing.intent_stage():
+                intent = self.intent_engine.detect(text)
 
         action = intent.get("action")
         params = intent.get("params")
