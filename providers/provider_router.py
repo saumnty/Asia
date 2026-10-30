@@ -48,6 +48,8 @@ CHAT_RULES = (
     'concreto, dilo ("no estoy seguro") en lugar de rellenar.'
 )
 
+BRIEF_REMINDER = "\n\n(Responde en 2 a 5 frases.)"
+
 # Los mismos que answer_limits.chat en config/defaults.json, por si falta la clave.
 DEFAULT_CHAT_LIMITS = {"tokens": 350, "detail_tokens": 1500}
 
@@ -199,7 +201,15 @@ Contexto del proyecto:
 {project_context}
 """
 
-        user_message = {"role": "user", "content": prompt}
+        model = self.sticky_model.choose(prompt, self.settings)
+        options = {"model": model, "think": thinks(self.settings, self.sticky_model.domain)}
+        max_tokens = self.chat_max_tokens(history_prompt or prompt, options["think"])
+
+        # Con la regla solo en el prompt de sistema, el 7B la ignoraba (350
+        # tokens ante "qué es un grafo bipartito"): se recuerda al final del
+        # mensaje. No se guarda en el historial.
+        reminder = BRIEF_REMINDER if max_tokens and not wants_detail(history_prompt or prompt) else ""
+        user_message = {"role": "user", "content": prompt + reminder}
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -220,9 +230,7 @@ Contexto del proyecto:
         self.last_fragments = ambient + past + turn
 
         request = self.external_chat_request(messages, turn, memory_context, project_context, user_message)
-        model = self.sticky_model.choose(prompt, self.settings)
-        options = {"model": model, "think": thinks(self.settings, self.sticky_model.domain)}
-        request.max_tokens = self.chat_max_tokens(history_prompt or prompt, options["think"])
+        request.max_tokens = max_tokens
         self.last_request = (request, options)
 
         try:
@@ -233,8 +241,7 @@ Contexto del proyecto:
 
             return str(e)
 
-        if history_prompt is not None:
-            user_message = {"role": "user", "content": history_prompt}
+        user_message = {"role": "user", "content": prompt if history_prompt is None else history_prompt}
 
         # El turno (pregunta y respuesta) hereda la etiqueta más restrictiva
         # de lo que lo originó: una respuesta sobre un adjunto queda local.

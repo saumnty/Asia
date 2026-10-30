@@ -93,3 +93,27 @@ def test_las_acciones_no_llevan_las_reglas_del_chat():
 
     messages, kwargs = provider.calls[0]
     assert CHAT_RULES not in messages[0]["content"] and "max_tokens" not in kwargs
+
+
+def test_recordatorio_al_final_del_mensaje_y_no_en_el_historial():
+    from providers.provider_router import BRIEF_REMINDER
+
+    SettingsManager.set_overrides({})
+    brain = make_brain()
+    provider = Recording()
+    brain.provider_router.providers["ollama"] = provider
+
+    with request_sources(Fragment(USUARIO, "qué es un grafo")):
+        brain.provider_router.chat("qué es un grafo")
+
+    messages, _ = provider.calls[0]
+    assert messages[-1]["content"] == "qué es un grafo" + BRIEF_REMINDER
+    assert brain.provider_router.history[0]["content"] == "qué es un grafo"
+
+
+def test_sin_recordatorio_si_se_pide_detalle():
+    from providers.provider_router import BRIEF_REMINDER
+
+    messages, _ = chat("explica a fondo qué es un grafo")
+
+    assert BRIEF_REMINDER not in messages[-1]["content"]
