@@ -4,6 +4,7 @@ El launcher abre una medición por mensaje (measure_request) solo si los
 tiempos están activos; sin medición abierta, nada se registra y el
 comportamiento no cambia. Se anotan:
 - el IntentEngine (intent_stage, desde Brain);
+- en modo voz, la voz a texto y el texto a voz (record_voice);
 - cada llamada a un proveedor (timed, desde ProviderRouter), con las
   métricas que devuelve Ollama (ollama_metrics: carga del modelo,
   procesamiento del prompt y tokens generados). Gemini no las da: solo su
@@ -41,6 +42,12 @@ class Timings:
     calls: list = field(default_factory=list)
     # Métricas de Ollama de la llamada en curso (las recoge timed).
     pending: dict = None
+    # Modo voz: (segundos de proceso, segundos de audio) de voz a texto y de
+    # texto a voz. answered: cuándo estuvo la respuesta en pantalla (el
+    # total no incluye lo que dura la lectura en voz alta).
+    stt: tuple = None
+    tts: tuple = None
+    answered: float = None
 
 
 _current = ContextVar("asia_timings", default=None)
@@ -161,10 +168,32 @@ def intent_part(timings: Timings) -> str:
     return f"{text} ({prompt}, {call.tokens or 0} generados{load})"
 
 
+def record_voice(kind, seconds, audio_seconds):
+    """kind: "stt" (voz a texto) o "tts" (texto a voz)."""
+    timings = current()
+
+    if timings is not None:
+        setattr(timings, kind, (seconds, audio_seconds))
+
+
+def mark_answered():
+    timings = current()
+
+    if timings is not None and timings.answered is None:
+        timings.answered = time.perf_counter()
+
+
+def voice_part(label, measured):
+    seconds, audio = measured
+    return f"{label} {number(seconds)} s ({number(audio)} s de audio)"
+
+
 def summary(timings: Timings, now=None) -> str:
-    """[tiempos] intención · carga · prompt · tokens · t/s · total · proveedor/modelo."""
-    total = (now if now is not None else time.perf_counter()) - timings.start
-    parts = [intent_part(timings)]
+    """[tiempos] voz a texto · intención · carga · prompt · tokens · t/s · total · texto a voz · proveedor/modelo."""
+    end = now if now is not None else timings.answered or time.perf_counter()
+    total = end - timings.start
+    parts = [voice_part("voz a texto", timings.stt)] if timings.stt else []
+    parts.append(intent_part(timings))
     calls = timings.calls
 
     load = total_of(calls, "load")
@@ -185,6 +214,9 @@ def summary(timings: Timings, now=None) -> str:
         ]
 
     parts.append(f"total {number(total)} s")
+
+    if timings.tts:
+        parts.append(voice_part("texto a voz", timings.tts))
 
     if calls:
         used = []

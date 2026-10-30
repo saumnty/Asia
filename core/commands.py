@@ -94,6 +94,13 @@ COMMANDS = [
     Command("tiempos", "/sin tiempos", "deja de mostrar los tiempos",
             "/sin tiempos", phrase="oculta tiempos", aliases=("oculta tiempos",)),
 
+    Command("voz", "/voz",
+            "Enter en una línea vacía escucha lo que dices; las respuestas se leen en voz alta "
+            "(como --voz)",
+            "/voz", phrase="activa la voz", aliases=("activa la voz",)),
+    Command("voz", "/sin voz", "quita la voz y libera sus modelos",
+            "/sin voz", phrase="desactiva la voz", aliases=("desactiva la voz",)),
+
     Command("salir", "/opciones", "esta lista", "/opciones", special="opciones"),
     Command("salir", "/salir", "cierra Asia", "/salir", special="salir", aliases=("salir", "exit", "quit")),
 ]

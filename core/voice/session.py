@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from core import timing
 from core.voice import build_stt, build_tts, voice_settings
 from core.voice.speakable import to_speakable
 from core.voice.vad import DONE, NO_SPEECH, SPEAKING, TOO_LONG, EndOfSpeech
@@ -67,12 +68,23 @@ class VoiceSession:
         audio, rate = self.tts.synthesize(text)
         seconds = time.perf_counter() - start
 
+        audio_seconds = len(audio) / rate if rate else 0.0
+        timing.record_voice("tts", seconds, audio_seconds)
+
         try:
             self.speaker.play(audio, rate)
         except KeyboardInterrupt:
             self.speaker.stop()
 
-        return Spoken(text, seconds, len(audio) / rate if rate else 0.0)
+        return Spoken(text, seconds, audio_seconds)
+
+    def unload(self):
+        """Libera los modelos ("/sin voz"): Whisper y la voz de Piper ocupan ~380 MB."""
+        for engine in (self._stt, self._tts):
+            if engine is not None and hasattr(engine, "unload"):
+                engine.unload()
+
+        self._stt = self._tts = None
 
     @property
     def stt(self):

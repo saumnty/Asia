@@ -10,6 +10,7 @@ from core.actions.memory import MemoryActions
 from core.actions.models import ModelActions, model_command
 from core.actions.confidential import ConfidentialActions, confidential_command
 from core.actions.timing import TimingActions, timing_command
+from core.actions.voice import VoiceActions, voice_command
 from core import timing
 from core.commands import is_launcher_command, options_text, resolve as resolve_command, unknown_message as unknown_command
 from core.session import Session
@@ -149,7 +150,7 @@ SHORTCUT_ACTIONS = {
 
 
 class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxActions, ModelActions, ConfidentialActions,
-            TimingActions):
+            TimingActions, VoiceActions):
     # Acción del IntentEngine -> método que la atiende (ver core/actions).
     HANDLERS = {
         **MemoryActions.HANDLERS,
@@ -252,6 +253,11 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
         if confidential_cmd:
             return self.handle_confidential_command(confidential_cmd)
+
+        voice_cmd = voice_command(text)
+
+        if voice_cmd:
+            return self.handle_voice_command(voice_cmd)
 
         timing_cmd = timing_command(text)
 

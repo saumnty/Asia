@@ -27,6 +27,7 @@ from config.settings_manager import SettingsManager
 from core.path_completion import make_completer
 from core import timing
 from core.actions.models import command_text
+from core.actions.voice import VOICE_SETTING
 from core.commands import is_launcher_command, options_text
 from core.confidential import LOCAL_MODE, OPEN_MODE, current_mode
 from core.model_selection import model_for
@@ -61,7 +62,7 @@ def warn(messages):
         print(message, file=sys.stderr)
 
 
-def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label=USUARIO, speak=None):
+def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label=USUARIO, speak=None, heard=None):
     """Procesa un mensaje e imprime la respuesta.
 
     Si Brain no reconoce una acción (devuelve None), el mensaje se trata
@@ -87,7 +88,11 @@ def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label
         return answer
 
     with timing.measure_request() as timings, request_sources(*sources):
+        if heard is not None:
+            timing.record_voice("stt", heard.stt_seconds, heard.audio_seconds)
+
         answer = respond_in_context(brain, text, attachments, use_actions)
+        timing.mark_answered()
         speak_answer(speak, answer)
 
     if timing.enabled(brain.settings):
@@ -317,7 +322,6 @@ def user_prompt(settings) -> str:
     return f"\nTú [{mode}]: " if mode in {OPEN_MODE, LOCAL_MODE} else "\nTú: "
 
 
-VOICE_SETTING = "voice_mode"
 
 
 def voice_enabled(settings) -> bool:
@@ -340,21 +344,21 @@ def enter_pressed() -> bool:
 
 
 def listen(voice, settings, stop_requested=enter_pressed):
-    """Escucha una frase y la muestra como si se hubiera escrito. "" si no se oyó nada."""
+    """Escucha una frase y la muestra como si se hubiera escrito. None si no se oyó nada."""
     print("[Escuchando: habla; termina con un silencio o con Enter]", file=sys.stderr, flush=True)
 
     try:
         heard = voice.listen(stop_requested)
     except Exception as e:
         print(f"No pude escuchar: {e}", file=sys.stderr)
-        return ""
+        return None
 
     if not heard.text:
         print("(No te oí. Pulsa Enter en una línea vacía y vuelve a hablar.)", file=sys.stderr)
-        return ""
+        return None
 
     print(f"{user_prompt(settings).strip()} {heard.text}")
-    return heard.text
+    return heard
 
 
 def interactive_mode(brain=None, read=None, voice=None):
@@ -374,6 +378,7 @@ def interactive_mode(brain=None, read=None, voice=None):
     try:
         while True:
             user, block = messages.next_message()
+            heard = None
 
             # Modo voz: Enter en una línea vacía escucha; lo dictado es "usuario",
             # igual que lo tecleado.
@@ -383,7 +388,8 @@ def interactive_mode(brain=None, read=None, voice=None):
 
                     voice = VoiceSession(brain.settings)
 
-                user = listen(voice, brain.settings)
+                heard = listen(voice, brain.settings)
+                user = heard.text if heard else ""
 
             if block is None and is_launcher_command(user, "salir"):
                 print("Asia apagada.")
@@ -415,7 +421,9 @@ def interactive_mode(brain=None, read=None, voice=None):
             text, attachments, use_actions, text_label = prepared
 
             # Modo voz: la respuesta se muestra entera y se lee su texto normal.
-            if voice_enabled(brain.settings) and voice is None:
+            voice_on = voice_enabled(brain.settings)
+
+            if voice_on and voice is None:
                 from core.voice.session import VoiceSession
 
                 voice = VoiceSession(brain.settings)
@@ -423,8 +431,12 @@ def interactive_mode(brain=None, read=None, voice=None):
             respond(
                 brain, text, prefix="\nAsia: ", attachments=attachments,
                 use_actions=use_actions, text_label=text_label,
-                speak=voice.speak if voice_enabled(brain.settings) else None
+                speak=voice.speak if voice_on else None, heard=heard
             )
+
+            # "/sin voz": se liberan Whisper y la voz (~380 MB).
+            if voice_on and not voice_enabled(brain.settings) and hasattr(voice, "unload"):
+                voice.unload()
 
     except (KeyboardInterrupt, EOFError):
         print("\nAsia apagada.")
@@ -465,12 +477,14 @@ def startup_message(settings) -> str:
         model = settings.get(f"{provider}_model")
 
     used = f"{provider}/{model}" if model else provider
+    voice = "\nVoz activa: pulsa Enter en una línea vacía y habla." if voice_enabled(settings) else ""
 
     return (
         "Asia iniciada\n"
         f"Modelo: {used} · modo {current_mode(settings)}\n"
         "Escribe /opciones para ver los comandos.\n"
         f"(Para pegar varias líneas termina el mensaje con {MULTILINE_START} y cierra con {MULTILINE_END}.)"
+        f"{voice}"
     )
 
 
@@ -517,6 +531,11 @@ def build_parser():
         "--timing", action="store_true",
         help="después de cada respuesta muestra los tiempos: IntentEngine, carga del modelo, "
              "prompt, tokens generados, tokens por segundo, total y modelo usado"
+    )
+    parser.add_argument(
+        "--voz", action="store_true",
+        help="modo voz: en el modo interactivo, Enter en una línea vacía escucha; las "
+             "respuestas se leen en voz alta (Whisper y Piper, en esta máquina)"
     )
     parser.add_argument(
         "--allow-external", action="store_true",
@@ -576,6 +595,9 @@ def session_overrides(args, parser) -> dict:
 
     if args.timing:
         overrides[timing.SETTING] = True
+
+    if args.voz:
+        overrides[VOICE_SETTING] = True
 
     if args.model:
         # Se comprueba que esté descargado: Asia nunca descarga modelos.
@@ -637,7 +659,15 @@ def main(argv=None, stdin=None, brain_factory=Brain):
         print("No recibí ningún mensaje.", file=sys.stderr)
         return
 
-    respond(brain, text, attachments=attachments, use_actions=use_actions, text_label=text_label)
+    speak = None
+
+    # jarvis --voz "mensaje": se lee la respuesta (escuchar es del modo interactivo).
+    if voice_enabled(brain.settings):
+        from core.voice.session import VoiceSession
+
+        speak = VoiceSession(brain.settings).speak
+
+    respond(brain, text, attachments=attachments, use_actions=use_actions, text_label=text_label, speak=speak)
 
 
 if __name__ == "__main__":
