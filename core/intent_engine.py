@@ -1,5 +1,8 @@
 import json
 import re
+import sys
+
+import httpx
 import ollama
 
 from config.settings_manager import SettingsManager
@@ -16,6 +19,23 @@ class IntentEngine:
     def __init__(self):
         self.settings = SettingsManager()
         self.client = ollama.Client(host=self.settings.get("ollama_host"))
+
+    def preload(self):
+        """Carga intent_model en Ollama sin prompt, para que el primer mensaje no espere la carga.
+
+        No envía contenido. Si Ollama no responde no pasa nada; otro error
+        (p. ej. el modelo no está descargado) se avisa por stderr.
+        """
+        model = self.settings.get("intent_model")
+
+        try:
+            unload_others(self.client, model, self.settings)
+            # Una llamada sin prompt solo carga el modelo (keep_alive no se toca).
+            self.client.generate(model=model)
+        except (ConnectionError, httpx.HTTPError):
+            return
+        except Exception as e:
+            print(f"[Aviso] No pude precargar {model} en Ollama: {e}", file=sys.stderr)
 
     def detect(self, text: str) -> dict:
         system_prompt = """

@@ -22,6 +22,7 @@ from core.actions.review import ReviewActions, wants_synthesis, wants_unverified
 from tools.sandbox import PendingRun
 from pathlib import Path
 import re
+import threading
 
 
 # El IntentEngine inventa rutas cuando el mensaje no trae ninguna
@@ -170,6 +171,17 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
     def limit(self, name):
         """Límite de contexto configurado en context_limits (settings)."""
         return self.settings.get("context_limits")[name]
+
+    def preload_in_background(self):
+        """Carga el modelo del IntentEngine en un hilo, sin bloquear la entrada."""
+        preload = getattr(self.intent_engine, "preload", None)
+
+        if preload is None:
+            return None
+
+        thread = threading.Thread(target=preload, name="asia-preload", daemon=True)
+        thread.start()
+        return thread
 
     def app_names(self):
         """Nombres de apps conocidas: con uno en el mensaje decide el IntentEngine."""

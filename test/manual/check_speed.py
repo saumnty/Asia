@@ -12,7 +12,9 @@ Al final imprime una tabla con la línea de tiempos de cada mensaje.
 """
 import argparse
 import io
+import subprocess
 import sys
+import time
 from contextlib import redirect_stderr
 from pathlib import Path
 
@@ -43,15 +45,34 @@ class Tee(io.StringIO):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sin-archivo", action="store_true", help='omite "explica @ROADMAP.md"')
+    parser.add_argument("--mensajes", nargs="+", help="mensajes en lugar de los de siempre")
+    parser.add_argument("--descargar", action="store_true",
+                        help="descarga el modelo del IntentEngine antes de empezar (ollama stop), como al encender")
+    parser.add_argument("--espera", type=float, default=0,
+                        help="segundos antes del primer mensaje (lo que tarda en escribirse)")
     args = parser.parse_args()
 
-    messages = [m for m in MESSAGES if not (args.sin_archivo and m.startswith("explica @"))]
+    messages = args.mensajes or [m for m in MESSAGES if not (args.sin_archivo and m.startswith("explica @"))]
     SettingsManager.set_overrides({**SettingsManager.overrides, SETTING: True})
+
+    if args.descargar:
+        subprocess.run(["ollama", "stop", SettingsManager().get("intent_model")], check=False)
+
     lines = iter([*messages, "salir"])
+    first = [True]
     err = Tee()
 
+    def read(prompt):
+        print(prompt, end="")
+
+        if first[0] and args.espera:
+            time.sleep(args.espera)
+
+        first[0] = False
+        return next(lines)
+
     with redirect_stderr(err):
-        launcher.interactive_mode(Brain(), read=lambda prompt: print(prompt, end="") or next(lines))
+        launcher.interactive_mode(Brain(), read=read)
 
     timings = [line for line in err.getvalue().splitlines() if line.startswith("[tiempos]")]
 

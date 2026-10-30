@@ -15,3 +15,11 @@ def audit_in_tmp(tmp_path, monkeypatch):
     from core import paths
 
     monkeypatch.setattr(paths, "EXTERNAL_AUDIT_FILE", tmp_path / "logs" / "external_audit.jsonl")
+
+
+@pytest.fixture(autouse=True)
+def no_preload(monkeypatch):
+    """El modo interactivo precarga el modelo en Ollama: en las pruebas, no."""
+    from core.brain import Brain
+
+    monkeypatch.setattr(Brain, "preload_in_background", lambda self: None)

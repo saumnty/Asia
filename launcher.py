@@ -304,6 +304,10 @@ def interactive_mode(brain=None, read=None):
 
     print(startup_message(brain.settings))
 
+    # Mientras se escribe el primer mensaje, Ollama carga el modelo (~15 s).
+    if hasattr(brain, "preload_in_background"):
+        brain.preload_in_background()
+
     messages = MessageReader(read, prompt=lambda: user_prompt(brain.settings))
     pending = None
 
