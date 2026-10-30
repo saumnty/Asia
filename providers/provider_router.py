@@ -4,6 +4,7 @@ from memory.project_memory import ProjectMemory
 from config.settings_manager import SettingsManager
 from providers.gemini_provider import GeminiProvider
 from core.confidential import (
+    Decision,
     OutgoingRequest,
     check,
     describe_chars,
@@ -12,6 +13,7 @@ from core.confidential import (
     outgoing_messages,
 )
 from core.model_selection import StickyModel, model_for, thinks
+from core.secrets_filter import describe as describe_secrets, redact_messages, safe_error
 from core.provenance import (
     DESCONOCIDO,
     MEMORIA,
@@ -261,8 +263,25 @@ Contexto del proyecto:
         if not decision.allowed:
             raise ExternalBlocked(name, decision)
 
-        messages = outgoing_messages(request.external_messages)
-        return provider.complete(messages, on_chunk=on_chunk, review=review, model=model, think=think)
+        messages, secrets = redact_messages(outgoing_messages(request.external_messages))
+        notice = ""
+
+        if secrets:
+            if self.settings.get("external_secret_policy", "redact") == "block":
+                raise ExternalBlocked(name, Decision(False, f"contiene secretos ({describe_secrets(secrets)})"))
+
+            notice = f"[Modo confidencial] Redacté antes de enviar a {name}: {describe_secrets(secrets)}.\n\n"
+
+            if on_chunk:
+                on_chunk(notice)
+
+        try:
+            answer = provider.complete(messages, on_chunk=on_chunk, review=review, model=model, think=think)
+        except Exception as e:
+            # El error de un proveedor externo no debe mostrar la clave.
+            raise RuntimeError(safe_error(e)) from None
+
+        return notice + answer
 
     def _confirmed_by_flag(self, name, request, decision) -> bool:
         """--allow-external: se confirma cada envío (o "todos en esta ejecución")."""
@@ -321,7 +340,7 @@ Contexto del proyecto:
 
         if not fallback_name or fallback_name == provider_name:
             raise ProviderError(
-                f"Error usando provider {provider_name}: {error}"
+                f"Error usando provider {provider_name}: {safe_error(error)}"
             ) from error
 
         try:
@@ -329,13 +348,13 @@ Contexto del proyecto:
         except ExternalBlocked as blocked:
             # El fallback automático nunca se lleva contenido local.
             raise ProviderError(
-                f"Falló {provider_name} ({error}) y no usé el fallback {fallback_name}: "
+                f"Falló {provider_name} ({safe_error(error)}) y no usé el fallback {fallback_name}: "
                 f"{blocked.decision.reason}. No salió nada de esta máquina."
             ) from error
         except Exception as fallback_error:
             raise ProviderError(
                 "Falló el provider principal y también el fallback. "
-                f"Error: {fallback_error}"
+                f"Error: {safe_error(fallback_error)}"
             ) from fallback_error
 
         response = f"[Fallback: usando {fallback_name}]\n\n{response}"
@@ -355,7 +374,7 @@ Contexto del proyecto:
 
         return (
             f"Saldría a {provider}: {parts} ({total} caracteres en total, con las rutas "
-            f"reemplazadas por el nombre del archivo).{omitted}"
+            f"reemplazadas por el nombre del archivo y los secretos redactados).{omitted}"
         )
 
     def prepare_authorization(self, provider=AUTHORIZED_PROVIDER) -> str:
@@ -392,7 +411,7 @@ Contexto del proyecto:
         except ProviderError as e:
             return str(e)
         except Exception as e:
-            return f"Error usando provider {provider}: {e}"
+            return f"Error usando provider {provider}: {safe_error(e)}"
 
     def cancel_authorization(self) -> str:
         if not self.pending_authorization:

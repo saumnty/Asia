@@ -5,6 +5,7 @@ import ollama
 from config.settings_manager import SettingsManager
 from core.confidential import is_local_mode, ollama_is_external, only_user
 from core.provenance import current_fragments, labels_of, local_labels
+from core.secrets_filter import redact_messages
 from providers.ollama_models import strip_think, think_kwargs, unload_others
 from providers.ollama_provider import ollama_options
 
@@ -247,6 +248,8 @@ Usuario: muestra el cambio pendiente
 
             if is_local_mode(self.settings) or local_labels(labels, self.settings):
                 return {"action": "chat", "params": {}}
+
+            messages = redact_messages(messages)[0]
 
         try:
             model = self.settings.get("intent_model")
