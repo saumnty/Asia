@@ -30,6 +30,7 @@ DEFAULT_VOICE_SETTINGS = {
     "silence_ms": 800,
     "max_seconds": 30,
     "start_timeout_s": 8,
+    "min_speech_ms": 96,
 }
 
 

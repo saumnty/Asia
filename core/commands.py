@@ -100,6 +100,9 @@ COMMANDS = [
             "/voz", phrase="activa la voz", aliases=("activa la voz",)),
     Command("voz", "/sin voz", "quita la voz y libera sus modelos",
             "/sin voz", phrase="desactiva la voz", aliases=("desactiva la voz",)),
+    Command("voz", "/calibrar voz",
+            "mide 3 s el ruido del cuarto (quédate en silencio) y ajusta el umbral de voz para la sesión",
+            "/calibrar voz", special="calibrar", aliases=("calibra la voz", "calibrar voz")),
 
     Command("salir", "/opciones", "esta lista", "/opciones", special="opciones"),
     Command("salir", "/salir", "cierra Asia", "/salir", special="salir", aliases=("salir", "exit", "quit")),

@@ -44,6 +44,9 @@ MISSING_FILE_MESSAGE = (
     "Necesito la ruta del archivo: escríbela en el mensaje o adjúntalo con @ruta."
 )
 
+# "/calibrar voz" usa el micrófono: lo atiende el modo interactivo (launcher).
+CALIBRATE_ONLY_INTERACTIVE = "La calibración de la voz es del modo interactivo: abre Asia y escribe /calibrar voz."
+
 # Acciones que trabajan sobre un archivo y sin file_path piden la ruta.
 FILE_ACTIONS = {
     "summarize_file", "explain_file", "review_file", "review_file_deep",
@@ -219,11 +222,17 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
             if slash.command.special == "opciones":
                 return options_text()
 
+            if slash.command.special == "calibrar":
+                return CALIBRATE_ONLY_INTERACTIVE
+
             if slash.command.action:
                 action, param = slash.command.action
                 return getattr(self, self.HANDLERS[action])(text, {param: slash.arg})
 
             text = slash.phrase or text
+
+        if is_launcher_command(text, "calibrar"):
+            return CALIBRATE_ONLY_INTERACTIVE
 
         if is_launcher_command(text, "carpeta"):
             return f"Carpeta desde donde llamaste a Asia: {Session.get_user_cwd()}"

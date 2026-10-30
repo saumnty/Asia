@@ -116,7 +116,9 @@ def test_escucha_hasta_el_silencio_y_transcribe():
 
     assert heard.text == "hola asia" and heard.reason == DONE
     # Se cortó en el silencio: los 5 s de después no se grabaron.
-    assert 2.5 < heard.audio_seconds < 3.0
+    assert 2.5 < heard.recorded_seconds < 3.0
+    # A Whisper solo le llega la voz con 0,3 s antes y después.
+    assert 2.0 < heard.audio_seconds < 2.2
     [audio] = stt.audio
     assert audio.dtype == np.float32 and audio.ndim == 1
 

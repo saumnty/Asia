@@ -78,7 +78,8 @@
         "vad_threshold": 0.5,
         "silence_ms": 800,
         "max_seconds": 30,
-        "start_timeout_s": 8
+        "start_timeout_s": 8,
+        "min_speech_ms": 96
     },
 
     "answer_limits": {

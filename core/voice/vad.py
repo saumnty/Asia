@@ -46,31 +46,48 @@ class SileroVAD:
 class EndOfSpeech:
     """Decide cuándo terminó la frase a partir de la probabilidad de cada tramo.
 
-    Empieza a contar cuando hay voz; termina tras silence_ms de silencio,
-    si no hubo voz en start_timeout_s o si la frase pasa de max_seconds.
+    Empieza a contar cuando hay min_speech_ms seguidos de voz (un golpe o un
+    clic suelto no abren la frase); termina tras silence_ms de silencio, si
+    no hubo voz en start_timeout_s o si la frase pasa de max_seconds.
+
+    first_speech y last_speech son los tramos (desde 0) donde empezó y
+    terminó la voz: se usan para no pasarle a Whisper la espera ni el
+    silencio del final.
     """
     threshold: float = 0.5
     silence_ms: int = 800
     max_seconds: float = 30
     start_timeout_s: float = 8
+    min_speech_ms: float = 96
     frame_ms: float = FRAME / SAMPLE_RATE * 1000
 
     def __post_init__(self):
         self.state = WAITING
         self.elapsed_ms = 0.0
         self.silent_ms = 0.0
+        self.frames = 0
+        self.run = 0
+        self.first_speech = None
+        self.last_speech = None
 
     @classmethod
     def from_config(cls, config):
-        return cls(config["vad_threshold"], config["silence_ms"], config["max_seconds"], config["start_timeout_s"])
+        return cls(config["vad_threshold"], config["silence_ms"], config["max_seconds"], config["start_timeout_s"],
+                   config.get("min_speech_ms", 96))
 
     def feed(self, probability: float) -> str:
         self.elapsed_ms += self.frame_ms
+        self.frames += 1
         speech = probability >= self.threshold
+        self.run = self.run + 1 if speech else 0
+
+        if speech:
+            self.last_speech = self.frames - 1
 
         if self.state == WAITING:
-            if speech:
+            if self.run * self.frame_ms >= self.min_speech_ms:
                 self.state = SPEAKING
+                self.first_speech = self.frames - self.run
             elif self.elapsed_ms >= self.start_timeout_s * 1000:
                 self.state = NO_SPEECH
 

@@ -89,7 +89,7 @@ def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label
 
     with timing.measure_request() as timings, request_sources(*sources):
         if heard is not None:
-            timing.record_voice("stt", heard.stt_seconds, heard.audio_seconds)
+            timing.record_voice("stt", heard.stt_seconds, heard.audio_seconds, heard.recorded_seconds)
 
         answer = respond_in_context(brain, text, attachments, use_actions)
         timing.mark_answered()
@@ -361,6 +361,33 @@ def listen(voice, settings, stop_requested=enter_pressed):
     return heard
 
 
+def calibrate(voice, seconds=3):
+    """/calibrar voz: mide el ruido del cuarto y sube el umbral del VAD si el ruido parece voz."""
+    print(f"[Calibrando: quédate en silencio {seconds} s]", file=sys.stderr, flush=True)
+
+    try:
+        result = voice.calibrate(seconds)
+    except Exception as e:
+        print(f"No pude calibrar: {e}", file=sys.stderr)
+        return None
+
+    print(calibration_message(result))
+    return result
+
+
+def calibration_message(result) -> str:
+    def n(value):
+        return f"{value:.2f}".replace(".", ",")
+
+    noise = (f"Ruido del cuarto: probabilidad de voz {n(result.p95)} (máx. {n(result.peak)}); "
+             f"el {result.over_threshold:.0%} de los tramos pasaba el umbral de {n(result.threshold_before)}.")
+
+    if result.threshold > result.threshold_before:
+        return f"{noise}\nUmbral de voz para esta sesión: {n(result.threshold)}."
+
+    return f"{noise}\nEl umbral de {n(result.threshold)} ya deja fuera ese ruido; no lo cambio."
+
+
 def interactive_mode(brain=None, read=None, voice=None):
     """voice: la sesión de voz (core/voice/session.py); se crea al primer uso."""
     brain = brain or Brain()
@@ -394,6 +421,15 @@ def interactive_mode(brain=None, read=None, voice=None):
             if block is None and is_launcher_command(user, "salir"):
                 print("Asia apagada.")
                 break
+
+            if block is None and is_launcher_command(user, "calibrar"):
+                if voice is None:
+                    from core.voice.session import VoiceSession
+
+                    voice = VoiceSession(brain.settings)
+
+                calibrate(voice)
+                continue
 
             # "¿Quisiste decir @X?" seguido de "sí": el mensaje de antes con la ruta corregida.
             correction, pending = pending, None

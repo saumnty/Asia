@@ -168,12 +168,16 @@ def intent_part(timings: Timings) -> str:
     return f"{text} ({prompt}, {call.tokens or 0} generados{load})"
 
 
-def record_voice(kind, seconds, audio_seconds):
-    """kind: "stt" (voz a texto) o "tts" (texto a voz)."""
+def record_voice(kind, seconds, audio_seconds, recorded_seconds=None):
+    """kind: "stt" (voz a texto) o "tts" (texto a voz).
+
+    recorded_seconds (voz a texto): todo lo grabado, si es más que el audio
+    que se transcribió (la espera antes de hablar y el silencio del final).
+    """
     timings = current()
 
     if timings is not None:
-        setattr(timings, kind, (seconds, audio_seconds))
+        setattr(timings, kind, (seconds, audio_seconds, recorded_seconds))
 
 
 def mark_answered():
@@ -184,8 +188,11 @@ def mark_answered():
 
 
 def voice_part(label, measured):
-    seconds, audio = measured
-    return f"{label} {number(seconds)} s ({number(audio)} s de audio)"
+    seconds, audio, *rest = measured
+    recorded = rest[0] if rest else None
+    # Solo si se grabó bastante más que la voz: así se ve si el ruido alargó la frase.
+    extra = f" de {number(recorded)} s grabados" if recorded and recorded > audio + 1 else ""
+    return f"{label} {number(seconds)} s ({number(audio)} s de audio{extra})"
 
 
 def summary(timings: Timings, now=None) -> str:
