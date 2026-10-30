@@ -41,8 +41,10 @@ class FakeSTT:
     def __init__(self, text="hola asia"):
         self.text = text
         self.audio = []
+        self.prompts = []
 
-    def transcribe(self, audio):
+    def transcribe(self, audio, prompt=""):
+        self.prompts.append(prompt)
         self.audio.append(audio)
         return self.text
 
@@ -72,7 +74,7 @@ def session(probabilities, text="hola asia", **voice):
     stt = FakeSTT(text)
     voice_session = VoiceSession(
         SettingsManager(), stt=stt, microphone=FakeMicrophone(probabilities), vad=FakeVAD(),
-        tts=FakeTTS(), speaker=FakeSpeaker(),
+        tts=FakeTTS(), speaker=FakeSpeaker(), vocabulary=lambda: "Órdenes para Asia: abre.",
     )
     return voice_session, stt
 

@@ -11,6 +11,7 @@ import numpy as np
 from core import timing
 from core.voice import build_stt, build_tts, voice_settings
 from core.voice.speakable import to_speakable
+from core.voice.vocabulary import build_prompt
 from core.voice.vad import DONE, NO_SPEECH, SPEAKING, TOO_LONG, EndOfSpeech
 
 
@@ -32,9 +33,11 @@ class Spoken:
 
 
 class VoiceSession:
-    def __init__(self, settings, stt=None, microphone=None, vad=None, tts=None, speaker=None):
+    def __init__(self, settings, stt=None, microphone=None, vad=None, tts=None, speaker=None, vocabulary=None):
         self.settings = settings
         self.config = voice_settings(settings)
+        # Texto para initial_prompt de Whisper; se rehace en cada frase (apps aprendidas).
+        self.vocabulary = vocabulary or (lambda: build_prompt(self.settings, self.config))
         self._stt = stt
         self._microphone = microphone
         self._vad = vad
@@ -141,6 +144,6 @@ class VoiceSession:
 
         audio = np.concatenate(frames)
         start = time.perf_counter()
-        text = self.stt.transcribe(audio)
+        text = self.stt.transcribe(audio, self.vocabulary())
 
         return Heard(text, reason, len(audio) / 16000, time.perf_counter() - start)

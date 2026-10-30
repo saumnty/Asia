@@ -1,6 +1,7 @@
 """Voz a texto.
 
-Interfaz: transcribe(audio float32 mono a 16 kHz) -> texto. FasterWhisperSTT
+Interfaz: transcribe(audio float32 mono a 16 kHz, prompt) -> texto. prompt es
+el vocabulario de Asia (core/voice/vocabulary.py) como initial_prompt. FasterWhisperSTT
 corre siempre en CPU (int8): la GPU de 4 GB la ocupa el 7B de Ollama y no
 debe desalojarse. El modelo se lee de models_dir; Asia no lo descarga.
 """
@@ -45,10 +46,10 @@ class FasterWhisperSTT:
         )
         return self.model
 
-    def transcribe(self, audio: np.ndarray) -> str:
+    def transcribe(self, audio: np.ndarray, prompt: str = "") -> str:
         segments, _ = self.load().transcribe(
             audio, language=self.config["language"], beam_size=self.config["stt_beam_size"],
-            condition_on_previous_text=False, vad_filter=False,
+            condition_on_previous_text=False, vad_filter=False, initial_prompt=prompt or None,
         )
         return " ".join(segment.text.strip() for segment in segments).strip()
 

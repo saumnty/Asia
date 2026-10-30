@@ -358,11 +358,10 @@ def test_golden(project):
 
 def test_golden_tiene_un_caso_por_accion_de_la_lista_del_intentengine():
     """Ninguna acción que el IntentEngine puede devolver queda sin caracterizar."""
-    from core.intent_engine import IntentEngine
-    import inspect, re
+    from core.intent_engine import INTENT_PROMPT
+    import re
 
-    source = inspect.getsource(IntentEngine.detect)
-    listed = re.search(r"Acciones disponibles:\n(.*?)\n\nFormato", source, re.DOTALL).group(1)
+    listed = re.search(r"Acciones disponibles:\n(.*?)\n\nFormato", INTENT_PROMPT, re.DOTALL).group(1)
     actions = {a.strip().strip(",") for a in listed.split("\n") if a.strip()}
     covered = {s["intent"]["action"] for steps in CASES.values() for s in steps if s["intent"]}
 

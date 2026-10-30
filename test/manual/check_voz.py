@@ -13,6 +13,11 @@ medir las latencias sin hablar:
     .venv\\Scripts\\python.exe test\\manual\\check_voz.py --sin-microfono
     .venv\\Scripts\\python.exe test\\manual\\check_voz.py --sin-microfono --sin-audio   # no reproduce
 
+Solo voz a texto, con y sin el vocabulario de Asia (initial_prompt), sin
+Ollama: compara lo que entiende Whisper de cada frase.
+
+    .venv\\Scripts\\python.exe test\\manual\\check_voz.py --transcribir
+
 El audio no se guarda en disco.
 """
 import argparse
@@ -39,6 +44,12 @@ from core.voice.audio import FRAME, SAMPLE_RATE
 from core.voice.session import VoiceSession
 
 PHRASES = ["Muestra el proyecto activo.", "Cuéntame un chiste.", "Qué es un grafo bipartito."]
+
+# Las frases que Whisper entendió mal con la voz real (J1).
+TRANSCRIBE_PHRASES = [
+    "Abre el bloc de notas.", "Muestra el proyecto activo.", "Qué es un grafo bipartito.",
+    "Explica el archivo ROADMAP.", "Revisa el proyecto Bolitabot.",
+]
 
 
 class SpokenMicrophone:
@@ -70,12 +81,32 @@ def spoken(phrases, tts):
         yield np.interp(positions, np.arange(len(audio)), audio).astype(np.float32)
 
 
+def compare_transcriptions(voice, phrases):
+    """Lo que entiende Whisper de cada frase sin y con el vocabulario, y cuánto tarda."""
+    import time
+
+    from core.voice.vocabulary import build_prompt
+
+    prompt = build_prompt(voice.settings, voice.config)
+    print(f"Vocabulario ({len(prompt)} caracteres):\n{prompt}\n")
+
+    for phrase, audio in zip(phrases, spoken(phrases, voice.tts)):
+        print(phrase)
+
+        for name, text_prompt in (("sin vocabulario", ""), ("con vocabulario", prompt)):
+            start = time.perf_counter()
+            text = voice.stt.transcribe(audio, text_prompt)
+            print(f"  {name}: {text}  ({time.perf_counter() - start:.1f} s)")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sin-microfono", action="store_true", help="frases generadas con Piper en lugar del micrófono")
     parser.add_argument("--sin-audio", action="store_true", help="no reproduce las respuestas")
     parser.add_argument("--frases", nargs="+", default=PHRASES)
     parser.add_argument("--dispositivos", action="store_true", help="lista los micrófonos y sale")
+    parser.add_argument("--transcribir", action="store_true",
+                        help="solo voz a texto, con y sin vocabulario (sin Ollama)")
     args = parser.parse_args()
 
     if args.dispositivos:
@@ -83,6 +114,11 @@ def main():
 
         print(sd.query_devices())
         print(f"\nEntrada por defecto: {sd.default.device[0]}")
+        return 0
+
+    if args.transcribir:
+        voice = VoiceSession(SettingsManager())
+        compare_transcriptions(voice, args.frases if args.frases != PHRASES else TRANSCRIBE_PHRASES)
         return 0
 
     SettingsManager.set_overrides({VOICE_SETTING: True, TIMING_SETTING: True})

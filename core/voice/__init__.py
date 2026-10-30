@@ -18,6 +18,8 @@ DEFAULT_VOICE_SETTINGS = {
     "stt_model": "small",
     "stt_compute_type": "int8",
     "stt_beam_size": 5,
+    "stt_vocabulary_prompt": True,
+    "stt_vocabulary": [],
     "language": "es",
     "tts_engine": "piper",
     "tts_voice": "es_MX-claude-high",

@@ -1,12 +1,10 @@
 """Consistencia del prompt del IntentEngine (sin llamar al modelo)."""
-import inspect
 import json
 import re
 
-from core.intent_engine import IntentEngine
+from core.intent_engine import INTENT_PROMPT, IntentEngine
 
-SOURCE = inspect.getsource(IntentEngine.detect)
-PROMPT = SOURCE[SOURCE.index('system_prompt = """') + len('system_prompt = """'):SOURCE.index('"""\n\n        # Si Ollama')]
+PROMPT = INTENT_PROMPT
 LISTED = {
     line.strip().strip(",")
     for line in re.search(r"Acciones disponibles:\n(.*?)\n\nFormato", PROMPT, re.DOTALL).group(1).splitlines()

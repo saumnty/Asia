@@ -15,32 +15,9 @@ from providers.ollama_models import strip_think, think_kwargs, unload_others
 from providers.ollama_provider import ollama_options
 
 
-class IntentEngine:
-    def __init__(self):
-        self.settings = SettingsManager()
-        self.client = ollama.Client(host=self.settings.get("ollama_host"))
-
-    def preload(self):
-        """Carga intent_model en Ollama sin prompt, para que el primer mensaje no espere la carga.
-
-        No envía contenido. Si Ollama no responde no pasa nada; otro error
-        (p. ej. el modelo no está descargado) se avisa por stderr.
-        """
-        model = self.settings.get("intent_model")
-
-        try:
-            unload_others(self.client, model, self.settings)
-            # Una llamada sin prompt solo carga el modelo (keep_alive no se toca).
-            # Con el mismo num_ctx que las llamadas reales: sin él Ollama lo
-            # carga con 4096 y la primera llamada lo vuelve a cargar (~20 s).
-            self.client.generate(model=model, options={"num_ctx": self.settings.get("ollama_num_ctx")})
-        except (ConnectionError, httpx.HTTPError):
-            return
-        except Exception as e:
-            print(f"[Aviso] No pude precargar {model} en Ollama: {e}", file=sys.stderr)
-
-    def detect(self, text: str) -> dict:
-        system_prompt = """
+# Prompt del IntentEngine. Texto fijo: Ollama reutiliza su caché entre mensajes.
+# core/voice/vocabulary.py saca de aquí los verbos de las órdenes.
+INTENT_PROMPT = """
 Eres un motor de intenciones. NO eres asistente conversacional.
 
 Responde ÚNICAMENTE con JSON válido.
@@ -256,6 +233,34 @@ Usuario: cancelar cambio
 Usuario: muestra el cambio pendiente
 {"action":"show_pending_change","params":{}}
 """
+
+
+class IntentEngine:
+    def __init__(self):
+        self.settings = SettingsManager()
+        self.client = ollama.Client(host=self.settings.get("ollama_host"))
+
+    def preload(self):
+        """Carga intent_model en Ollama sin prompt, para que el primer mensaje no espere la carga.
+
+        No envía contenido. Si Ollama no responde no pasa nada; otro error
+        (p. ej. el modelo no está descargado) se avisa por stderr.
+        """
+        model = self.settings.get("intent_model")
+
+        try:
+            unload_others(self.client, model, self.settings)
+            # Una llamada sin prompt solo carga el modelo (keep_alive no se toca).
+            # Con el mismo num_ctx que las llamadas reales: sin él Ollama lo
+            # carga con 4096 y la primera llamada lo vuelve a cargar (~20 s).
+            self.client.generate(model=model, options={"num_ctx": self.settings.get("ollama_num_ctx")})
+        except (ConnectionError, httpx.HTTPError):
+            return
+        except Exception as e:
+            print(f"[Aviso] No pude precargar {model} en Ollama: {e}", file=sys.stderr)
+
+    def detect(self, text: str) -> dict:
+        system_prompt = INTENT_PROMPT
 
         # Si Ollama no responde, se trata como chat: el provider configurado
         # (que puede no ser Ollama) contestará o mostrará el error.
