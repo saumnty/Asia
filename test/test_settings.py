@@ -1,6 +1,6 @@
 import json
 
-from config.settings_manager import SettingsManager
+from config.settings_manager import SettingsManager, read_json
 
 
 def write_json(path, data):
@@ -97,3 +97,9 @@ def test_set_explicito_gana_al_override(tmp_path):
 
     assert settings.get("default_provider") == "gemini"
     assert settings.get("stream_output") is False
+
+
+def test_streaming_activado_por_defecto():
+    from core.paths import DEFAULTS_FILE
+
+    assert read_json(DEFAULTS_FILE)["stream_output"] is True

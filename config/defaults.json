@@ -1,7 +1,7 @@
 {
     "default_provider": "ollama",
     "fallback_provider": "ollama",
-    "stream_output": false,
+    "stream_output": true,
     "attachment_max_chars": 20000,
     "active_project": "asia",
 
