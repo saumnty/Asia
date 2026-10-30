@@ -44,6 +44,9 @@ para poder revisar o revertir los cambios.
 - "muéstrame un resumen del archivo X" va a `read_file_preview` (las primeras líneas), no a `summarize_file`. Se dejó así en la fase E para no cambiar la acción.
 - `remember`, `recall` y `forget` sin `key` caen al chat sin aviso.
 - El diagnóstico de `debug_project` sigue siendo superficial: con "Asia None" señala `launcher.py` y `brain.process` devolviendo `None`, sin llegar a la causa real del bug de la fase 1 (el streaming, ya corregido). En C:\Asia, `tools/debug_context.py` sale entre los primeros archivos porque contiene las búsquedas fijas y "Asia None" en sus comentarios: es ruido propio de este repositorio.
+- `open_app` responde "Abriendo notebook." con el nombre que extrajo el modelo. Debería decir el nombre resuelto ("Abriendo bloc de notas.").
+- La salida no tolera erratas: "salior" va al IntentEngine en lugar de cerrar. Aplicar a `EXIT_COMMANDS` la misma tolerancia que a los nombres de apps.
+- Flag `--timing`: tiempo por etapa (IntentEngine, acción, modelo). Con esas medidas, acelerar: mantener el modelo cargado, streaming, más atajos sin LLM y un prompt más corto.
 
 ## Fases futuras (diseño pendiente)
 
@@ -164,7 +167,7 @@ Dos colecciones nuevas en ChromaDB, separadas de las de proyectos. Usar un prefi
 
 Hecho en la fase C (`af003d2a`, `4f25b229`): `@ruta`, autocompletado, stdin, `--file`, varios adjuntos con límite y aviso, flags y multilínea. Falta:
 
-- Imágenes desde el portapapeles (`:pegar`): la terminal no pasa imágenes con Ctrl+V. `PIL.ImageGrab.grabclipboard()` (Pillow ya está instalado) guardaría la imagen en una carpeta temporal para adjuntarla. Requiere un modelo con visión (ver "Multi-modelo"); hoy no hay ninguno descargado, así que se deja para después de la fase F.
+- Imágenes desde el portapapeles y `@ruta.png`: ver "Extras: imágenes en la terminal".
 - PDF y texto largo vía RAG en vez de recortar.
 - Reemplazar `jarvis.bat` por un ejecutable nativo, para evitar el "¿Desea terminar el trabajo por lotes (S/N)?" de Windows al interrumpir con Ctrl+C.
 - stdin: si Asia se lanza sin terminal y con un stdin abierto que nunca se cierra (no una tubería real), la lectura espera indefinidamente. Si pasa, agregar un flag `--no-stdin`.
@@ -208,8 +211,18 @@ Hecho en la fase G (ver la tabla). Pendientes:
 - Indexación incremental del RAG por hash y calibración de umbrales del retriever.
 - Detección de código muerto por AST y auto-fix desde el diagnóstico de `DebugAgent`.
 
-### Servidor y acceso remoto
+### Extras
 
+**Imágenes en la terminal.** La terminal no pasa imágenes con Ctrl+V.
+- Comando `:pegar`: lee la imagen del portapapeles con `PIL.ImageGrab.grabclipboard()` (Pillow ya está instalado), la guarda en una carpeta temporal y la adjunta al mensaje.
+- `@ruta.png` (y otros formatos de imagen) como adjunto, igual que los archivos de texto.
+- Primera opción, para capturas de texto (errores, código, enunciados): OCR local con Tesseract. No necesita modelo de visión.
+- Segunda etapa: modelo de visión local (`gemma3:4b` o `qwen2.5vl:3b`). Antes de elegir, medir el costo de recarga con 4 GB de VRAM: con un solo modelo en memoria a la vez (`ollama_one_model_at_a_time`), cada imagen descarga el 7B y lo vuelve a cargar después. Preguntar antes de descargar.
+- Modo confidencial: las imágenes llevan la etiqueta "adjunto", así que son locales por defecto (ni la imagen ni el texto del OCR salen sin autorización).
+
+### Servidor y acceso remoto (siempre disponible)
+
+Va después de los extras.
 - Medir el uso real de RAM/VRAM antes de comprar el Jetson Orin Nano Super (8 GB de RAM soldada).
 - Portar a ARM64 y revisar requisitos del Jetson.
 - Tailscale para acceso remoto, con modo reducido en conexiones lentas.
@@ -223,4 +236,5 @@ Hecho en la fase G (ver la tabla). Pendientes:
 4. Wikipedia offline.
 5. Voz.
 6. Avatar.
-7. Jetson, servidor y uso remoto.
+7. Extras: imágenes en la terminal.
+8. Jetson, servidor y uso remoto (siempre disponible).
