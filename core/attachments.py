@@ -58,7 +58,13 @@ def make_attachment(label: str, text: str, max_chars: int, path: Path | None = N
 
 class MissingAttachment(str):
     """Aviso de un adjunto que no existe. El launcher no envía el mensaje:
-    sin el archivo, el modelo respondería sobre algo que no vio."""
+    sin el archivo, el modelo respondería sobre algo que no vio.
+
+    raw es la ruta tal como se escribió y suggestions, las rutas parecidas
+    (sin @): con una sola, un "sí" reenvía el mensaje corregido.
+    """
+    raw = ""
+    suggestions = ()
 
 
 MAX_SUGGESTIONS = 5
@@ -94,15 +100,42 @@ def suggest_paths(raw: str, cwd: Path) -> list[str]:
 
 def missing_warning(raw: str, cwd: Path) -> MissingAttachment:
     message = f"No encontré el archivo adjunto: {raw}"
-    suggestions = [
-        "@" + (f'"{s}"' if " " in s else s)
-        for s in suggest_paths(raw, cwd)
-    ]
+    paths = suggest_paths(raw, cwd)
+    suggestions = [at_path(s) for s in paths]
 
     if suggestions:
         message += f"\n  ¿Quisiste decir {', '.join(suggestions)}?"
 
-    return MissingAttachment(message)
+    warning = MissingAttachment(message)
+    warning.raw, warning.suggestions = raw, tuple(paths)
+    return warning
+
+
+def at_path(path: str) -> str:
+    """"a.py" -> "@a.py"; con espacios, @"ruta con espacios"."""
+    return "@" + (f'"{path}"' if " " in path else path)
+
+
+def corrected_message(text: str, missing) -> str | None:
+    """text con cada @ruta inexistente cambiada por su única sugerencia.
+
+    None si algún adjunto no tiene exactamente una sugerencia: con varias,
+    "sí" no dice cuál.
+    """
+    for warning in missing:
+        if len(warning.suggestions) != 1:
+            return None
+
+        new = at_path(warning.suggestions[0])
+        written = [f'@"{warning.raw}"', f"@{warning.raw}"]
+        found = next((w for w in written if w in text), None)
+
+        if found is None:
+            return None
+
+        text = text.replace(found, new, 1)
+
+    return text if missing else None
 
 
 def read_attachment(path: Path, max_chars: int) -> Attachment | str:

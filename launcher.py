@@ -11,7 +11,9 @@ from pathlib import Path
 from core.attachments import (
     STDIN_LABEL,
     MissingAttachment,
+    at_path,
     build_chat_prompt,
+    corrected_message,
     decode,
     extract_attachments,
     file_attachments,
@@ -24,6 +26,7 @@ from core.attachments import (
 from config.settings_manager import SettingsManager
 from core.path_completion import make_completer
 from core import timing
+from core.actions.models import command_text
 from core.commands import is_launcher_command, options_text
 from core.confidential import LOCAL_MODE, OPEN_MODE, current_mode
 from core.model_selection import model_for
@@ -114,7 +117,7 @@ def respond_in_context(brain, text, attachments, use_actions):
         print(f"Error inesperado: {e}")
 
 
-def prepare_message(brain, text, files=(), block=None, block_label=STDIN_LABEL):
+def prepare_message(brain, text, files=(), block=None, block_label=STDIN_LABEL, missing=None):
     """Resuelve @ruta, --file y un bloque de texto (stdin o pegado con <<).
 
     Devuelve (texto, adjuntos, use_actions). En el texto, cada @ruta y cada
@@ -136,7 +139,13 @@ def prepare_message(brain, text, files=(), block=None, block_label=STDIN_LABEL):
     extra, extra_warnings = file_attachments(files, cwd, max_chars)
     warnings += extra_warnings
 
-    if any(isinstance(w, MissingAttachment) for w in warnings):
+    not_found = [w for w in warnings if isinstance(w, MissingAttachment)]
+
+    if not_found:
+        # missing: el modo interactivo los guarda para reenviar con un "sí".
+        if missing is not None:
+            missing.extend(not_found)
+
         warn(warnings + ["Mensaje no enviado: corrige la ruta y vuelve a intentarlo."])
         return None
 
@@ -272,6 +281,17 @@ class MessageReader:
         return instruction, "\n".join(lines)
 
 
+YES_REPLIES = {"si", "s", "yes", "y", "claro", "dale", "ok", "vale", "si por favor", "si gracias", "correcto", "eso"}
+
+
+def is_yes(text: str) -> bool:
+    return command_text(text) in YES_REPLIES
+
+
+def fixed_paths(missing) -> str:
+    return ", ".join(at_path(w.suggestions[0]) for w in missing)
+
+
 def user_prompt(settings) -> str:
     """"Tú: ", o "Tú [abierto]: " / "Tú [local]: " si el modo confidencial no es el normal."""
     mode = current_mode(settings)
@@ -285,6 +305,7 @@ def interactive_mode(brain=None, read=None):
     print(startup_message(brain.settings))
 
     messages = MessageReader(read, prompt=lambda: user_prompt(brain.settings))
+    pending = None
 
     try:
         while True:
@@ -294,10 +315,27 @@ def interactive_mode(brain=None, read=None):
                 print("Asia apagada.")
                 break
 
-            prepared = prepare_message(brain, user, block=block, block_label=PASTED_LABEL)
+            # "¿Quisiste decir @X?" seguido de "sí": el mensaje de antes con la ruta corregida.
+            correction, pending = pending, None
+
+            if correction and block is None and is_yes(user):
+                user, block = correction
+                print(f"Reenvío: {user}", file=sys.stderr)
+
+            missing = []
+            prepared = prepare_message(brain, user, block=block, block_label=PASTED_LABEL, missing=missing)
 
             # None: un adjunto no existe; el aviso ya se mostró y se vuelve al prompt.
-            if prepared is None or not prepared[0].strip():
+            if prepared is None:
+                fixed = corrected_message(user, missing)
+
+                if fixed:
+                    pending = (fixed, block)
+                    print(f'(Escribe "sí" para enviarlo con {fixed_paths(missing)}.)', file=sys.stderr)
+
+                continue
+
+            if not prepared[0].strip():
                 continue
 
             text, attachments, use_actions, text_label = prepared
