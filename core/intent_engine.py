@@ -31,7 +31,9 @@ class IntentEngine:
         try:
             unload_others(self.client, model, self.settings)
             # Una llamada sin prompt solo carga el modelo (keep_alive no se toca).
-            self.client.generate(model=model)
+            # Con el mismo num_ctx que las llamadas reales: sin él Ollama lo
+            # carga con 4096 y la primera llamada lo vuelve a cargar (~20 s).
+            self.client.generate(model=model, options={"num_ctx": self.settings.get("ollama_num_ctx")})
         except (ConnectionError, httpx.HTTPError):
             return
         except Exception as e:

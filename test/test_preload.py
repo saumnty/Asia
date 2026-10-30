@@ -37,13 +37,14 @@ def engine(client):
     return e
 
 
-def test_precarga_sin_prompt_ni_keep_alive():
+def test_precarga_sin_prompt_ni_keep_alive_con_el_mismo_num_ctx():
     client = Client()
     client.release.set()
 
     engine(client).preload()
 
-    assert client.generated == [{"model": SettingsManager().get("intent_model")}]
+    settings = SettingsManager()
+    assert client.generated == [{"model": settings.get("intent_model"), "options": {"num_ctx": settings.get("ollama_num_ctx")}}]
 
 
 def test_ollama_apagado_no_muestra_nada(capsys):
