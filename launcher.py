@@ -23,6 +23,7 @@ from core.attachments import (
 )
 from config.settings_manager import SettingsManager
 from core.path_completion import make_completer
+from core import timing
 from core.provenance import ADJUNTO, USUARIO, Fragment, request_sources
 from core.paths import PROJECT_ROOT
 from providers.ollama_models import full_name, installed_models as ollama_installed_models
@@ -72,8 +73,19 @@ def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label
 
     sources = [Fragment(text_label, text)] + [Fragment(ADJUNTO, a.content) for a in attachments]
 
-    with request_sources(*sources):
+    # Con --timing o "/tiempos", una línea de tiempos al final (por stderr,
+    # para no mezclarla con la respuesta si la salida va a un archivo). Si
+    # el mensaje los activa o los quita, esa vez no se muestra.
+    if not timing.enabled(brain.settings):
+        with request_sources(*sources):
+            respond_in_context(brain, text, attachments, use_actions)
+        return
+
+    with timing.measure_request() as timings, request_sources(*sources):
         respond_in_context(brain, text, attachments, use_actions)
+
+    if timing.enabled(brain.settings):
+        print(timing.summary(timings), file=sys.stderr)
 
 
 def respond_in_context(brain, text, attachments, use_actions):
@@ -310,6 +322,11 @@ modo confidencial:
     qué has enviado afuera  resumen de los últimos envíos externos
   --allow-external autoriza los envíos de esa ejecución, confirmando cada uno.
 
+tiempos:
+  --timing, "/tiempos" (o "muestra tiempos") y "/sin tiempos" (o "oculta tiempos"):
+  después de cada respuesta, una línea con el IntentEngine, la carga del modelo,
+  el prompt, los tokens generados, tokens por segundo, el total y el modelo.
+
 proveedor:
   "cambia el provider a gemini" y --provider valen solo para la sesión. Para
   que sea permanente, edita "default_provider" en config/settings.json.
@@ -354,6 +371,11 @@ def build_parser():
         help="modelo de Ollama (p. ej. qwen3:4b) para el chat y las acciones de "
              "esta ejecución; debe estar descargado, Asia no descarga modelos. "
              "No cambia settings.json"
+    )
+    parser.add_argument(
+        "--timing", action="store_true",
+        help="después de cada respuesta muestra los tiempos: IntentEngine, carga del modelo, "
+             "prompt, tokens generados, tokens por segundo, total y modelo usado"
     )
     parser.add_argument(
         "--allow-external", action="store_true",
@@ -410,6 +432,9 @@ def session_overrides(args, parser) -> dict:
 
     if args.allow_external:
         overrides["allow_external"] = True
+
+    if args.timing:
+        overrides[timing.SETTING] = True
 
     if args.model:
         # Se comprueba que esté descargado: Asia nunca descarga modelos.

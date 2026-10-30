@@ -9,6 +9,8 @@ from core.actions.explore import ExploreActions
 from core.actions.memory import MemoryActions
 from core.actions.models import ModelActions, model_command
 from core.actions.confidential import ConfidentialActions, confidential_command
+from core.actions.timing import TimingActions, timing_command
+from core import timing
 from core.provenance import USUARIO, Fragment, request_sources
 # wants_synthesis y wants_unverified se importan desde aquí en las pruebas.
 from core.actions.sandbox import RUN_CANCEL_PHRASES, RUN_CONFIRM_PHRASES, SandboxActions, normalized_command
@@ -140,7 +142,8 @@ SHORTCUT_ACTIONS = {
 }
 
 
-class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxActions, ModelActions, ConfidentialActions):
+class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxActions, ModelActions, ConfidentialActions,
+            TimingActions):
     # Acción del IntentEngine -> método que la atiende (ver core/actions).
     HANDLERS = {
         **MemoryActions.HANDLERS,
@@ -206,7 +209,13 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         if confidential_cmd:
             return self.handle_confidential_command(confidential_cmd)
 
-        intent = self.intent_engine.detect(text)
+        timing_cmd = timing_command(text)
+
+        if timing_cmd:
+            return self.handle_timing_command(timing_cmd)
+
+        with timing.intent_stage():
+            intent = self.intent_engine.detect(text)
 
         action = intent.get("action")
         params = intent.get("params")

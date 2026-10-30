@@ -3,6 +3,7 @@ import sys
 import ollama
 
 from config.settings_manager import SettingsManager
+from core.timing import ollama_metrics
 from providers.ollama_models import ThinkFilter, strip_think, think_kwargs, unload_others
 
 
@@ -82,6 +83,7 @@ class OllamaProvider:
                 options=options,
                 **thinking
             )
+            ollama_metrics(response)
 
             return strip_think(response["message"]["content"])
 
@@ -95,14 +97,18 @@ class OllamaProvider:
 
         visible = ThinkFilter()
         full_response = ""
+        last = None
 
         for chunk in stream:
+            last = chunk
             content = visible.feed(chunk["message"]["content"] or "")
 
             if content:
                 on_chunk(content)
                 full_response += content
 
+        # El último fragmento (done) trae las métricas de la respuesta.
+        ollama_metrics(last)
         rest = visible.flush()
 
         if rest:

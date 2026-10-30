@@ -14,6 +14,7 @@ from core.confidential import (
 )
 from core.audit import log_external_send
 from core.model_selection import StickyModel, model_for, thinks
+from core.timing import timed
 from core.secrets_filter import describe as describe_secrets, redact_messages, safe_error
 from core.provenance import (
     DESCONOCIDO,
@@ -258,7 +259,7 @@ Contexto del proyecto:
         provider = self.get_provider(name)
 
         if not is_external(name, self.settings):
-            return provider.complete(request.messages, on_chunk=on_chunk, review=review, model=model, think=think)
+            return self._call(name, provider, request.messages, on_chunk=on_chunk, review=review, model=model, think=think)
 
         decision = check(request, self.settings, authorized)
         authorization = "una vez" if authorized else "exportable"
@@ -286,7 +287,7 @@ Contexto del proyecto:
         labels = labels_of(request.turn) | set(request.exported_ambient)
 
         try:
-            answer = provider.complete(messages, on_chunk=on_chunk, review=review, model=model, think=think)
+            answer = self._call(name, provider, messages, on_chunk=on_chunk, review=review, model=model, think=think)
         except Exception as e:
             log_external_send(name, model, labels, messages, authorization, len(secrets), ok=False)
             # El error de un proveedor externo no debe mostrar la clave.
@@ -294,6 +295,11 @@ Contexto del proyecto:
 
         log_external_send(name, model, labels, messages, authorization, len(secrets))
         return notice + answer
+
+    @staticmethod
+    def _call(name, provider, messages, **options):
+        """provider.complete, con su tiempo anotado si --timing está activo (core/timing.py)."""
+        return timed(name, options.get("model"), lambda: provider.complete(messages, **options))
 
     def _confirmed_by_flag(self, name, request, decision) -> bool:
         """--allow-external: se confirma cada envío (o "todos en esta ejecución")."""
@@ -336,9 +342,9 @@ Contexto del proyecto:
 
             if on_chunk:
                 on_chunk(f"{notice} Respondo con el modelo local (ollama).{hint}\n\n")
-                answer = local.complete(request.messages, on_chunk=on_chunk, review=review, model=model, think=think)
+                answer = self._call("ollama", local, request.messages, on_chunk=on_chunk, review=review, model=model, think=think)
             else:
-                answer = local.complete(request.messages, review=review, model=model, think=think)
+                answer = self._call("ollama", local, request.messages, review=review, model=model, think=think)
         except Exception as e:
             raise ProviderError(
                 f"{notice} El modelo local (ollama) tampoco respondió: {e}. "
