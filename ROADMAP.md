@@ -232,9 +232,16 @@ Hecho en la fase G (ver la tabla). Pendientes:
 
 - RAM con el 7B cargado: 2 132 MB libres; con Whisper small y la voz, 1 748 MB (ocupan ~380 MB).
 - Latencias (`test/manual/check_voz.py --sin-microfono`, frases generadas con Piper): voz a texto 2,5–2,7 s por frase de 2,4–2,9 s (4,6 s la primera, con la carga de Whisper); texto a voz 0,2–1,9 s de generación para 1,8–27 s de audio. Una respuesta de 110 tokens son ~27 s de lectura.
-- Con voz sintética, Whisper entendió "Vuestra el proyecto activo" y "¡Que ves un grafo bipartito!": las rutas rápidas no lo reconocen y decide el IntentEngine. Medir con voz real; si se repite, probar `initial_prompt` con el vocabulario de Asia o el modelo `medium` (más lento).
+- Con voz sintética, Whisper entendió "Vuestra el proyecto activo" y "¡Que ves un grafo bipartito!": las rutas rápidas no lo reconocen y decide el IntentEngine.
 
-**J2, frase por frase e interrupción:** generar y leer la respuesta por frases mientras llega el streaming (hoy se espera al final) y poder cortarla al hablar o con una tecla, no solo con Ctrl+C.
+**J1, ajustes tras la prueba con voz real (hecho):** con el micrófono de la laptop Whisper entendió "sobre el blog de notas" (iba al chat y respondía 64–85 s de audio sobre blogs), "Moisture el proyecto activo" y "rootmap.md".
+- Vocabulario de Asia como `initial_prompt` de Whisper (`core/voice/vocabulary.py`): verbos de las órdenes (sacados del prompt del IntentEngine, atajos y comandos; primero los más usados), apps de `apps.json` y `apps_learned.json`, proyectos y `voice.stt_vocabulary`. Hasta 400 caracteres. Con voz sintética corrige "bloc de notas", "ROADMAP" y "Bolitabot"; "grafo bipartito" sigue mal. Cuesta ~0,5–0,9 s más de voz a texto. `check_voz.py --transcribir` compara con y sin. Commit `59ca9776`.
+- Brevedad en voz: el recordatorio de "2 a 5 frases" sí se aplicaba; el 7B respondía con una lista de 5 puntos de varias frases (201–284 tokens). En modo voz: "1 a 3 frases, en un solo párrafo, sin listas" y `answer_limits.chat.voice_tokens` (150); el aviso de recorte no se lee. "Sobre el blog de notas": de 147–284 a 44–97 tokens. A veces el 7B igual se alarga (143 tokens en una corrida del grafo). Commit `a344cb60`.
+- VAD: a Whisper solo le llega la voz con 0,3 s de margen (antes, también la espera tras el Enter y el silencio final: así una frase corta daba 7,4 s de audio); la frase empieza con 96 ms seguidos de voz (`min_speech_ms`). Con ruido blanco el VAD no pasa de 0,12, así que el ruido no parece ser la causa. `/calibrar voz` mide 3 s de ruido y sube el umbral para la sesión si hace falta; `--timing` muestra "de X s grabados" si se grabó mucho más que la voz. Commit `0b06ca87`.
+- Si con voz real sigue fallando: el modelo `medium` (más lento) o sumar palabras a `voice.stt_vocabulary`.
+
+**J2, frase por frase e interrupción (hecho):** `core/voice/reading.py`. Cada frase completa del streaming (nunca dentro de un bloque de código ni de una fila de tabla) se genera en un hilo y suena en otro, en orden; la respuesta sigue sonando al volver al prompt. Enter (mientras escribe o al mandar otra línea), Ctrl+C (corta la lectura, no Asia) o volver a escuchar cortan la lectura y vacían la cola. "Te dejo el código en pantalla" se dice una vez al final. `--timing` añade "primer audio".
+- Hasta el primer audio, desde que termina la frase dicha (`check_voz.py --sin-microfono`, con altavoz): "qué es un grafo bipartito" 15,8 s → 9,1 s; "sobre el blog de notas" 29,6 s → 10,2 s (con la brevedad en voz); "cuéntame un chiste" 11,2 s → 9,3 s (respuesta de una frase: casi todo es la intención y el modelo). Voz a texto aparte: 2,7 → 3,1 s.
 
 **J3, palabra de activación:** "Hey Jarvis" de openWakeWord para las pruebas; después, "Oye Asia" entrenada.
 
