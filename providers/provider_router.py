@@ -1,4 +1,7 @@
+import re
+
 from providers.ollama_provider import OllamaProvider
+from core.actions.models import command_text
 from memory.memory_manager import MemoryManager
 from memory.project_memory import ProjectMemory
 from config.settings_manager import SettingsManager
@@ -34,6 +37,31 @@ SYSTEM_PROMPT = (
     "Eres Asia, un asistente local. "
     "Responde en español, de forma clara y útil."
 )
+
+# Solo en el chat (las acciones llevan sus propias instrucciones). Es texto
+# fijo: el principio del prompt no cambia entre mensajes y Ollama lo
+# reutiliza de su caché; el detalle pedido solo cambia el tope de tokens.
+CHAT_RULES = (
+    "Responde en 2 a 5 frases, salvo que el usuario pida más detalle (a fondo, con detalle, "
+    "ejemplos, paso a paso): entonces extiéndete lo necesario.\n"
+    "No inventes ejemplos, datos, nombres, fechas ni cifras. Si no estás seguro de algo "
+    'concreto, dilo ("no estoy seguro") en lugar de rellenar.'
+)
+
+# Los mismos que answer_limits.chat en config/defaults.json, por si falta la clave.
+DEFAULT_CHAT_LIMITS = {"tokens": 350, "detail_tokens": 1500}
+
+DETAIL_REQUEST = re.compile(
+    r"\b(a fondo|en detalle|con detalle|detallad[oa]s?|detalladamente|dame (unos |algunos )?ejemplos"
+    r"|con ejemplos|ejemplos de|paso a paso|explica(me)? (todo|bien|completo)|completo|extens[oa]"
+    r"|mas largo|mas detalle|profundidad|exhaustiv[oa])\b"
+)
+
+
+def wants_detail(text: str) -> bool:
+    """El usuario pide una respuesta larga ("explica a fondo", "dame ejemplos")."""
+    return bool(DETAIL_REQUEST.search(command_text(text)))
+
 
 # Mensajes (usuario + asistente) que se conservan del chat con el usuario.
 MAX_HISTORY_MESSAGES = 20
@@ -162,6 +190,8 @@ class ProviderRouter:
         project_context = self.build_project_context()
         system_prompt = f"""{SYSTEM_PROMPT}
 
+{CHAT_RULES}
+
 Contexto personal:
 {memory_context}
 
@@ -192,6 +222,7 @@ Contexto del proyecto:
         request = self.external_chat_request(messages, turn, memory_context, project_context, user_message)
         model = self.sticky_model.choose(prompt, self.settings)
         options = {"model": model, "think": thinks(self.settings, self.sticky_model.domain)}
+        request.max_tokens = self.chat_max_tokens(history_prompt or prompt, options["think"])
         self.last_request = (request, options)
 
         try:
@@ -217,6 +248,18 @@ Contexto del proyecto:
 
         return answer
 
+    def chat_max_tokens(self, text, think):
+        """Tope de la respuesta del chat (answer_limits.chat): más alto si se pide detalle.
+
+        Con razonamiento (math con qwen3) no hay tope: num_predict cuenta
+        también los tokens del razonamiento y lo cortaría.
+        """
+        if think:
+            return None
+
+        limits = {**DEFAULT_CHAT_LIMITS, **((self.settings.get("answer_limits") or {}).get("chat") or {})}
+        return limits["detail_tokens"] if wants_detail(text) else limits["tokens"]
+
     def external_chat_request(self, messages, turn, memory_context, project_context, user_message):
         """El chat completo y su versión para fuera, sin el contexto de fondo local."""
         exportable = exportable_labels(self.settings)
@@ -229,7 +272,7 @@ Contexto del proyecto:
         if project_context:
             omitted.append("resumen del proyecto")
 
-        system = SYSTEM_PROMPT + (f"\n\nContexto personal:\n{memory_context}\n" if memory_ok else "")
+        system = f"{SYSTEM_PROMPT}\n\n{CHAT_RULES}" + (f"\n\nContexto personal:\n{memory_context}\n" if memory_ok else "")
         history = [m for m, label in zip(self.history, self.history_labels) if label in exportable]
         exported = {label for label in self.history_labels if label in exportable}
 

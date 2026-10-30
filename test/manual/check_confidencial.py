@@ -42,7 +42,7 @@ class SimulatedGemini:
     def __init__(self):
         self.received = []
 
-    def complete(self, messages, on_chunk=None, review=False, model=None, think=False):
+    def complete(self, messages, on_chunk=None, review=False, model=None, think=False, max_tokens=None):
         self.received.append(messages)
         answer = "(respuesta simulada de Gemini)"
 

@@ -225,7 +225,7 @@ class FakeProvider:
     def __init__(self):
         self.fragments = []
 
-    def complete(self, messages, on_chunk=None, review=False, model=None, think=False):
+    def complete(self, messages, on_chunk=None, review=False, model=None, think=False, max_tokens=None):
         return "respuesta"
 
 

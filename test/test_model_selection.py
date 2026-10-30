@@ -107,7 +107,7 @@ class FakeProvider:
     def __init__(self):
         self.models = []
 
-    def complete(self, messages, on_chunk=None, review=False, model=None, think=False):
+    def complete(self, messages, on_chunk=None, review=False, model=None, think=False, max_tokens=None):
         self.models.append(model)
         return "ok"
 
@@ -342,7 +342,7 @@ def test_router_activa_think_solo_en_math():
             super().__init__()
             self.thinks = []
 
-        def complete(self, messages, on_chunk=None, review=False, model=None, think=False):
+        def complete(self, messages, on_chunk=None, review=False, model=None, think=False, max_tokens=None):
             self.thinks.append(think)
             return "ok"
 

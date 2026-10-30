@@ -98,7 +98,7 @@ class FakeProvider:
         self.received = []
         self.fail = fail
 
-    def complete(self, messages, on_chunk=None, review=False, model=None, think=False):
+    def complete(self, messages, on_chunk=None, review=False, model=None, think=False, max_tokens=None):
         if self.fail:
             raise self.fail
 
