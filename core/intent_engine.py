@@ -3,6 +3,7 @@ import re
 import ollama
 
 from config.settings_manager import SettingsManager
+from core import timing
 from core.confidential import is_local_mode, is_open_mode, ollama_is_external, only_user
 from core.provenance import NEVER_EXPORT, current_fragments, labels_of, local_labels
 from core.audit import log_external_send
@@ -271,6 +272,7 @@ Usuario: muestra el cambio pendiente
         except Exception:
             return {"action": "chat", "params": {}}
 
+        timing.intent_metrics(response)
         content = strip_think(response["message"]["content"]).strip()
 
         match = re.search(r"\{.*\}", content, re.DOTALL)

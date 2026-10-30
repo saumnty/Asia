@@ -207,3 +207,38 @@ def test_help_documenta_timing(capsys):
 
     out = capsys.readouterr().out
     assert "--timing" in out and "/tiempos" in out and "/sin tiempos" in out
+
+
+# --- El IntentEngine por dentro ------------------------------------------------------
+
+def test_linea_con_las_metricas_del_intent_engine():
+    timings = Timings(start=0.0, intent=21.3)
+    timings.intent_call = ModelCall("ollama", "m:1", load=0.0, prompt_eval=19.8, prompt_tokens=2400, tokens=18, eval=1.2)
+
+    assert summary(timings, now=22.0).startswith(
+        "[tiempos] intención 21,3 s (prompt 2400 tokens en 19,8 s, 18 generados) · total 22,0 s"
+    )
+
+
+class FakeIntentClient(FakeOllamaClient):
+    def chat(self, model, messages, stream=False, options=None, **kwargs):
+        return {
+            "message": {"content": '{"action": "chat", "params": {}}'},
+            **METRICS, "prompt_eval_count": 1900, "eval_count": 14,
+        }
+
+
+def test_intent_engine_registra_sus_metricas_aparte():
+    from core.intent_engine import IntentEngine
+
+    engine = IntentEngine.__new__(IntentEngine)
+    engine.settings = SettingsManager()
+    engine.client = FakeIntentClient()
+
+    with timing.measure_request() as timings:
+        with timing.intent_stage():
+            assert engine.detect("hola")["action"] == "chat"
+
+    assert (timings.intent_call.prompt_tokens, timings.intent_call.tokens) == (1900, 14)
+    assert timings.calls == []
+    assert "prompt 1900 tokens en 0,5 s, 14 generados, carga 2,0 s" in summary(timings)
