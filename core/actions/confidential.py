@@ -24,7 +24,7 @@ NORMAL_PHRASES = {
     "modo normal", "sal del modo local", "salir del modo local", "desactiva el modo local",
     "sal del modo abierto", "salir del modo abierto", "desactiva el modo abierto",
 }
-OPEN_PHRASES = {"modo abierto", "/modo abierto", "activa el modo abierto", "pasa a modo abierto"}
+OPEN_PHRASES = {"modo abierto", "activa el modo abierto", "pasa a modo abierto"}
 
 OPEN_MODE_WARNING = (
     "Modo abierto (solo en esta sesión): lo que entra al prompt sale al proveedor externo "

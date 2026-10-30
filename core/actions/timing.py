@@ -1,14 +1,15 @@
 """Mostrar u ocultar los tiempos de cada respuesta (core/timing.py).
 
-"/tiempos" y "/sin tiempos" (o "muestra tiempos" y "oculta tiempos") se
-reconocen por texto, sin el IntentEngine. Es un valor de sesión, como
+"muestra tiempos" y "oculta tiempos" (y "/tiempos", "/sin tiempos", que
+core/commands.py traduce a estas frases) se reconocen por texto, sin el
+IntentEngine. Es un valor de sesión, como
 --timing: dura hasta salir de Asia y no se escribe en settings.json.
 """
 from core.actions.models import command_text, set_session
 from core.timing import SETTING
 
-ON_PHRASES = {"/tiempos", "muestra tiempos", "muestra los tiempos", "activa los tiempos"}
-OFF_PHRASES = {"/sin tiempos", "oculta tiempos", "oculta los tiempos", "desactiva los tiempos"}
+ON_PHRASES = {"muestra tiempos", "muestra los tiempos", "activa los tiempos"}
+OFF_PHRASES = {"oculta tiempos", "oculta los tiempos", "desactiva los tiempos"}
 
 
 def timing_command(text: str):

@@ -24,7 +24,9 @@ from core.attachments import (
 from config.settings_manager import SettingsManager
 from core.path_completion import make_completer
 from core import timing
+from core.commands import is_launcher_command, options_text
 from core.confidential import LOCAL_MODE, OPEN_MODE, current_mode
+from core.model_selection import model_for
 from core.provenance import ADJUNTO, USUARIO, Fragment, request_sources
 from core.paths import PROJECT_ROOT
 from providers.ollama_models import full_name, installed_models as ollama_installed_models
@@ -37,8 +39,6 @@ Session.set_paths(
     user_cwd=Path.cwd(),
 )
 
-EXIT_COMMANDS = {"salir", "exit", "quit"}
-CWD_COMMANDS = {"cwd", "donde estoy", "carpeta actual"}
 
 DEFAULT_ATTACHMENT_MAX_CHARS = 20000
 
@@ -282,8 +282,7 @@ def interactive_mode(brain=None, read=None):
     brain = brain or Brain()
     read = read or make_reader()
 
-    print("Asia iniciada")
-    print(f"(Para pegar varias líneas termina el mensaje con {MULTILINE_START} y cierra con {MULTILINE_END}.)")
+    print(startup_message(brain.settings))
 
     messages = MessageReader(read, prompt=lambda: user_prompt(brain.settings))
 
@@ -291,7 +290,7 @@ def interactive_mode(brain=None, read=None):
         while True:
             user, block = messages.next_message()
 
-            if block is None and user.lower().strip() in EXIT_COMMANDS:
+            if block is None and is_launcher_command(user, "salir"):
                 print("Asia apagada.")
                 break
 
@@ -311,38 +310,48 @@ def interactive_mode(brain=None, read=None):
         print("\nAsia apagada.")
 
 
-MODEL_HELP = """modelos:
+# Lo que no es un comando de sesión; los comandos salen de core/commands.py,
+# la misma tabla que "/opciones".
+HELP_NOTES = """
+cómo se elige el modelo:
   El chat elige el modelo según el tema (models_by_domain en config: código,
   matemáticas o general) y lo mantiene mientras siga la conversación. Las
-  acciones de código usan el de código. En el modo interactivo:
-    ¿qué modelo estás usando?        muestra los modelos en uso
-    usa el modelo de matemáticas     fija el chat en ese dominio (también: de código, general)
-    usa el modelo qwen3:4b           fija un modelo descargado para todo
-    vuelve al modelo normal          quita lo fijado
-  Lo que se cambia dura solo la sesión; no se escribe en settings.json.
+  acciones de código usan el de código.
 
 modo confidencial:
   Archivos, adjuntos (@ruta, --file, stdin, << ... FIN), RAG, resumen del
   proyecto y memoria no salen hacia un proveedor externo (Gemini, u Ollama en
   otra máquina) sin autorización: responde el modelo local y lo avisa.
-    envía esto a Gemini     muestra qué saldría del último mensaje; luego "confirmar envío"
-    modo local              no sale nada, ni lo que escribes; "modo normal" lo quita
-    modo abierto            sale todo lo que entra al prompt (archivos, adjuntos, RAG,
-                            proyecto, memoria, historial, con rutas) sin pedir
-                            autorización; siguen el filtro de secretos y la bitácora y
-                            lo emocional nunca sale. Solo la sesión; "modo normal" lo quita
-    qué has enviado afuera  resumen de los últimos envíos externos
   --allow-external autoriza los envíos de esa ejecución, confirmando cada uno.
+  "/modo abierto" deja salir todo lo que entra al prompt en la sesión.
 
-tiempos:
-  --timing, "/tiempos" (o "muestra tiempos") y "/sin tiempos" (o "oculta tiempos"):
-  después de cada respuesta, una línea con el IntentEngine, la carga del modelo,
-  el prompt, los tokens generados, tokens por segundo, el total y el modelo.
-
-proveedor:
-  "cambia el provider a gemini" y --provider valen solo para la sesión. Para
-  que sea permanente, edita "default_provider" en config/settings.json.
+flags de sesión:
+  --provider, --model y --timing valen solo para esa ejecución, como los
+  comandos de sesión.
 """
+
+
+def help_epilog() -> str:
+    return options_text() + "\n" + HELP_NOTES
+
+
+def startup_message(settings) -> str:
+    """Modelo, modo y cómo ver los comandos."""
+    provider = settings.get("default_provider") or "ollama"
+
+    if provider == "ollama":
+        model = model_for(settings, "general")
+    else:
+        model = settings.get(f"{provider}_model")
+
+    used = f"{provider}/{model}" if model else provider
+
+    return (
+        "Asia iniciada\n"
+        f"Modelo: {used} · modo {current_mode(settings)}\n"
+        "Escribe /opciones para ver los comandos.\n"
+        f"(Para pegar varias líneas termina el mensaje con {MULTILINE_START} y cierra con {MULTILINE_END}.)"
+    )
 
 
 def build_parser():
@@ -358,7 +367,7 @@ def build_parser():
             "líneas hasta una línea con FIN (o FIN al final de la última línea). "
             "Usa -- antes de un mensaje que empiece con guion."
         ),
-        epilog=MODEL_HELP,
+        epilog=help_epilog(),
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("prompt", nargs="*", help="mensaje para Asia")
@@ -486,12 +495,12 @@ def main(argv=None, stdin=None, brain_factory=Brain):
         interactive_mode(with_confirmation(brain_factory()))
         return
 
-    if prompt.lower().strip() in CWD_COMMANDS and not args.file and stdin_data is None:
+    if is_launcher_command(prompt, "carpeta") and not args.file and stdin_data is None:
         print(f"Carpeta desde donde llamaste a Asia: {Session.get_user_cwd()}")
         return
 
     # "jarvis salir" no tiene nada que hacer: no se crea Brain ni se llama al modelo.
-    if prompt.lower().strip() in EXIT_COMMANDS and not args.file and stdin_data is None:
+    if is_launcher_command(prompt, "salir") and not args.file and stdin_data is None:
         print("Asia apagada.")
         return
 

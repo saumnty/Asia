@@ -11,6 +11,8 @@ from core.actions.models import ModelActions, model_command
 from core.actions.confidential import ConfidentialActions, confidential_command
 from core.actions.timing import TimingActions, timing_command
 from core import timing
+from core.commands import is_launcher_command, options_text, resolve as resolve_command, unknown_message as unknown_command
+from core.session import Session
 from core.provenance import USUARIO, Fragment, request_sources
 # wants_synthesis y wants_unverified se importan desde aquí en las pruebas.
 from core.actions.sandbox import RUN_CANCEL_PHRASES, RUN_CONFIRM_PHRASES, SandboxActions, normalized_command
@@ -183,6 +185,26 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
             return self.process_labeled(text)
 
     def process_labeled(self, text):
+        # Comandos "/" (core/commands.py): se traducen a su frase, que se
+        # atiende abajo como siempre.
+        slash = resolve_command(text)
+
+        if slash:
+            if slash.unknown:
+                return unknown_command(slash.unknown)
+
+            if slash.command.special == "opciones":
+                return options_text()
+
+            if slash.command.action:
+                action, param = slash.command.action
+                return getattr(self, self.HANDLERS[action])(text, {param: slash.arg})
+
+            text = slash.phrase or text
+
+        if is_launcher_command(text, "carpeta"):
+            return f"Carpeta desde donde llamaste a Asia: {Session.get_user_cwd()}"
+
         command = normalized_command(text)
 
         # Comandos fijos: texto exacto, sin pasar por el IntentEngine.
