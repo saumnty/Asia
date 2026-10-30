@@ -61,6 +61,23 @@
         ".html", ".css", ".sdf", ".urdf", ".launch"
     ],
 
+    "voice": {
+        "stt_engine": "faster_whisper",
+        "stt_model": "small",
+        "stt_compute_type": "int8",
+        "stt_beam_size": 5,
+        "language": "es",
+        "tts_engine": "piper",
+        "tts_voice": "es_MX-claude-high",
+        "tts_speaker": null,
+        "models_dir": "data/models",
+        "voices_dir": "data/voices",
+        "vad_threshold": 0.5,
+        "silence_ms": 800,
+        "max_seconds": 30,
+        "start_timeout_s": 8
+    },
+
     "answer_limits": {
         "explain_file": {"words": 150, "tokens": 450},
         "summarize_file": {"words": 100, "tokens": 300},

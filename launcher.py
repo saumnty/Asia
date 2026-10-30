@@ -298,7 +298,48 @@ def user_prompt(settings) -> str:
     return f"\nTú [{mode}]: " if mode in {OPEN_MODE, LOCAL_MODE} else "\nTú: "
 
 
-def interactive_mode(brain=None, read=None):
+VOICE_SETTING = "voice_mode"
+
+
+def voice_enabled(settings) -> bool:
+    """Valor de sesión (como --timing): lo activan "/voz" y --voz."""
+    return bool(settings.get(VOICE_SETTING))
+
+
+def enter_pressed() -> bool:
+    """True si se pulsó Enter mientras se escucha (Windows, sin bloquear)."""
+    try:
+        import msvcrt
+    except ImportError:
+        return False
+
+    while msvcrt.kbhit():
+        if msvcrt.getwch() in "\r\n":
+            return True
+
+    return False
+
+
+def listen(voice, settings, stop_requested=enter_pressed):
+    """Escucha una frase y la muestra como si se hubiera escrito. "" si no se oyó nada."""
+    print("[Escuchando: habla; termina con un silencio o con Enter]", file=sys.stderr, flush=True)
+
+    try:
+        heard = voice.listen(stop_requested)
+    except Exception as e:
+        print(f"No pude escuchar: {e}", file=sys.stderr)
+        return ""
+
+    if not heard.text:
+        print("(No te oí. Pulsa Enter en una línea vacía y vuelve a hablar.)", file=sys.stderr)
+        return ""
+
+    print(f"{user_prompt(settings).strip()} {heard.text}")
+    return heard.text
+
+
+def interactive_mode(brain=None, read=None, voice=None):
+    """voice: la sesión de voz (core/voice/session.py); se crea al primer uso."""
     brain = brain or Brain()
     read = read or make_reader()
 
@@ -314,6 +355,16 @@ def interactive_mode(brain=None, read=None):
     try:
         while True:
             user, block = messages.next_message()
+
+            # Modo voz: Enter en una línea vacía escucha; lo dictado es "usuario",
+            # igual que lo tecleado.
+            if block is None and not user.strip() and voice_enabled(brain.settings):
+                if voice is None:
+                    from core.voice.session import VoiceSession
+
+                    voice = VoiceSession(brain.settings)
+
+                user = listen(voice, brain.settings)
 
             if block is None and is_launcher_command(user, "salir"):
                 print("Asia apagada.")
