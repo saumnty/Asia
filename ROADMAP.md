@@ -228,7 +228,23 @@ Hecho en la fase G (ver la tabla). Pendientes:
 
 ### Voz y avatar
 
-- Voz local: reconocimiento con faster-whisper y síntesis con Piper (voz femenina).
+**J1, voz en la terminal (hecho):** `core/voice/` es una capa de entrada y salida; el cerebro no cambia. Con `/voz` (o `--voz`), Enter en una línea vacía escucha (sounddevice, 16 kHz mono; Silero VAD tramo a tramo con el ONNX que trae faster-whisper, sin el paquete `silero-vad` ni PyTorch); termina con 800 ms de silencio o con otro Enter. faster-whisper `small` siempre en CPU int8 (`beam_size` 5: igual de rápido que 1 y acierta más). Lo entendido se muestra como tecleado y lleva la etiqueta "usuario". Las respuestas se muestran enteras y se lee su texto normal con Piper (`es_MX-claude-high`), sin código, tablas, rutas ni markdown ("te dejo el código en pantalla"). Motores elegidos por config (`voice` en `defaults.json`); el audio no se guarda. `/sin voz` libera los modelos. Paquetes en `requirements-voice.txt`; modelos y voces en `data/models` y `data/voices` (no versionados). Commits: `af14fd52`, `3ccb0f5b`, `b8a31257`, `e9763b0f`, `49ef551a`, `37f519c3`.
+
+- RAM con el 7B cargado: 2 132 MB libres; con Whisper small y la voz, 1 748 MB (ocupan ~380 MB).
+- Latencias (`test/manual/check_voz.py --sin-microfono`, frases generadas con Piper): voz a texto 2,5–2,7 s por frase de 2,4–2,9 s (4,6 s la primera, con la carga de Whisper); texto a voz 0,2–1,9 s de generación para 1,8–27 s de audio. Una respuesta de 110 tokens son ~27 s de lectura.
+- Con voz sintética, Whisper entendió "Vuestra el proyecto activo" y "¡Que ves un grafo bipartito!": las rutas rápidas no lo reconocen y decide el IntentEngine. Medir con voz real; si se repite, probar `initial_prompt` con el vocabulario de Asia o el modelo `medium` (más lento).
+
+**J2, frase por frase e interrupción:** generar y leer la respuesta por frases mientras llega el streaming (hoy se espera al final) y poder cortarla al hablar o con una tecla, no solo con Ctrl+C.
+
+**J3, palabra de activación:** "Hey Jarvis" de openWakeWord para las pruebas; después, "Oye Asia" entrenada.
+
+**J4, servicio en segundo plano:** Asia escuchando sin la terminal abierta (bandeja del sistema o servicio), con el mismo modo confidencial.
+
+**Voz propia de Piper:** fine-tuning en Colab a partir de una voz en español; el `.onnx` y su `.onnx.json` se dejan en `data/voices/` y se elige con `voice.tts_voice`, sin cambiar código.
+
+**Licencias de voz:** `piper-tts` 1.3+ es GPL-3.0 (vale para uso personal). Si algún día se distribuye Asia, la alternativa es el Piper anterior con licencia MIT (rhasspy/piper, hasta 1.2). Voces descargadas: `es_MX-claude-high` (datos Apache-2.0), `es_MX-ald-medium` (Unlicense) y `es_ES-sharvard-medium` (CC BY 3.0, exige atribución). `ald` y `sharvard` se afinaron desde `lessac`, cuyos datos probablemente son de uso no comercial: revisarlo antes de distribuir.
+
+**Pendiente:**
 - Canal de estado local (Flask-SocketIO) para que el avatar reaccione a hablar, pensar y escuchar.
 - Avatar: perro bóxer.
 
