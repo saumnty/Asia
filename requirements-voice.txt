@@ -1,0 +1,7 @@
+# Voz (fase J1), opcional: .venv\Scripts\python.exe -m pip install -r requirements-voice.txt
+# sounddevice ya viene con el resto; Silero VAD es el ONNX que trae faster-whisper
+# (sin el paquete silero-vad, que carga PyTorch). Whisper corre en CPU (int8).
+sounddevice==0.5.5
+faster-whisper==1.2.1
+# piper-tts 1.3+ es GPL-3.0 (uso personal). Para distribuir Asia, ver ROADMAP.
+piper-tts==1.8.0

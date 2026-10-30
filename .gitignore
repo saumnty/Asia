@@ -18,3 +18,7 @@ logs/
 
 # Apps que open_app aprende del menú Inicio (config/apps.json es del repositorio).
 config/apps_learned.json
+
+# Voz (fase J1): modelos de Whisper y voces de Piper, se descargan aparte.
+data/models/
+data/voices/
