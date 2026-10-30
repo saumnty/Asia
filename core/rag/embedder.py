@@ -1,7 +1,7 @@
 import requests
 
 from config.settings_manager import SettingsManager
-from core.confidential import ollama_is_external
+from core.confidential import is_open_mode, ollama_is_external
 
 
 class ExternalEmbeddingBlocked(RuntimeError):
@@ -21,7 +21,8 @@ class OllamaEmbedder:
         self.external = ollama_is_external(_HostSettings(host, settings.get("trusted_local_hosts")))
 
     def embed(self, text: str) -> list[float]:
-        if self.external:
+        # En modo abierto el contenido puede salir (fase G).
+        if self.external and not is_open_mode(SettingsManager()):
             raise ExternalEmbeddingBlocked(
                 "ollama_host apunta fuera de esta máquina: no envío contenido de archivos "
                 "para indexar ni buscar con RAG. Agrega el host a trusted_local_hosts en "

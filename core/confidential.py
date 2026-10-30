@@ -12,8 +12,14 @@ Antes de un envío externo:
   son contexto de fondo del chat: no bloquean el envío, se quitan de lo
   que sale (la memoria se deja si external_allow_memory es true).
 - En modo local ("modo local") no sale nada, ni lo tecleado.
+- En modo abierto ("modo abierto") sale todo lo que entra al prompt, con
+  el contexto de fondo y las rutas, sin pedir autorización. Siguen el
+  filtro de secretos y la bitácora; lo "emocional" nunca sale.
 - Las rutas absolutas se reemplazan por el nombre del archivo, solo en lo
-  que sale.
+  que sale (salvo en modo abierto).
+
+Los modos son valores de sesión (confidential_mode): duran hasta salir de
+Asia. Sin modo elegido es "normal", o "abierto" si open_mode_default es true.
 """
 import re
 from dataclasses import dataclass, field
@@ -32,10 +38,25 @@ EXTERNAL_PROVIDERS = {"gemini"}
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 LOCAL_MODE = "local"
+NORMAL_MODE = "normal"
+OPEN_MODE = "abierto"
+
+
+def current_mode(settings) -> str:
+    mode = settings.get("confidential_mode")
+
+    if mode in {LOCAL_MODE, NORMAL_MODE, OPEN_MODE}:
+        return mode
+
+    return OPEN_MODE if settings.get("open_mode_default") else NORMAL_MODE
 
 
 def is_local_mode(settings) -> bool:
-    return settings.get("confidential_mode") == LOCAL_MODE
+    return current_mode(settings) == LOCAL_MODE
+
+
+def is_open_mode(settings) -> bool:
+    return current_mode(settings) == OPEN_MODE
 
 
 def ollama_is_external(settings) -> bool:
@@ -59,6 +80,8 @@ class OutgoingRequest:
     messages es lo completo (para el modelo local); external_messages, lo
     que puede salir sin el contexto de fondo local. turn es la procedencia
     de lo que trae este mensaje; omitted, lo que se quitó de external_messages.
+    open_messages es lo que sale en modo abierto (todo menos lo que nunca
+    sale) y open_labels, las etiquetas del contexto de fondo que lleva.
     """
     messages: list
     turn: list
@@ -66,10 +89,15 @@ class OutgoingRequest:
     omitted: list = field(default_factory=list)
     # Etiquetas del contexto de fondo que sí van en external_messages (memoria permitida...).
     exported_ambient: list = field(default_factory=list)
+    open_messages: list = None
+    open_labels: list = field(default_factory=list)
 
     def __post_init__(self):
         if self.external_messages is None:
             self.external_messages = self.messages
+
+        if self.open_messages is None:
+            self.open_messages = self.messages
 
 
 @dataclass
@@ -89,6 +117,9 @@ def check(request: OutgoingRequest, settings, authorized=False) -> Decision:
 
     if never:
         return Decision(False, f"lleva contenido {describe_labels(never)}, que nunca sale", never)
+
+    if is_open_mode(settings):
+        return Decision(True)
 
     local = local_labels(labels, settings)
 

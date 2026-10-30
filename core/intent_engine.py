@@ -3,8 +3,8 @@ import re
 import ollama
 
 from config.settings_manager import SettingsManager
-from core.confidential import is_local_mode, ollama_is_external, only_user
-from core.provenance import current_fragments, labels_of, local_labels
+from core.confidential import is_local_mode, is_open_mode, ollama_is_external, only_user
+from core.provenance import NEVER_EXPORT, current_fragments, labels_of, local_labels
 from core.audit import log_external_send
 from core.secrets_filter import redact_messages
 from providers.ollama_models import strip_think, think_kwargs, unload_others
@@ -247,11 +247,15 @@ Usuario: muestra el cambio pendiente
         if ollama_is_external(self.settings):
             labels = labels_of(current_fragments() or only_user(text))
 
-            if is_local_mode(self.settings) or local_labels(labels, self.settings):
+            open_mode = is_open_mode(self.settings)
+            blocked = labels & NEVER_EXPORT or local_labels(labels, self.settings) and not open_mode
+
+            if is_local_mode(self.settings) or blocked:
                 return {"action": "chat", "params": {}}
 
             messages, secrets = redact_messages(messages)
-            log_external_send("ollama", self.settings.get("intent_model"), labels, messages, "exportable", len(secrets))
+            authorization = "modo abierto" if open_mode else "exportable"
+            log_external_send("ollama", self.settings.get("intent_model"), labels, messages, authorization, len(secrets))
 
         try:
             model = self.settings.get("intent_model")

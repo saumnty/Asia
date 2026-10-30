@@ -24,6 +24,7 @@ from core.attachments import (
 from config.settings_manager import SettingsManager
 from core.path_completion import make_completer
 from core import timing
+from core.confidential import LOCAL_MODE, OPEN_MODE, current_mode
 from core.provenance import ADJUNTO, USUARIO, Fragment, request_sources
 from core.paths import PROJECT_ROOT
 from providers.ollama_models import full_name, installed_models as ollama_installed_models
@@ -193,8 +194,9 @@ class MessageReader:
     aunque venga dentro del mismo pegado.
     """
 
-    def __init__(self, read):
+    def __init__(self, read, prompt=lambda: "\nTú: "):
         self.read = read
+        self.prompt = prompt
         self.pending = deque()
 
     def closes_read(self, remainder=None):
@@ -231,7 +233,7 @@ class MessageReader:
         líneas en la misma lectura (un pegado sin <<), todo el pegado es un
         solo mensaje.
         """
-        first = self.next_line("\nTú: ")
+        first = self.next_line(self.prompt())
         stripped = first.rstrip()
         marker = first.find(MULTILINE_START)
 
@@ -270,6 +272,12 @@ class MessageReader:
         return instruction, "\n".join(lines)
 
 
+def user_prompt(settings) -> str:
+    """"Tú: ", o "Tú [abierto]: " / "Tú [local]: " si el modo confidencial no es el normal."""
+    mode = current_mode(settings)
+    return f"\nTú [{mode}]: " if mode in {OPEN_MODE, LOCAL_MODE} else "\nTú: "
+
+
 def interactive_mode(brain=None, read=None):
     brain = brain or Brain()
     read = read or make_reader()
@@ -277,7 +285,7 @@ def interactive_mode(brain=None, read=None):
     print("Asia iniciada")
     print(f"(Para pegar varias líneas termina el mensaje con {MULTILINE_START} y cierra con {MULTILINE_END}.)")
 
-    messages = MessageReader(read)
+    messages = MessageReader(read, prompt=lambda: user_prompt(brain.settings))
 
     try:
         while True:
@@ -319,6 +327,10 @@ modo confidencial:
   otra máquina) sin autorización: responde el modelo local y lo avisa.
     envía esto a Gemini     muestra qué saldría del último mensaje; luego "confirmar envío"
     modo local              no sale nada, ni lo que escribes; "modo normal" lo quita
+    modo abierto            sale todo lo que entra al prompt (archivos, adjuntos, RAG,
+                            proyecto, memoria, historial, con rutas) sin pedir
+                            autorización; siguen el filtro de secretos y la bitácora y
+                            lo emocional nunca sale. Solo la sesión; "modo normal" lo quita
     qué has enviado afuera  resumen de los últimos envíos externos
   --allow-external autoriza los envíos de esa ejecución, confirmando cada uno.
 

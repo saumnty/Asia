@@ -10,6 +10,7 @@ from core.confidential import (
     describe_chars,
     is_external,
     is_local_mode,
+    is_open_mode,
     outgoing_messages,
 )
 from core.audit import log_external_send
@@ -239,7 +240,23 @@ Contexto del proyecto:
             omitted.append(f"{len(self.history) - len(history)} mensajes del historial")
 
         external = [{"role": "system", "content": system}, *history, user_message]
-        return OutgoingRequest(messages, turn, external, omitted, sorted(exported))
+
+        # Modo abierto: todo el chat (memoria, proyecto, historial) menos los
+        # turnos que nunca salen.
+        open_history = [m for m, label in zip(self.history, self.history_labels) if label not in NEVER_EXPORT]
+        open_labels = {label for label in self.history_labels if label not in NEVER_EXPORT}
+
+        if self.memory.load():
+            open_labels.add(MEMORIA)
+
+        if project_context:
+            open_labels.add(PROYECTO)
+
+        return OutgoingRequest(
+            messages, turn, external, omitted, sorted(exported),
+            open_messages=[messages[0], *open_history, user_message],
+            open_labels=sorted(open_labels),
+        )
 
     # --- Envío con la política del modo confidencial ---------------------------
 
@@ -262,7 +279,8 @@ Contexto del proyecto:
             return self._call(name, provider, request.messages, on_chunk=on_chunk, review=review, model=model, think=think)
 
         decision = check(request, self.settings, authorized)
-        authorization = "una vez" if authorized else "exportable"
+        open_mode = is_open_mode(self.settings)
+        authorization = "modo abierto" if open_mode else "una vez" if authorized else "exportable"
 
         if not decision.allowed and self._confirmed_by_flag(name, request, decision):
             decision = check(request, self.settings, authorized=True)
@@ -271,7 +289,13 @@ Contexto del proyecto:
         if not decision.allowed:
             raise ExternalBlocked(name, decision)
 
-        messages, secrets = redact_messages(outgoing_messages(request.external_messages))
+        # En modo abierto sale todo, con las rutas; los secretos se filtran igual.
+        if open_mode:
+            outgoing = request.open_messages
+        else:
+            outgoing = outgoing_messages(request.external_messages)
+
+        messages, secrets = redact_messages(outgoing)
         notice = ""
 
         if secrets:
@@ -284,7 +308,7 @@ Contexto del proyecto:
                 on_chunk(notice)
 
         # La bitácora guarda el envío aunque el proveedor falle: el texto ya salió.
-        labels = labels_of(request.turn) | set(request.exported_ambient)
+        labels = labels_of(request.turn) | set(request.open_labels if open_mode else request.exported_ambient)
 
         try:
             answer = self._call(name, provider, messages, on_chunk=on_chunk, review=review, model=model, think=think)
