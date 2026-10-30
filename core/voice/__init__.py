@@ -46,6 +46,23 @@ def stt_engines():
     return {"faster_whisper": FasterWhisperSTT}
 
 
+def tts_engines():
+    from core.voice.tts import PiperTTS
+
+    return {"piper": PiperTTS}
+
+
+def build_tts(settings, engines=None):
+    config = voice_settings(settings)
+    engines = engines or tts_engines()
+    name = config["tts_engine"]
+
+    if name not in engines:
+        raise ValueError(f"Motor de texto a voz desconocido: {name} (disponibles: {', '.join(engines)})")
+
+    return engines[name](config)
+
+
 def build_stt(settings, engines=None):
     config = voice_settings(settings)
     engines = engines or stt_engines()

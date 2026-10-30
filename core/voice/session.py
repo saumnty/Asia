@@ -1,4 +1,4 @@
-"""Escuchar una frase (y, desde el paso 4, leer la respuesta).
+"""Escuchar una frase y leer una respuesta.
 
 Los motores se crean al primer uso: activar la voz no carga Whisper hasta
 que se escucha algo. Micrófono, VAD y motores se pueden inyectar (pruebas).
@@ -8,7 +8,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from core.voice import build_stt, voice_settings
+from core.voice import build_stt, build_tts, voice_settings
+from core.voice.speakable import to_speakable
 from core.voice.vad import DONE, NO_SPEECH, SPEAKING, TOO_LONG, EndOfSpeech
 
 
@@ -21,13 +22,57 @@ class Heard:
     stt_seconds: float = 0.0
 
 
+@dataclass
+class Spoken:
+    """Lo que se leyó en voz alta y cuánto tardó en generarse."""
+    text: str
+    tts_seconds: float = 0.0
+    audio_seconds: float = 0.0
+
+
 class VoiceSession:
-    def __init__(self, settings, stt=None, microphone=None, vad=None):
+    def __init__(self, settings, stt=None, microphone=None, vad=None, tts=None, speaker=None):
         self.settings = settings
         self.config = voice_settings(settings)
         self._stt = stt
         self._microphone = microphone
         self._vad = vad
+        self._tts = tts
+        self._speaker = speaker
+
+    @property
+    def tts(self):
+        if self._tts is None:
+            self._tts = build_tts(self.settings)
+
+        return self._tts
+
+    @property
+    def speaker(self):
+        if self._speaker is None:
+            from core.voice.audio import Speaker
+
+            self._speaker = Speaker()
+
+        return self._speaker
+
+    def speak(self, answer: str) -> Spoken:
+        """Lee el texto normal de answer (core/voice/speakable.py). Ctrl+C corta la lectura."""
+        text = to_speakable(answer)
+
+        if not text:
+            return Spoken("")
+
+        start = time.perf_counter()
+        audio, rate = self.tts.synthesize(text)
+        seconds = time.perf_counter() - start
+
+        try:
+            self.speaker.play(audio, rate)
+        except KeyboardInterrupt:
+            self.speaker.stop()
+
+        return Spoken(text, seconds, len(audio) / rate if rate else 0.0)
 
     @property
     def stt(self):

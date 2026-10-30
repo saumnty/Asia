@@ -61,7 +61,7 @@ def warn(messages):
         print(message, file=sys.stderr)
 
 
-def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label=USUARIO):
+def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label=USUARIO, speak=None):
     """Procesa un mensaje e imprime la respuesta.
 
     Si Brain no reconoce una acción (devuelve None), el mensaje se trata
@@ -82,39 +82,58 @@ def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label
     # el mensaje los activa o los quita, esa vez no se muestra.
     if not timing.enabled(brain.settings):
         with request_sources(*sources):
-            respond_in_context(brain, text, attachments, use_actions)
-        return
+            answer = respond_in_context(brain, text, attachments, use_actions)
+            speak_answer(speak, answer)
+        return answer
 
     with timing.measure_request() as timings, request_sources(*sources):
-        respond_in_context(brain, text, attachments, use_actions)
+        answer = respond_in_context(brain, text, attachments, use_actions)
+        speak_answer(speak, answer)
 
     if timing.enabled(brain.settings):
         print(timing.summary(timings), file=sys.stderr)
 
+    return answer
+
+
+def speak_answer(speak, answer):
+    """Modo voz: lee la respuesta (ya mostrada en pantalla). Un fallo de la voz no la pierde."""
+    if speak is None or not answer:
+        return
+
+    try:
+        speak(answer)
+    except Exception as e:
+        print(f"No pude leer la respuesta en voz alta: {e}", file=sys.stderr)
+
 
 def respond_in_context(brain, text, attachments, use_actions):
+    """Imprime la respuesta y la devuelve (para leerla en voz alta)."""
     try:
         response = brain.process(text) if use_actions else None
 
         if response is not None:
             print(response)
-            return
+            return response
 
         prompt = build_chat_prompt(text, attachments)
         history = history_prompt(text, attachments)
 
         if brain.settings.get("stream_output", False):
-            brain.provider_router.chat(
+            answer = brain.provider_router.chat(
                 prompt,
                 on_chunk=lambda chunk: print(chunk, end="", flush=True),
                 history_prompt=history
             )
             print()
-            return
+            return answer
 
-        print(brain.provider_router.chat(prompt, history_prompt=history))
+        answer = brain.provider_router.chat(prompt, history_prompt=history)
+        print(answer)
+        return answer
     except Exception as e:
         print(f"Error inesperado: {e}")
+        return None
 
 
 def prepare_message(brain, text, files=(), block=None, block_label=STDIN_LABEL, missing=None):
@@ -394,9 +413,17 @@ def interactive_mode(brain=None, read=None, voice=None):
                 continue
 
             text, attachments, use_actions, text_label = prepared
+
+            # Modo voz: la respuesta se muestra entera y se lee su texto normal.
+            if voice_enabled(brain.settings) and voice is None:
+                from core.voice.session import VoiceSession
+
+                voice = VoiceSession(brain.settings)
+
             respond(
                 brain, text, prefix="\nAsia: ", attachments=attachments,
-                use_actions=use_actions, text_label=text_label
+                use_actions=use_actions, text_label=text_label,
+                speak=voice.speak if voice_enabled(brain.settings) else None
             )
 
     except (KeyboardInterrupt, EOFError):

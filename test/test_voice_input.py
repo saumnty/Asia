@@ -47,10 +47,34 @@ class FakeSTT:
         return self.text
 
 
+class FakeTTS:
+    def __init__(self):
+        self.texts = []
+
+    def synthesize(self, text):
+        self.texts.append(text)
+        return np.zeros(2205, dtype=np.float32), 22050
+
+
+class FakeSpeaker:
+    def __init__(self):
+        self.played = []
+
+    def play(self, audio, rate):
+        self.played.append((len(audio), rate))
+
+    def stop(self):
+        pass
+
+
 def session(probabilities, text="hola asia", **voice):
     SettingsManager.set_overrides({"voice": {**DEFAULT_VOICE_SETTINGS, **voice}})
     stt = FakeSTT(text)
-    return VoiceSession(SettingsManager(), stt=stt, microphone=FakeMicrophone(probabilities), vad=FakeVAD()), stt
+    voice_session = VoiceSession(
+        SettingsManager(), stt=stt, microphone=FakeMicrophone(probabilities), vad=FakeVAD(),
+        tts=FakeTTS(), speaker=FakeSpeaker(),
+    )
+    return voice_session, stt
 
 
 def speech(seconds):
@@ -187,6 +211,9 @@ def test_error_del_microfono_no_cierra_asia(capsys):
     class Broken:
         def listen(self, stop):
             raise OSError("no hay micrófono")
+
+        def speak(self, answer):
+            pass
 
     brain = FakeBrain("hecho", **{launcher.VOICE_SETTING: True})
 
