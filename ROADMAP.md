@@ -37,6 +37,7 @@ para poder revisar o revertir los cambios.
 | — | `--timing`, "/tiempos" y "/sin tiempos" (alias "muestra tiempos" y "oculta tiempos"): después de cada respuesta, una línea por stderr con el IntentEngine, la carga del modelo (`load_duration`), el prompt (`prompt_eval`), los tokens generados, tokens por segundo, el total y proveedor/modelo; con Gemini, el total y el proveedor. Valor de sesión, apagado por defecto (`core/timing.py`). | `be89ee6d` |
 | — | Modo abierto ("/modo abierto" o "modo abierto", solo la sesión; `open_mode_default` en `defaults.json`, false): sale todo lo que entra al prompt sin pedir autorización (archivos, adjuntos, RAG, proyecto, memoria e historial) y sin reemplazar rutas. Siguen el filtro de secretos y la bitácora (autorización "modo abierto"); lo emocional nunca sale. Aviso una vez al activarlo. El prompt muestra "Tú [abierto]:" (y "Tú [local]:" en modo local). | `8aa68c5f` |
 | — | Comandos de sesión con "/" en una sola tabla (`core/commands.py`), de la que salen "/opciones" y `--help`: modos, modelos (`/modelo`, `/proveedor`), archivos y adjuntos (`/carpeta`), confidencialidad, cambios y ejecución, tiempos y salir, con un ejemplo cada uno. Las frases de antes ("modo local", "vuelve al modelo normal"...) siguen como alias. Un "/algo" desconocido no va al modelo. El arranque muestra modelo, modo y "Escribe /opciones para ver los comandos". | `66b259ef` |
+| — | Aceleración con los números de `--timing` (ver "Velocidad" más abajo): la línea de tiempos muestra también el IntentEngine por dentro (tokens de prompt, `prompt_eval`, generados, carga) y `test/manual/check_speed.py` mide una sesión real; ruta rápida sin IntentEngine para la charla clara (`core/fast_chat.py`; `check_intents.py` con 12 casos de charla, 39 de 39 iguales); plantilla de documento para `explain_file`/`summarize_file` con `.md`, `.txt`, `.json`… y tope de la respuesta (`answer_limits`, `num_predict`) con aviso si se corta; "¿Quisiste decir @X?" + "sí" reenvía el mensaje corregido; `stream_output` true por defecto. | `7a65647f`, `904526ba`, `94f5787d`, `ae1a2015`, `62929ae2`, `f04bf65f` |
 
 ## Próximas fases
 
@@ -49,7 +50,22 @@ para poder revisar o revertir los cambios.
 - El diagnóstico de `debug_project` sigue siendo superficial: con "Asia None" señala `launcher.py` y `brain.process` devolviendo `None`, sin llegar a la causa real del bug de la fase 1 (el streaming, ya corregido). En C:\Asia, `tools/debug_context.py` sale entre los primeros archivos porque contiene las búsquedas fijas y "Asia None" en sus comentarios: es ruido propio de este repositorio.
 - `open_app` responde "Abriendo notebook." con el nombre que extrajo el modelo. Debería decir el nombre resuelto ("Abriendo bloc de notas.").
 - La salida no tolera erratas: "salior" va al IntentEngine en lugar de cerrar. Aplicar a "/salir" y sus alias (`core/commands.py`) la misma tolerancia que a los nombres de apps.
-- ~~Flag `--timing`~~ (hecho, ver la tabla). La aceleración (mantener el modelo cargado, streaming, más atajos sin LLM, prompt más corto) se decide con los números de `--timing` en uso real, no antes.
+- ~~Flag `--timing`~~ (hecho, ver la tabla). La aceleración se decide con los números de `--timing` en uso real: primera tanda hecha (ver "Velocidad").
+
+### Velocidad
+
+Medido con `test/manual/check_speed.py` (una sesión, `qwen2.5-coder:7b`, `num_ctx` 16384), total por mensaje:
+
+| Mensaje | Sesión del usuario (antes) | Línea base (`7a65647f`) | Después (`ae1a2015`) |
+|---|---|---|---|
+| "hola" | 30,4 s (intención 23,5) | 29,8 s (intención 23,8: 15,8 de carga del modelo) | 4,9 s, sin IntentEngine (20,1 s si el modelo no estaba cargado) |
+| "qué es un grafo bipartito" | 47,8 s (intención 21,3) | 30,8 s (intención 5,0) | 27,2–33,1 s, sin IntentEngine |
+| "si" | 30,4 s (intención 21,8) | 7,5 s (intención 4,7) | 2,4–4,4 s, sin IntentEngine |
+| "explica @ROADMAP.md" | 217 s (1072 tokens) | 110,4 s (533 tokens) | 35,8 s (154 tokens) |
+
+- La sospecha de la caché no se confirmó: el prompt del IntentEngine tiene 2083–2090 tokens reales y, ya cargado el modelo, se procesa en 0,2–0,9 s cuando Ollama lo tiene en caché y en 3,9–4,6 s cuando no. No explica los ~21 s por mensaje de la sesión del usuario; esos números coinciden con una recarga del modelo antes de cada mensaje (15,8 s de carga + 4,6 s de prompt en la línea base). La línea de tiempos ahora muestra la carga del IntentEngine para confirmarlo. Por eso no se recortó el prompt del IntentEngine ni se le puso `num_predict` (genera 10–20 tokens).
+- Pendiente: averiguar qué descarga el modelo entre mensajes en una sesión interactiva (¿`keep_alive` de 5 minutos entre mensajes espaciados?). Si es eso, un `keep_alive` más largo lo evitaría, a cambio de dejar 5,8 GB ocupados.
+- Lo que más pesa ahora es la generación (5–7 t/s, el 7B corre 59 % en CPU): una respuesta de 200 tokens son ~30 s.
 
 ## Fases futuras (diseño pendiente)
 
