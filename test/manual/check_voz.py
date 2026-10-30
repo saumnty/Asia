@@ -131,8 +131,14 @@ def main():
 
     voice._microphone = SpokenMicrophone(spoken(args.frases, voice.tts))
     lines = iter([""] * len(args.frases) + ["salir"])
-    # Como en la terminal: el Enter en la línea vacía deja el prompt en su línea.
-    launcher.interactive_mode(brain, read=lambda prompt: print(prompt) or next(lines), voice=voice)
+    def read(prompt):
+        # Volver a escuchar corta la lectura: la frase siguiente llega cuando terminó.
+        voice.wait_reading(300)
+        # Como en la terminal: el Enter en la línea vacía deja el prompt en su línea.
+        print(prompt)
+        return next(lines)
+
+    launcher.interactive_mode(brain, read=read, voice=voice)
     return 0
 
 

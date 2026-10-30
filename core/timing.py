@@ -4,7 +4,8 @@ El launcher abre una medición por mensaje (measure_request) solo si los
 tiempos están activos; sin medición abierta, nada se registra y el
 comportamiento no cambia. Se anotan:
 - el IntentEngine (intent_stage, desde Brain);
-- en modo voz, la voz a texto y el texto a voz (record_voice);
+- en modo voz, la voz a texto (record_voice) y cuándo empezó a sonar la
+  primera frase (first_audio, desde core/voice/reading.py);
 - cada llamada a un proveedor (timed, desde ProviderRouter), con las
   métricas que devuelve Ollama (ollama_metrics: carga del modelo,
   procesamiento del prompt y tokens generados). Gemini no las da: solo su
@@ -48,6 +49,8 @@ class Timings:
     stt: tuple = None
     tts: tuple = None
     answered: float = None
+    # Lectura frase por frase (J2): cuándo empezó a sonar la primera frase.
+    first_audio: float = None
 
 
 _current = ContextVar("asia_timings", default=None)
@@ -196,7 +199,11 @@ def voice_part(label, measured):
 
 
 def summary(timings: Timings, now=None) -> str:
-    """[tiempos] voz a texto · intención · carga · prompt · tokens · t/s · total · texto a voz · proveedor/modelo."""
+    """[tiempos] voz a texto · intención · carga · prompt · tokens · t/s · total · primer audio · proveedor/modelo.
+
+    primer audio: desde que llegó el mensaje hasta que empezó a sonar la
+    primera frase (con la lectura frase por frase, antes del total).
+    """
     end = now if now is not None else timings.answered or time.perf_counter()
     total = end - timings.start
     parts = [voice_part("voz a texto", timings.stt)] if timings.stt else []
@@ -221,6 +228,9 @@ def summary(timings: Timings, now=None) -> str:
         ]
 
     parts.append(f"total {number(total)} s")
+
+    if timings.first_audio is not None:
+        parts.append(f"primer audio {number(timings.first_audio - timings.start)} s")
 
     if timings.tts:
         parts.append(voice_part("texto a voz", timings.tts))

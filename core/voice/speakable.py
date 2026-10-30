@@ -23,8 +23,12 @@ EMPHASIS = re.compile(r"(\*\*|__|\*|_)(?=\S)(.+?)(?<=\S)\1")
 NOTICE = re.compile(r"^\s*\[[^\]]*\]\s*$")
 
 
-def to_speakable(text: str) -> str:
-    """Texto para leer en voz alta."""
+def to_speakable(text: str, note=True) -> str:
+    """Texto para leer en voz alta.
+
+    note=False: sin "te dejo el código en pantalla" (la lectura frase por
+    frase lo dice una vez al final, con screen_note).
+    """
     had_code = bool(FENCE.search(text or ""))
     text = FENCE.sub("\n", text or "")
     lines = []
@@ -58,13 +62,24 @@ def to_speakable(text: str) -> str:
     text = re.sub(r"[*_#`|]+", " ", text)
     text = sentences(text)
 
-    notes = [what for what, had in (("el código", had_code), ("la tabla", had_table)) if had]
-
-    if notes:
-        note = f"Te dejo {' y '.join(notes)} en pantalla."
-        text = f"{text} {note}".strip()
+    if note:
+        text = f"{text} {note_for(had_code, had_table)}".strip()
 
     return text
+
+
+def note_for(had_code: bool, had_table: bool) -> str:
+    notes = [what for what, had in (("el código", had_code), ("la tabla", had_table)) if had]
+    return f"Te dejo {' y '.join(notes)} en pantalla." if notes else ""
+
+
+def screen_note(text: str) -> str:
+    """"Te dejo el código (y la tabla) en pantalla." si la respuesta los tenía; si no, ""."""
+    text = text or ""
+    lines = FENCE.sub("\n", text).splitlines()
+    had_code = bool(FENCE.search(text)) or any(INDENTED_CODE.match(line) for line in lines)
+    had_table = any(TABLE_LINE.match(line) or TABLE_RULE.match(line) for line in lines)
+    return note_for(had_code, had_table)
 
 
 def sentences(text: str) -> str:

@@ -1,4 +1,4 @@
-"""Texto a voz (J1, paso 4): qué se lee y cuándo, con motores falsos."""
+"""Texto a voz (J1, paso 4): qué se lee y cuándo, con motores falsos. Ctrl+C y Enter: test_voice_reading.py."""
 import numpy as np
 import pytest
 
@@ -61,14 +61,28 @@ def test_vacio():
 
 # --- Leer la respuesta --------------------------------------------------------------
 
+def patient(lines, voice):
+    """Como reader, pero cada línea llega cuando terminó de sonar la respuesta anterior.
+
+    Una línea nueva corta la lectura (como Enter): sin esperar, no sonaría nada.
+    """
+    read = reader(lines)
+
+    def patient_read(prompt):
+        voice.wait_reading(5)
+        return read(prompt)
+
+    return patient_read
+
+
 def test_lee_la_respuesta_y_la_muestra_entera(capsys):
     brain = FakeBrain("Hecho.\n```\nx = 1\n```", **{launcher.VOICE_SETTING: True})
     voice, _ = session(speech(1) + silence(1), text="arregla el archivo")
 
-    launcher.interactive_mode(brain, read=reader(["", "salir"]), voice=voice)
+    launcher.interactive_mode(brain, read=patient(["", "salir"], voice), voice=voice)
 
-    assert voice.tts.texts == ["Hecho. Te dejo el código en pantalla."]
-    assert voice.speaker.played == [(2205, 22050)]
+    assert voice.tts.texts == ["Hecho.", "Te dejo el código en pantalla."]
+    assert voice.speaker.played == [(2205, 22050)] * 2
     # En pantalla, la respuesta completa, con el código.
     assert "Hecho.\n```\nx = 1\n```" in capsys.readouterr().out
 
@@ -77,7 +91,7 @@ def test_tambien_lee_lo_tecleado_en_modo_voz():
     brain = FakeBrain("Proyecto activo: asia", **{launcher.VOICE_SETTING: True})
     voice, _ = session([])
 
-    launcher.interactive_mode(brain, read=reader(["muestra el proyecto activo", "salir"]), voice=voice)
+    launcher.interactive_mode(brain, read=patient(["muestra el proyecto activo", "salir"], voice), voice=voice)
 
     assert voice.tts.texts == ["Proyecto activo: asia."]
 
@@ -86,7 +100,7 @@ def test_sin_modo_voz_no_lee():
     brain = FakeBrain("hola")
     voice, _ = session([])
 
-    launcher.interactive_mode(brain, read=reader(["hola", "salir"]), voice=voice)
+    launcher.interactive_mode(brain, read=patient(["hola", "salir"], voice), voice=voice)
 
     assert voice.tts.texts == []
 
@@ -95,7 +109,7 @@ def test_chat_en_streaming_tambien_se_lee():
     brain = FakeBrain(None, stream_output=True, **{launcher.VOICE_SETTING: True})
     voice, _ = session([])
 
-    launcher.interactive_mode(brain, read=reader(["cuéntame algo", "salir"]), voice=voice)
+    launcher.interactive_mode(brain, read=patient(["cuéntame algo", "salir"], voice), voice=voice)
 
     assert voice.tts.texts == ["respuesta del chat."]
 
@@ -109,29 +123,11 @@ def test_un_fallo_de_la_voz_no_pierde_la_respuesta(capsys):
     voice, _ = session([])
     voice._tts = BrokenTTS()
 
-    launcher.interactive_mode(brain, read=reader(["hola", "salir"]), voice=voice)
+    launcher.interactive_mode(brain, read=patient(["hola", "otra", "salir"], voice), voice=voice)
 
     out = capsys.readouterr()
     assert "Hecho." in out.out and "No pude leer la respuesta en voz alta: sin altavoces" in out.err
-
-
-def test_ctrl_c_corta_la_lectura_y_sigue():
-    class Interrupted(FakeSpeaker):
-        stopped = False
-
-        def play(self, audio, rate):
-            raise KeyboardInterrupt
-
-        def stop(self):
-            Interrupted.stopped = True
-
-    brain = FakeBrain("Hecho.", **{launcher.VOICE_SETTING: True})
-    voice, _ = session([])
-    voice._speaker = Interrupted()
-
-    launcher.interactive_mode(brain, read=reader(["hola", "otra", "salir"]), voice=voice)
-
-    assert Interrupted.stopped and brain.processed == ["hola", "otra"]
+    assert brain.processed == ["hola", "otra"]
 
 
 # --- Piper -----------------------------------------------------------------------

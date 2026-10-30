@@ -103,7 +103,8 @@ def test_timing_en_modo_voz_de_punta_a_punta(capsys):
     launcher.interactive_mode(brain, read=reader(["", "salir"]), voice=voice)
 
     [line] = [l for l in capsys.readouterr().err.splitlines() if l.startswith("[tiempos]")]
-    assert line.startswith("[tiempos] voz a texto ") and " · texto a voz " in line
+    # La línea espera a que suene la primera frase.
+    assert line.startswith("[tiempos] voz a texto ") and " · primer audio " in line
 
 
 def test_respond_registra_lo_oido(capsys):

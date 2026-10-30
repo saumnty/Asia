@@ -1,4 +1,4 @@
-"""Escuchar una frase y leer una respuesta.
+"""Escuchar una frase y leer una respuesta (frase por frase, core/voice/reading.py).
 
 Los motores se crean al primer uso: activar la voz no carga Whisper hasta
 que se escucha algo. Micrófono, VAD y motores se pueden inyectar (pruebas).
@@ -10,7 +10,7 @@ import numpy as np
 
 from core import timing
 from core.voice import build_stt, build_tts, voice_settings
-from core.voice.speakable import to_speakable
+from core.voice.reading import Reading
 from core.voice.vocabulary import build_prompt
 from core.voice.audio import FRAME, SAMPLE_RATE
 from core.voice.vad import DONE, NO_SPEECH, SPEAKING, TOO_LONG, EndOfSpeech
@@ -82,6 +82,7 @@ class VoiceSession:
         self._vad = vad
         self._tts = tts
         self._speaker = speaker
+        self.reading = None
 
     @property
     def tts(self):
@@ -99,29 +100,46 @@ class VoiceSession:
 
         return self._speaker
 
+    def start_reading(self) -> Reading:
+        """Una lectura frase por frase (core/voice/reading.py); corta la anterior si seguía."""
+        self.stop_speaking()
+        self.reading = Reading(self.tts, self.speaker, timing.current())
+        return self.reading
+
+    @property
+    def speaking(self) -> bool:
+        return self.reading is not None and self.reading.active
+
+    def stop_speaking(self) -> bool:
+        """Corta la lectura en curso. True si había algo sonando o por sonar."""
+        reading, self.reading = self.reading, None
+
+        if reading is None or not reading.active:
+            return False
+
+        reading.stop()
+        return True
+
+    def wait_reading(self, timeout=None):
+        if self.reading is not None:
+            self.reading.wait(timeout)
+
     def speak(self, answer: str) -> Spoken:
-        """Lee el texto normal de answer (core/voice/speakable.py). Ctrl+C corta la lectura."""
-        text = to_speakable(answer)
-
-        if not text:
-            return Spoken("")
-
-        start = time.perf_counter()
-        audio, rate = self.tts.synthesize(text)
-        seconds = time.perf_counter() - start
-
-        audio_seconds = len(audio) / rate if rate else 0.0
-        timing.record_voice("tts", seconds, audio_seconds)
+        """Lee answer entera y espera a que termine (jarvis --voz "mensaje"). Ctrl+C corta la lectura."""
+        reading = self.start_reading()
+        reading.finish(answer)
 
         try:
-            self.speaker.play(audio, rate)
+            reading.wait()
         except KeyboardInterrupt:
-            self.speaker.stop()
+            self.stop_speaking()
 
-        return Spoken(text, seconds, audio_seconds)
+        return Spoken(" ".join(reading.spoken), reading.tts_seconds, reading.audio_seconds)
 
     def unload(self):
         """Libera los modelos ("/sin voz"): Whisper y la voz de Piper ocupan ~380 MB."""
+        self.stop_speaking()
+
         for engine in (self._stt, self._tts):
             if engine is not None and hasattr(engine, "unload"):
                 engine.unload()
@@ -158,6 +176,8 @@ class VoiceSession:
 
         El audio queda solo en memoria. Si no hubo voz, text es "".
         """
+        # Volver a escuchar corta la lectura: el micrófono no debe oír a Asia.
+        self.stop_speaking()
         detector = EndOfSpeech.from_config(self.config)
         self.vad.reset()
         frames = []

@@ -1,8 +1,11 @@
 import argparse
 import re
+import signal
 import sys
 import textwrap
+import threading
 from collections import deque
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 # No se cambia de carpeta: los datos internos de Asia usan rutas absolutas
@@ -62,7 +65,8 @@ def warn(messages):
         print(message, file=sys.stderr)
 
 
-def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label=USUARIO, speak=None, heard=None):
+def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label=USUARIO, speak=None, heard=None,
+            voice=None):
     """Procesa un mensaje e imprime la respuesta.
 
     Si Brain no reconoce una acción (devuelve None), el mensaje se trata
@@ -73,6 +77,10 @@ def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label
     El texto y los adjuntos quedan registrados con su procedencia
     (core/provenance.py) para que el router no los mande afuera sin
     autorización.
+
+    voice (modo voz interactivo): la respuesta se lee frase por frase
+    mientras se escribe y sigue sonando al volver al prompt. speak (una sola
+    ejecución, jarvis --voz "mensaje"): se lee entera al final.
     """
     print(prefix, end="", flush=True)
 
@@ -81,28 +89,78 @@ def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label
     # Con --timing o "/tiempos", una línea de tiempos al final (por stderr,
     # para no mezclarla con la respuesta si la salida va a un archivo). Si
     # el mensaje los activa o los quita, esa vez no se muestra.
-    if not timing.enabled(brain.settings):
-        with request_sources(*sources):
-            answer = respond_in_context(brain, text, attachments, use_actions)
-            speak_answer(speak, answer)
-        return answer
+    measuring = timing.enabled(brain.settings)
+    measurement = timing.measure_request() if measuring else nullcontext()
 
-    with timing.measure_request() as timings, request_sources(*sources):
+    with measurement as timings, request_sources(*sources):
         if heard is not None:
             timing.record_voice("stt", heard.stt_seconds, heard.audio_seconds, heard.recorded_seconds)
 
-        answer = respond_in_context(brain, text, attachments, use_actions)
-        timing.mark_answered()
-        speak_answer(speak, answer)
+        reading = start_reading(voice)
 
-    if timing.enabled(brain.settings):
+        with ctrl_c_stops(reading):
+            answer = respond_in_context(brain, text, attachments, use_actions, reading)
+            timing.mark_answered()
+
+            if reading is not None:
+                reading.finish(answer or "")
+
+                # La línea de tiempos lleva cuándo empezó a sonar la primera frase.
+                if measuring:
+                    reading.wait_first_audio(timeout=FIRST_AUDIO_WAIT)
+
+            speak_answer(speak, answer)
+
+    if measuring and timing.enabled(brain.settings):
         print(timing.summary(timings), file=sys.stderr)
 
     return answer
 
 
+# Lo más que se espera a la primera frase para la línea de --timing.
+FIRST_AUDIO_WAIT = 20
+READING_CUT = "\n(Lectura cortada.)"
+
+
+def start_reading(voice):
+    """La lectura frase por frase de esta respuesta, o None. Un fallo de la voz no pierde la respuesta."""
+    if voice is None:
+        return None
+
+    try:
+        return voice.start_reading()
+    except Exception as e:
+        print(f"No pude leer la respuesta en voz alta: {e}", file=sys.stderr)
+        return None
+
+
+@contextmanager
+def ctrl_c_stops(reading):
+    """Mientras se escribe la respuesta, Ctrl+C corta la lectura (no la respuesta ni Asia).
+
+    Si no hay nada sonando, Ctrl+C hace lo de siempre.
+    """
+    if reading is None or threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    def handler(signum, frame):
+        if not reading.active:
+            raise KeyboardInterrupt
+
+        reading.stop()
+        print(READING_CUT, file=sys.stderr)
+
+    previous = signal.signal(signal.SIGINT, handler)
+
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, previous)
+
+
 def speak_answer(speak, answer):
-    """Modo voz: lee la respuesta (ya mostrada en pantalla). Un fallo de la voz no la pierde."""
+    """jarvis --voz "mensaje": lee la respuesta (ya mostrada en pantalla). Un fallo de la voz no la pierde."""
     if speak is None or not answer:
         return
 
@@ -112,8 +170,19 @@ def speak_answer(speak, answer):
         print(f"No pude leer la respuesta en voz alta: {e}", file=sys.stderr)
 
 
-def respond_in_context(brain, text, attachments, use_actions):
-    """Imprime la respuesta y la devuelve (para leerla en voz alta)."""
+def respond_in_context(brain, text, attachments, use_actions, reading=None):
+    """Imprime la respuesta y la devuelve. reading: cada trozo del streaming se lee en cuanto completa una frase."""
+    def on_chunk(chunk):
+        print(chunk, end="", flush=True)
+
+        if reading is not None and reading.active:
+            reading.feed(chunk)
+
+            # Enter mientras escribe corta la lectura (la respuesta sigue).
+            if enter_pressed():
+                reading.stop()
+                print(READING_CUT, file=sys.stderr)
+
     try:
         response = brain.process(text) if use_actions else None
 
@@ -127,7 +196,7 @@ def respond_in_context(brain, text, attachments, use_actions):
         if brain.settings.get("stream_output", False):
             answer = brain.provider_router.chat(
                 prompt,
-                on_chunk=lambda chunk: print(chunk, end="", flush=True),
+                on_chunk=on_chunk,
                 history_prompt=history
             )
             print()
@@ -404,7 +473,18 @@ def interactive_mode(brain=None, read=None, voice=None):
 
     try:
         while True:
-            user, block = messages.next_message()
+            # La respuesta anterior puede seguir sonando: Ctrl+C la corta (sin
+            # cerrar Asia) y cualquier Enter también, antes de atender la línea.
+            try:
+                user, block = messages.next_message()
+            except KeyboardInterrupt:
+                if stop_speaking(voice):
+                    print(READING_CUT, file=sys.stderr)
+                    continue
+
+                raise
+
+            stop_speaking(voice)
             heard = None
 
             # Modo voz: Enter en una línea vacía escucha; lo dictado es "usuario",
@@ -456,7 +536,8 @@ def interactive_mode(brain=None, read=None, voice=None):
 
             text, attachments, use_actions, text_label = prepared
 
-            # Modo voz: la respuesta se muestra entera y se lee su texto normal.
+            # Modo voz: la respuesta se muestra entera y se lee su texto normal,
+            # frase por frase mientras se escribe.
             voice_on = voice_enabled(brain.settings)
 
             if voice_on and voice is None:
@@ -467,7 +548,7 @@ def interactive_mode(brain=None, read=None, voice=None):
             respond(
                 brain, text, prefix="\nAsia: ", attachments=attachments,
                 use_actions=use_actions, text_label=text_label,
-                speak=voice.speak if voice_on else None, heard=heard
+                heard=heard, voice=voice if voice_on else None
             )
 
             # "/sin voz": se liberan Whisper y la voz (~380 MB).
@@ -476,6 +557,14 @@ def interactive_mode(brain=None, read=None, voice=None):
 
     except (KeyboardInterrupt, EOFError):
         print("\nAsia apagada.")
+    finally:
+        stop_speaking(voice)
+
+
+def stop_speaking(voice) -> bool:
+    """Corta la lectura en curso, si la hay. True si algo sonaba."""
+    stop = getattr(voice, "stop_speaking", None)
+    return bool(stop()) if stop else False
 
 
 # Lo que no es un comando de sesión; los comandos salen de core/commands.py,
