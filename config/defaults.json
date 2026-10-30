@@ -17,6 +17,7 @@
     "think_domains": ["math"],
 
     "external_allow_memory": false,
+    "trusted_local_hosts": [],
     "ollama_num_ctx": 16384,
     "ollama_temperature": 0.1,
     "ollama_repeat_penalty": 1.15,

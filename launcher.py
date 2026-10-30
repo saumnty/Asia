@@ -300,6 +300,19 @@ MODEL_HELP = """modelos:
     usa el modelo qwen3:4b           fija un modelo descargado para todo
     vuelve al modelo normal          quita lo fijado
   Lo que se cambia dura solo la sesión; no se escribe en settings.json.
+
+modo confidencial:
+  Archivos, adjuntos (@ruta, --file, stdin, << ... FIN), RAG, resumen del
+  proyecto y memoria no salen hacia un proveedor externo (Gemini, u Ollama en
+  otra máquina) sin autorización: responde el modelo local y lo avisa.
+    envía esto a Gemini     muestra qué saldría del último mensaje; luego "confirmar envío"
+    modo local              no sale nada, ni lo que escribes; "modo normal" lo quita
+    qué has enviado afuera  resumen de los últimos envíos externos
+  --allow-external autoriza los envíos de esa ejecución, confirmando cada uno.
+
+proveedor:
+  "cambia el provider a gemini" y --provider valen solo para la sesión. Para
+  que sea permanente, edita "default_provider" en config/settings.json.
 """
 
 
@@ -342,7 +355,30 @@ def build_parser():
              "esta ejecución; debe estar descargado, Asia no descarga modelos. "
              "No cambia settings.json"
     )
+    parser.add_argument(
+        "--allow-external", action="store_true",
+        help="autoriza en esta ejecución que contenido local (archivos, adjuntos...) "
+             "salga a un proveedor externo; cada envío se confirma en la terminal "
+             "y la autorización no se guarda"
+    )
     return parser
+
+
+def confirm_external(summary):
+    """Confirmación de --allow-external: True, False o "all" (todos en esta ejecución)."""
+    print(f"\n[Modo confidencial] {summary}", file=sys.stderr)
+
+    if not sys.stdin or not sys.stdin.isatty():
+        print("No se puede confirmar sin una terminal: no se envió.", file=sys.stderr)
+        return False
+
+    try:
+        answer = input("¿Enviar? [s = sí, una vez / t = todos en esta ejecución / N = no]: ")
+    except EOFError:
+        return False
+
+    answer = answer.strip().lower()
+    return "all" if answer == "t" else answer in {"s", "si", "sí"}
 
 
 def installed_models():
@@ -372,6 +408,9 @@ def session_overrides(args, parser) -> dict:
     if args.no_stream:
         overrides["stream_output"] = False
 
+    if args.allow_external:
+        overrides["allow_external"] = True
+
     if args.model:
         # Se comprueba que esté descargado: Asia nunca descarga modelos.
         installed = installed_models()
@@ -387,6 +426,16 @@ def session_overrides(args, parser) -> dict:
     return overrides
 
 
+def with_confirmation(brain):
+    """--allow-external confirma cada envío externo en la terminal."""
+    router = getattr(brain, "provider_router", None)
+
+    if router is not None and hasattr(router, "confirm"):
+        router.confirm = confirm_external
+
+    return brain
+
+
 def main(argv=None, stdin=None, brain_factory=Brain):
     """Devuelve el código de salida: 1 si un adjunto no existe, 0 si no."""
     parser = build_parser()
@@ -397,7 +446,7 @@ def main(argv=None, stdin=None, brain_factory=Brain):
     stdin_data = read_stdin(stdin)
 
     if not prompt and not args.file and stdin_data is None:
-        interactive_mode(brain_factory())
+        interactive_mode(with_confirmation(brain_factory()))
         return
 
     if prompt.lower().strip() in CWD_COMMANDS and not args.file and stdin_data is None:
@@ -409,7 +458,7 @@ def main(argv=None, stdin=None, brain_factory=Brain):
         print("Asia apagada.")
         return
 
-    brain = brain_factory()
+    brain = with_confirmation(brain_factory())
     block = decode(stdin_data) if stdin_data is not None else None
     prepared = prepare_message(brain, prompt, args.file, block)
 

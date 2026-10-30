@@ -1,0 +1,64 @@
+"""Comandos del modo confidencial (fase G), por texto fijo y sin el IntentEngine.
+
+- "envía esto a Gemini": muestra qué tipos de contenido y cuántos
+  caracteres saldrían del último mensaje y pide "confirmar envío". La
+  autorización vale una vez y no se guarda.
+- "modo local": no sale nada de esta máquina (ni la memoria ni lo
+  tecleado) hasta "modo normal" o hasta salir de Asia.
+"""
+from core.actions.models import command_text, set_session
+from core.confidential import LOCAL_MODE
+
+AUTHORIZE_PHRASES = {
+    "envia esto a gemini", "enviar esto a gemini", "manda esto a gemini",
+    "mandar esto a gemini", "envialo a gemini",
+}
+CONFIRM_PHRASES = {"confirmar envio", "confirmo envio", "confirmo el envio", "confirmar el envio"}
+CANCEL_PHRASES = {"cancelar envio", "cancela el envio", "cancelar el envio"}
+LOCAL_PHRASES = {"modo local", "activa el modo local", "pasa a modo local"}
+NORMAL_PHRASES = {"modo normal", "sal del modo local", "salir del modo local", "desactiva el modo local"}
+
+
+def confidential_command(text: str):
+    """Nombre del comando o None."""
+    command = command_text(text)
+
+    for name, phrases in (
+        ("authorize", AUTHORIZE_PHRASES),
+        ("confirm", CONFIRM_PHRASES),
+        ("cancel", CANCEL_PHRASES),
+        ("local", LOCAL_PHRASES),
+        ("normal", NORMAL_PHRASES),
+    ):
+        if command in phrases:
+            return name
+
+    return None
+
+
+class ConfidentialActions:
+    def handle_confidential_command(self, name):
+        router = self.provider_router
+
+        if name == "authorize":
+            return router.prepare_authorization()
+
+        if name == "confirm":
+            return router.send_authorized()
+
+        if name == "cancel":
+            return router.cancel_authorization()
+
+        if name == "local":
+            set_session(confidential_mode=LOCAL_MODE)
+            router.pending_authorization = None
+            return (
+                "Modo local: no sale nada de esta máquina, ni la memoria ni lo que "
+                'escribas, hasta que escribas "modo normal" o salgas de Asia.'
+            )
+
+        set_session(confidential_mode=None)
+        return (
+            "Modo normal: lo que escribes puede ir a un proveedor externo si lo usas; "
+            "archivos, adjuntos, RAG, proyecto y memoria siguen sin salir sin tu autorización."
+        )

@@ -91,33 +91,23 @@
  },
  "set_provider": {
   "results": [
-   "Provider cambiado a: gemini"
+   "Provider cambiado a: gemini (solo en esta sesión). Para que sea permanente, edita \"default_provider\" en config/settings.json."
   ],
   "events": [
    [
     "process",
     "usa Gemini"
-   ],
-   [
-    "settings.set",
-    "default_provider",
-    "gemini"
    ]
   ]
  },
  "set_provider_alias": {
   "results": [
-   "Provider cambiado a: ollama"
+   "Provider cambiado a: ollama (solo en esta sesión). Para que sea permanente, edita \"default_provider\" en config/settings.json."
   ],
   "events": [
    [
     "process",
     "usa olama"
-   ],
-   [
-    "settings.set",
-    "default_provider",
-    "ollama"
    ]
   ]
  },

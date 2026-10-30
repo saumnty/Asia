@@ -8,6 +8,7 @@ from core.actions.code import CodeActions
 from core.actions.explore import ExploreActions
 from core.actions.memory import MemoryActions
 from core.actions.models import ModelActions, model_command
+from core.actions.confidential import ConfidentialActions, confidential_command
 from core.provenance import USUARIO, Fragment, request_sources
 # wants_synthesis y wants_unverified se importan desde aquí en las pruebas.
 from core.actions.sandbox import RUN_CANCEL_PHRASES, RUN_CONFIRM_PHRASES, SandboxActions, normalized_command
@@ -139,7 +140,7 @@ SHORTCUT_ACTIONS = {
 }
 
 
-class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxActions, ModelActions):
+class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxActions, ModelActions, ConfidentialActions):
     # Acción del IntentEngine -> método que la atiende (ver core/actions).
     HANDLERS = {
         **MemoryActions.HANDLERS,
@@ -198,6 +199,12 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
         if model_cmd:
             return self.handle_model_command(*model_cmd)
+
+        # Modo confidencial (core/actions/confidential.py): texto fijo, sin LLM.
+        confidential_cmd = confidential_command(text)
+
+        if confidential_cmd:
+            return self.handle_confidential_command(confidential_cmd)
 
         intent = self.intent_engine.detect(text)
 

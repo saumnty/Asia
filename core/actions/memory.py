@@ -1,5 +1,6 @@
 """Memoria personal, memoria del proyecto y ajustes (provider, proyecto activo)."""
 from core import prompts
+from core.actions.models import set_session
 from core.provenance import PROYECTO, Fragment, record
 
 
@@ -132,9 +133,14 @@ class MemoryActions:
         if provider not in self.provider_router.provider_factories:
             return f"Provider no disponible todavía: {provider}"
 
-        self.settings.set("default_provider", provider)
+        # Solo esta sesión: settings.json no cambia (fase G). Para que sea
+        # permanente se edita default_provider a mano (ver jarvis --help).
+        set_session(default_provider=provider)
 
-        return f"Provider cambiado a: {provider}"
+        return (
+            f"Provider cambiado a: {provider} (solo en esta sesión). Para que sea permanente, "
+            f'edita "default_provider" en config/settings.json.'
+        )
 
     def handle_set_active_project(self, text, params):
         project_name = params.get("project_name")

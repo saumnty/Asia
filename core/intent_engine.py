@@ -3,6 +3,8 @@ import re
 import ollama
 
 from config.settings_manager import SettingsManager
+from core.confidential import is_local_mode, ollama_is_external, only_user
+from core.provenance import current_fragments, labels_of, local_labels
 from providers.ollama_models import strip_think, think_kwargs, unload_others
 from providers.ollama_provider import ollama_options
 
@@ -236,6 +238,15 @@ Usuario: muestra el cambio pendiente
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": text}
         ]
+
+        # Con Ollama en otra máquina, el mensaje sale de aquí: solo si es
+        # exportable y no estamos en modo local (fase G). Si no, chat: el
+        # router aplicará la política y lo dirá.
+        if ollama_is_external(self.settings):
+            labels = labels_of(current_fragments() or only_user(text))
+
+            if is_local_mode(self.settings) or local_labels(labels, self.settings):
+                return {"action": "chat", "params": {}}
 
         try:
             model = self.settings.get("intent_model")
