@@ -34,6 +34,9 @@ para poder revisar o revertir los cambios.
 | F. Multi-modelo (partes 2 y 3) | Razonamiento solo en `math` (`think_domains`); `math` con `qwen3:4b` (Thinking-2507). Clasificador de dominio que no manda código a `math`. `check_intents.py` con 28 mensajes y acción esperada. `open_app` tolerante a nombres aproximados (`notebook` → Bloc de notas) y con aclaración si no coincide nada. Comandos para ver y cambiar el modelo en la sesión. qwen3:4b-instruct medido y descartado para el IntentEngine (rompía `open_app`). | `91dab1d3`, `d0a093e8`, `07957ee7`, `f8b986df`, `b64c07b6`, `fccf75bd` |
 | G. Modo confidencial | Inventario de las salidas (proveedor principal, fallback, Ollama remoto). Etiquetas de procedencia por petición (`core/provenance.py`): usuario, memoria (`external_allow_memory`, por defecto false), archivo, adjunto, rag, proyecto y emocional (nunca sale). El router no envía contenido local a un proveedor externo: responde el modelo local con aviso, o dice qué pasó si no hay uno; el fallback automático nunca lo lleva; memoria, proyecto y turnos locales del historial se quitan de lo que sale; rutas absolutas por el nombre del archivo. "envía esto a Gemini" + "confirmar envío" o `--allow-external` autorizan una vez, sin guardarse. "modo local"/"modo normal". Ollama fuera de localhost cuenta como externo salvo `trusted_local_hosts`. "cambia el provider" solo para la sesión. Filtro de secretos (`external_secret_policy`: redact/block) y la clave de Gemini fuera de prompts y errores. Bitácora `logs/external_audit.jsonl` sin texto y "qué has enviado afuera". Pruebas (a)-(f) y `test/manual/check_confidencial.py` (6 de 6). | `10e19aa2`, `2689b185`, `774a9308`, `97a2471d`, `9bb4d9da` |
 | — | `open_app` guarda las apps que encuentra en el menú Inicio en `config/apps_learned.json` (en `.gitignore`) en lugar de `config/apps.json`, que dejaba el repositorio con cambios. Lee los dos; si una clave está en ambos, gana `apps.json`. Lo que ya había en `apps.json` no se movió. | `14006850` |
+| — | `--timing`, "/tiempos" y "/sin tiempos" (alias "muestra tiempos" y "oculta tiempos"): después de cada respuesta, una línea por stderr con el IntentEngine, la carga del modelo (`load_duration`), el prompt (`prompt_eval`), los tokens generados, tokens por segundo, el total y proveedor/modelo; con Gemini, el total y el proveedor. Valor de sesión, apagado por defecto (`core/timing.py`). | `be89ee6d` |
+| — | Modo abierto ("/modo abierto" o "modo abierto", solo la sesión; `open_mode_default` en `defaults.json`, false): sale todo lo que entra al prompt sin pedir autorización (archivos, adjuntos, RAG, proyecto, memoria e historial) y sin reemplazar rutas. Siguen el filtro de secretos y la bitácora (autorización "modo abierto"); lo emocional nunca sale. Aviso una vez al activarlo. El prompt muestra "Tú [abierto]:" (y "Tú [local]:" en modo local). | `8aa68c5f` |
+| — | Comandos de sesión con "/" en una sola tabla (`core/commands.py`), de la que salen "/opciones" y `--help`: modos, modelos (`/modelo`, `/proveedor`), archivos y adjuntos (`/carpeta`), confidencialidad, cambios y ejecución, tiempos y salir, con un ejemplo cada uno. Las frases de antes ("modo local", "vuelve al modelo normal"...) siguen como alias. Un "/algo" desconocido no va al modelo. El arranque muestra modelo, modo y "Escribe /opciones para ver los comandos". | `66b259ef` |
 
 ## Próximas fases
 
@@ -45,8 +48,8 @@ para poder revisar o revertir los cambios.
 - `remember`, `recall` y `forget` sin `key` caen al chat sin aviso.
 - El diagnóstico de `debug_project` sigue siendo superficial: con "Asia None" señala `launcher.py` y `brain.process` devolviendo `None`, sin llegar a la causa real del bug de la fase 1 (el streaming, ya corregido). En C:\Asia, `tools/debug_context.py` sale entre los primeros archivos porque contiene las búsquedas fijas y "Asia None" en sus comentarios: es ruido propio de este repositorio.
 - `open_app` responde "Abriendo notebook." con el nombre que extrajo el modelo. Debería decir el nombre resuelto ("Abriendo bloc de notas.").
-- La salida no tolera erratas: "salior" va al IntentEngine en lugar de cerrar. Aplicar a `EXIT_COMMANDS` la misma tolerancia que a los nombres de apps.
-- Flag `--timing`: tiempo por etapa (IntentEngine, acción, modelo). Con esas medidas, acelerar: mantener el modelo cargado, streaming, más atajos sin LLM y un prompt más corto.
+- La salida no tolera erratas: "salior" va al IntentEngine en lugar de cerrar. Aplicar a "/salir" y sus alias (`core/commands.py`) la misma tolerancia que a los nombres de apps.
+- ~~Flag `--timing`~~ (hecho, ver la tabla). La aceleración (mantener el modelo cargado, streaming, más atajos sin LLM, prompt más corto) se decide con los números de `--timing` en uso real, no antes.
 
 ## Fases futuras (diseño pendiente)
 
@@ -214,7 +217,7 @@ Hecho en la fase G (ver la tabla). Pendientes:
 ### Extras
 
 **Imágenes en la terminal.** La terminal no pasa imágenes con Ctrl+V.
-- Comando `:pegar`: lee la imagen del portapapeles con `PIL.ImageGrab.grabclipboard()` (Pillow ya está instalado), la guarda en una carpeta temporal y la adjunta al mensaje.
+- Comando `/pegar` (se agrega a la tabla de `core/commands.py`): lee la imagen del portapapeles con `PIL.ImageGrab.grabclipboard()` (Pillow ya está instalado), la guarda en una carpeta temporal y la adjunta al mensaje.
 - `@ruta.png` (y otros formatos de imagen) como adjunto, igual que los archivos de texto.
 - Primera opción, para capturas de texto (errores, código, enunciados): OCR local con Tesseract. No necesita modelo de visión.
 - Segunda etapa: modelo de visión local (`gemma3:4b` o `qwen2.5vl:3b`). Antes de elegir, medir el costo de recarga con 4 GB de VRAM: con un solo modelo en memoria a la vez (`ollama_one_model_at_a_time`), cada imagen descarga el 7B y lo vuelve a cargar después. Preguntar antes de descargar.
