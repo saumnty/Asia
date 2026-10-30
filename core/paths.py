@@ -14,6 +14,9 @@ CONFIG_DIR = PROJECT_ROOT / "config"
 DEFAULTS_FILE = CONFIG_DIR / "defaults.json"
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 APPS_FILE = CONFIG_DIR / "apps.json"
+# Apps encontradas en el menú Inicio (no versionado; ver tools/app_tool.py).
+APPS_LEARNED_NAME = "apps_learned.json"
+APPS_LEARNED_FILE = CONFIG_DIR / APPS_LEARNED_NAME
 
 MEMORY_DIR = PROJECT_ROOT / "memory"
 MEMORY_FILE = MEMORY_DIR / "memory.json"

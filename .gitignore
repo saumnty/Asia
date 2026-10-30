@@ -15,3 +15,6 @@ config/settings.json
 
 # Bitácora de envíos externos (fase G): solo metadatos, nunca el texto.
 logs/
+
+# Apps que open_app aprende del menú Inicio (config/apps.json es del repositorio).
+config/apps_learned.json

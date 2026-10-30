@@ -121,3 +121,51 @@ def test_resolve_y_close():
 
 def test_nombre_vacio(tool):
     assert tool.open_app("  ") == "No encontré qué aplicación abrir."
+
+
+# --- Apps aprendidas del menú Inicio, fuera de apps.json --------------------------
+
+def test_lo_aprendido_va_a_apps_learned_y_no_a_apps_json(tool):
+    before = tool.config_file.read_bytes()
+    tool.start_menu["excel"] = {"appid": "Microsoft.Office.EXCEL.EXE.15"}
+
+    assert tool.open_app("excel") == "Abriendo excel."
+
+    assert tool.config_file.read_bytes() == before
+    assert tool.learned_file == tool.config_file.with_name("apps_learned.json")
+    assert json.loads(tool.learned_file.read_text(encoding="utf-8")) == {
+        "excel": "explorer.exe shell:AppsFolder\Microsoft.Office.EXCEL.EXE.15"
+    }
+
+
+def test_lo_aprendido_se_usa_sin_volver_al_menu_inicio(tool):
+    tool.start_menu["excel"] = {"appid": "Excel.App"}
+    tool.open_app("excel")
+    tool.start_menu.clear()
+
+    tool.open_app("Excel")
+
+    assert tool.launched == ["explorer.exe shell:AppsFolder\Excel.App"] * 2
+
+
+def test_apps_json_gana_a_lo_aprendido(tool):
+    tool.learned_file.write_text(json.dumps({"chrome": "otro.exe", "visio": "visio.exe"}), encoding="utf-8")
+
+    tool.open_app("chrome")
+    tool.open_app("visio")
+
+    assert tool.launched == ["chrome", "visio.exe"]
+
+
+def test_apps_learned_roto_o_ausente(tool):
+    assert tool.load_learned() == {}
+    tool.learned_file.write_text("{ no es json", encoding="utf-8")
+
+    assert tool.load_learned() == {}
+    assert tool.open_app("crome") == "Abriendo crome."
+
+
+def test_apps_learned_en_gitignore():
+    from core.paths import PROJECT_ROOT
+
+    assert "config/apps_learned.json" in (PROJECT_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()

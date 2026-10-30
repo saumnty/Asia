@@ -3,9 +3,10 @@ import os
 import re
 import shutil
 import subprocess
+from pathlib import Path
 
 from core.atomic_write import write_json_atomic
-from core.paths import APPS_FILE
+from core.paths import APPS_FILE, APPS_LEARNED_NAME
 from tools.app_resolver import clarification, close_app, find_start_app, resolve_known_app
 
 
@@ -36,8 +37,12 @@ def launch(entry: str):
 
 
 class AppTool:
-    def __init__(self, config_file=APPS_FILE):
-        self.config_file = config_file
+    def __init__(self, config_file=APPS_FILE, learned_file=None):
+        self.config_file = Path(config_file)
+        # Las apps que se encuentran en el menú Inicio se guardan aparte
+        # (apps_learned.json, en .gitignore): apps.json es del repositorio y
+        # aprenderlas ahí lo dejaba con cambios sin commitear.
+        self.learned_file = Path(learned_file) if learned_file else self.config_file.with_name(APPS_LEARNED_NAME)
 
     def load_apps(self):
         if not self.config_file.exists():
@@ -52,6 +57,26 @@ class AppTool:
         # Atómico: un corte a mitad de la escritura no deja apps.json vacío.
         write_json_atomic(self.config_file, apps, ensure_ascii=False, indent=4)
 
+    def load_learned(self):
+        """Apps aprendidas del menú Inicio; {} si el archivo falta o está roto."""
+        try:
+            with open(self.learned_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+        return data if isinstance(data, dict) else {}
+
+    def learn(self, key, command):
+        learned = self.load_learned()
+        learned[key] = command
+        self.learned_file.parent.mkdir(parents=True, exist_ok=True)
+        write_json_atomic(self.learned_file, learned, ensure_ascii=False, indent=4)
+
+    def known_apps(self):
+        """apps.json y las aprendidas; si una clave está en los dos, gana apps.json."""
+        return {**self.load_learned(), **self.load_apps()}
+
     def open_app(self, app_name: str):
         """Abre una app de apps.json o del menú Inicio (Get-StartApps).
 
@@ -61,7 +86,7 @@ class AppTool:
         if not isinstance(app_name, str) or not app_name.strip():
             return "No encontré qué aplicación abrir."
 
-        apps = self.load_apps()
+        apps = self.known_apps()
         app_key = app_name.lower().strip()
 
         # Primero el nombre exacto o una variante conocida ("notebook"), luego
@@ -76,7 +101,7 @@ class AppTool:
             if found:
                 command = f"explorer.exe shell:AppsFolder\\{found['appid']}"
                 apps[app_key] = command
-                self.save_apps(apps)
+                self.learn(app_key, command)
 
         if not command:
             close = close_app(app_name, apps)
