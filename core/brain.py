@@ -174,6 +174,9 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         self.settings = SettingsManager()
         self.last_debug_report = None
         self.pending_run = PendingRun()
+        # Qué hizo el último mensaje (resumen de la sesión): una acción, "chat" o
+        # None si fue un comando de sesión.
+        self.last_action = None
 
     def limit(self, name):
         """Límite de contexto configurado en context_limits (settings)."""
@@ -213,6 +216,8 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
             return self.process_labeled(text)
 
     def process_labeled(self, text):
+        self.last_action = None
+
         # Comandos "/" (core/commands.py): se traducen a su frase, que se
         # atiende abajo como siempre.
         slash = resolve_command(text)
@@ -278,6 +283,7 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         # Charla clara (saludo, gracias, "qué es X"): directo al chat, sin
         # los ~20 s del IntentEngine (core/fast_chat.py).
         if is_clear_chat(text, self.app_names()):
+            self.last_action = "chat"
             return None
 
         # Órdenes inequívocas ("abre X", "muestra el proyecto activo"): sin
@@ -290,6 +296,7 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
         action = intent.get("action")
         params = intent.get("params")
+        self.last_action = action if action in self.HANDLERS or action in DIRECT_TOOL_ACTIONS else "chat"
 
         if not isinstance(params, dict):
             params = {}

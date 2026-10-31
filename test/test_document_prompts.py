@@ -57,7 +57,7 @@ def test_codigo_conserva_su_plantilla_con_tope(path):
 def test_los_topes_estan_en_defaults():
     limits = SettingsManager().get("answer_limits")
 
-    assert set(limits) == {"explain_file", "summarize_file", "chat"}
+    assert set(limits) == {"explain_file", "summarize_file", "chat", "session_summary"}
     assert all(limits[a]["tokens"] > 0 and limits[a]["words"] > 0 for a in ("explain_file", "summarize_file"))
 
 

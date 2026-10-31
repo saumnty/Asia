@@ -7,6 +7,23 @@ antes: cambiar uno es un cambio de comportamiento.
 """
 
 
+# --- Reflexión (fase R) ---------------------------------------------------------
+
+def session_summary(session):
+    return f"""
+Resume en 2 a 3 frases, en español y en pasado, qué se hizo en esta sesión de trabajo con Asia.
+
+Reglas:
+- Usa solo lo que aparece abajo. No inventes nada ni agregues recomendaciones.
+- Un solo párrafo, sin listas.
+
+Sesión:
+{session}
+
+Resume en 2 a 3 frases.
+"""
+
+
 # --- Memoria del proyecto ----------------------------------------------------
 
 def summarize_and_save_project(project_name, content):

@@ -82,10 +82,15 @@
         "min_speech_ms": 96
     },
 
+    "reflection": {
+        "summary_timeout_s": 30
+    },
+
     "answer_limits": {
         "explain_file": {"words": 150, "tokens": 450},
         "summarize_file": {"words": 100, "tokens": 300},
-        "chat": {"tokens": 350, "detail_tokens": 1500, "voice_tokens": 150}
+        "chat": {"tokens": 350, "detail_tokens": 1500, "voice_tokens": 150},
+        "session_summary": {"tokens": 120}
     },
 
     "context_limits": {

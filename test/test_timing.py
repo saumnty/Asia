@@ -188,7 +188,8 @@ def test_comandos_de_sesion_imprimen_una_sola_linea(capsys):
 
     captured = capsys.readouterr()
     assert captured.err.count("[tiempos]") == 1
-    assert captured.out.count("respuesta de ollama") == 3
+    # El resumen de la sesión también pasa por el Ollama simulado.
+    assert captured.out.count("Asia: respuesta de ollama") == 3
 
 
 def test_el_intent_engine_se_mide(capsys):

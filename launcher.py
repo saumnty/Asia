@@ -35,7 +35,7 @@ from core.commands import is_launcher_command, options_text
 from core.confidential import LOCAL_MODE, OPEN_MODE, current_mode
 from core.model_selection import model_for
 from core.provenance import ADJUNTO, USUARIO, Fragment, request_sources
-from core.reflection import opening_text
+from core.reflection import SessionLog, close_session, opening_text
 from core.paths import PROJECT_ROOT
 from providers.ollama_models import full_name, installed_models as ollama_installed_models
 from core.session import Session
@@ -490,6 +490,8 @@ def interactive_mode(brain=None, read=None, voice=None):
 
     messages = MessageReader(read, prompt=lambda: user_prompt(brain.settings))
     pending = None
+    session_log = SessionLog()
+    farewell = "Asia apagada."
 
     try:
         while True:
@@ -524,7 +526,6 @@ def interactive_mode(brain=None, read=None, voice=None):
                 user = heard.text if heard else ""
 
             if block is None and is_launcher_command(user, "salir"):
-                print("Asia apagada.")
                 break
 
             if block is None and is_launcher_command(user, "calibrar"):
@@ -565,20 +566,35 @@ def interactive_mode(brain=None, read=None, voice=None):
             # frase por frase mientras se escribe.
             voice_on = voice_enabled(brain.settings)
 
-            respond(
+            answer = respond(
                 brain, text, prefix="\nAsia: ", attachments=attachments,
                 use_actions=use_actions, text_label=text_label,
                 heard=heard, voice=voice if voice_on else None, cuttable=True
             )
+
+            # Para el resumen de la sesión; los comandos de sesión no cuentan.
+            action = getattr(brain, "last_action", "chat") if use_actions else "chat"
+
+            if action:
+                session_log.add(user, answer, action)
 
             # "/sin voz": se liberan Whisper y la voz (~380 MB).
             if voice_on and not voice_enabled(brain.settings) and hasattr(voice, "unload"):
                 voice.unload()
 
     except (KeyboardInterrupt, EOFError):
-        print("\nAsia apagada.")
+        farewell = "\nAsia apagada."
     finally:
         stop_speaking(voice)
+
+    if session_log:
+        print("[Guardando el resumen de la sesión]", file=sys.stderr, flush=True)
+        summary = close_session(brain, session_log)
+
+        if summary:
+            print(f"\nResumen de la sesión: {summary}")
+
+    print(farewell)
 
 
 def stop_speaking(voice) -> bool:
