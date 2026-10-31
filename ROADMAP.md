@@ -87,7 +87,8 @@ Ctrl+C, comprobado con una consola real y `jarvis.exe`: sin voz corta la respues
 
 - ~~La primera carga de la voz de Piper tarda ~9 s, detiene los tokens ~7,5 s y retrasa Ctrl+C.~~ Hecho (`b63a9506`): la voz se precarga en un hilo con `/voz` o `--voz` (3,6 s, mientras se escribe). La primera frase pasó de 9,2 a 1,8 s, sin huecos de más de 0,7 s entre tokens. Medido con el 7B al 100 % en CPU; repetir con la GPU.
 - Pendiente: `jarvis "mensaje"` (una sola ejecución) sigue cerrando con Ctrl+C.
-- Pendiente: en Windows Ctrl+C no interrumpe la espera del socket: solo actúa al llegar el siguiente dato. Con tokens llegando es inmediato, pero mientras el modelo carga, procesa el prompt o decide la intención, espera a que termine (2,7 s en la intención; 65 s medidos en CPU con el modelo descargado). Arreglarlo requiere otro hilo para la llamada al modelo o cerrar la conexión desde un manejador de consola.
+- ~~En Windows Ctrl+C no interrumpe la espera del socket~~ Hecho: la llamada al modelo va en otro hilo (`core/interruptible.py`, desde el router y el IntentEngine; también cubre Gemini) y Ctrl+C cierra la conexión. Corta en ~0,1 s también durante la intención y con el modelo cargándose (antes, hasta 65 s en CPU). El turno cortado no queda en el historial.
+- Límite de Ollama: cerrar la conexión no detiene el prompt que ya está procesando. El mensaje siguiente espera a que termine (medido en CPU, con el modelo recién cargado: 99 s de intención con 12 s de carga). Con tokens saliendo sí para al instante. Repetir con la GPU, donde ese prompt tarda ~4 s.
 
 ## Fases futuras (diseño pendiente)
 

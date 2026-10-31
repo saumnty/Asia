@@ -9,6 +9,7 @@ demás modelos cargados (keep_alive=0). Cambiar de modelo cuesta una recarga
 
 
 import re
+import threading
 
 
 def full_name(model: str) -> str:
@@ -124,6 +125,20 @@ class ThinkFilter:
         rest = "" if self.inside else self.buffer
         self.buffer = ""
         return rest
+
+
+def drop_client(owner):
+    """Cierra la conexión del cliente de owner (si es uno real) para que el próximo uso abra otra.
+
+    En un hilo aparte: cerrar la conexión nunca debe retrasar a quien canceló.
+    """
+    connection = getattr(owner._client, "_client", None)
+
+    if connection is None:
+        return
+
+    owner._client = None
+    threading.Thread(target=connection.close, name="asia-cierre", daemon=True).start()
 
 
 def installed_models(host=None):

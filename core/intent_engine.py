@@ -5,10 +5,11 @@ import sys
 from config.settings_manager import SettingsManager
 from core import timing
 from core.confidential import is_local_mode, is_open_mode, ollama_is_external, only_user
+from core.interruptible import call as interruptible_call
 from core.provenance import NEVER_EXPORT, current_fragments, labels_of, local_labels
 from core.audit import log_external_send
 from core.secrets_filter import redact_messages
-from providers.ollama_models import strip_think, think_kwargs, unload_others
+from providers.ollama_models import drop_client, strip_think, think_kwargs, unload_others
 from providers.ollama_provider import ollama_options
 
 
@@ -251,6 +252,10 @@ class IntentEngine:
     def client(self, client):
         self._client = client
 
+    def cancel(self):
+        """Ctrl+C: cierra la conexión para que Ollama deje de generar."""
+        drop_client(self)
+
     def preload(self):
         """Carga intent_model en Ollama sin prompt, para que el primer mensaje no espere la carga.
 
@@ -302,15 +307,19 @@ class IntentEngine:
 
         try:
             model = self.settings.get("intent_model")
-            unload_others(self.client, model, self.settings)
-            # Sin razonamiento: con think el modelo tarda más y escribe antes
-            # del JSON (qwen3).
-            response = self.client.chat(
-                model=model,
-                messages=messages,
-                options=ollama_options(self.settings, messages, temperature=0),
-                **think_kwargs(self.client, model, False)
-            )
+
+            def ask_model(emit):
+                unload_others(self.client, model, self.settings)
+                # Sin razonamiento: con think el modelo tarda más y escribe antes
+                # del JSON (qwen3).
+                return self.client.chat(
+                    model=model,
+                    messages=messages,
+                    options=ollama_options(self.settings, messages, temperature=0),
+                    **think_kwargs(self.client, model, False)
+                )
+
+            response = interruptible_call(ask_model, cancel=self.cancel)
         except Exception:
             return {"action": "chat", "params": {}}
 

@@ -2,7 +2,7 @@ import sys
 
 from config.settings_manager import SettingsManager
 from core.timing import ollama_metrics
-from providers.ollama_models import ThinkFilter, strip_think, think_kwargs, unload_others
+from providers.ollama_models import ThinkFilter, drop_client, strip_think, think_kwargs, unload_others
 
 
 # Medido en prompts reales de Asia: entre 3,3 y 4,1 caracteres por token.
@@ -77,6 +77,10 @@ class OllamaProvider:
     @client.setter
     def client(self, client):
         self._client = client
+
+    def cancel(self):
+        """Ctrl+C: cierra la conexión para que Ollama deje de generar."""
+        drop_client(self)
 
     def complete(self, messages: list[dict], on_chunk=None, review=False, model=None, think=False, max_tokens=None) -> str:
         """Envía los mensajes y devuelve la respuesta completa.

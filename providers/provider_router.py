@@ -18,6 +18,7 @@ from core.confidential import (
 )
 from core.audit import log_external_send
 from core.model_selection import StickyModel, model_for, thinks
+from core.interruptible import call as interruptible_call
 from core.timing import timed
 from core.secrets_filter import describe as describe_secrets, redact_messages, safe_error
 from core.provenance import (
@@ -393,8 +394,18 @@ Contexto del proyecto:
 
     @staticmethod
     def _call(name, provider, messages, **options):
-        """provider.complete, con su tiempo anotado si --timing está activo (core/timing.py)."""
-        return timed(name, options.get("model"), lambda: provider.complete(messages, **options))
+        """provider.complete, con su tiempo anotado si --timing está activo (core/timing.py).
+
+        En otro hilo, para que Ctrl+C la corte al momento (core/interruptible.py).
+        """
+        streaming = "on_chunk" in options
+        on_chunk = options.pop("on_chunk", None)
+
+        def complete(emit):
+            return provider.complete(messages, **options, **({"on_chunk": emit} if streaming else {}))
+
+        cancel = getattr(provider, "cancel", None)
+        return timed(name, options.get("model"), lambda: interruptible_call(complete, on_chunk, cancel))
 
     def _confirmed_by_flag(self, name, request, decision) -> bool:
         """--allow-external: se confirma cada envío (o "todos en esta ejecución")."""
