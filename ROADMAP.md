@@ -197,7 +197,7 @@ Hecho en la fase C (`af003d2a`, `4f25b229`): `@ruta`, autocompletado, stdin, `--
 
 - Imágenes desde el portapapeles y `@ruta.png`: ver "Extras: imágenes en la terminal".
 - PDF y texto largo vía RAG en vez de recortar.
-- Reemplazar `jarvis.bat` por un ejecutable nativo, para evitar el "¿Desea terminar el trabajo por lotes (S/N)?" de Windows al interrumpir con Ctrl+C.
+- **Fase I (Asia 1.0):** reemplazar `jarvis.bat` por un ejecutable nativo, para evitar el "¿Desea terminar el trabajo por lotes (S/N)?" de Windows al interrumpir con Ctrl+C.
 - stdin: si Asia se lanza sin terminal y con un stdin abierto que nunca se cierra (no una tubería real), la lectura espera indefinidamente. Si pasa, agregar un flag `--no-stdin`.
 
 ### Generación de código con verificación
@@ -224,7 +224,7 @@ Hecho en la fase G (ver la tabla). Pendientes:
 - La procedencia es por petición, no por carácter: si una acción lee un archivo, todo su prompt cuenta como local aunque use una parte. Peca de restrictiva.
 - El filtro de secretos es por patrones: en código da falsos positivos (`token = obtener()`) y no reconoce secretos sin formato conocido.
 - Con Ollama remoto no confiable, el RAG no indexa ni busca; no hay forma de autorizarlo una vez.
-- La etiqueta "emocional" existe pero todavía nada la produce.
+- La etiqueta "emocional" existe pero todavía nada la produce (ver "Afecto y cognición social" en Extras).
 
 ### Voz y avatar
 
@@ -247,7 +247,7 @@ Hecho en la fase G (ver la tabla). Pendientes:
 
 **J4, servicio en segundo plano:** Asia escuchando sin la terminal abierta (bandeja del sistema o servicio), con el mismo modo confidencial.
 
-**Voz propia de Piper:** fine-tuning en Colab a partir de una voz en español; el `.onnx` y su `.onnx.json` se dejan en `data/voices/` y se elige con `voice.tts_voice`, sin cambiar código.
+**Voz propia de Piper:** ver "Voz propia" en Extras.
 
 **Licencias de voz:** `piper-tts` 1.3+ es GPL-3.0 (vale para uso personal). Si algún día se distribuye Asia, la alternativa es el Piper anterior con licencia MIT (rhasspy/piper, hasta 1.2). Voces descargadas: `es_MX-claude-high` (datos Apache-2.0), `es_MX-ald-medium` (Unlicense) y `es_ES-sharvard-medium` (CC BY 3.0, exige atribución). `ald` y `sharvard` se afinaron desde `lessac`, cuyos datos probablemente son de uso no comercial: revisarlo antes de distribuir.
 
@@ -255,12 +255,27 @@ Hecho en la fase G (ver la tabla). Pendientes:
 - Canal de estado local (Flask-SocketIO) para que el avatar reaccione a hablar, pensar y escuchar.
 - Avatar: perro bóxer.
 
-### Conocimiento offline
+### Biblioteca de conocimiento offline (fase H, Asia 1.0)
 
-- Herramienta de Wikipedia offline con Kiwix/ZIM, separada del RAG de proyectos.
+Antes "Wikipedia offline". Va por capas, y cada fuente lleva su etiqueta para poder citarla:
+
+1. Proyectos propios (repos, reportes, notas) con el RAG actual: primera capa, la más útil.
+2. Documentación técnica offline (ROS 2, Gazebo, Python, MATLAB), empaquetada para Kiwix o convertida con zimit.
+3. Wikipedia en español e inglés: herramienta offline con Kiwix/ZIM, separada del RAG de proyectos.
+4. Preguntas y respuestas (Stack Overflow, Robotics Stack Exchange).
+
+- Búsqueda: la de texto de Kiwix encuentra los artículos y los embeddings se usan solo dentro de ellos, sin indexar todo.
+- Regla en el prompt: responder con lo que dice la fuente y decir "no lo encontré" si no está.
+
+Conocimiento, pendientes generales:
+
 - Knowledge Manager: destilar lo aprendido de proveedores externos, deduplicar y reindexar en una base global.
 - Indexación incremental del RAG por hash y calibración de umbrales del retriever.
 - Detección de código muerto por AST y auto-fix desde el diagnóstico de `DebugAgent`.
+
+### Reflexión y proactividad (fase R, Asia 1.0)
+
+Alcance por definir. Sin fecha dentro de esta fase: monólogo interno y reflexión nocturna (ver "Posibles pendientes sin fecha").
 
 ### Extras
 
@@ -271,7 +286,55 @@ Hecho en la fase G (ver la tabla). Pendientes:
 - Segunda etapa: modelo de visión local (`gemma3:4b` o `qwen2.5vl:3b`). Antes de elegir, medir el costo de recarga con 4 GB de VRAM: con un solo modelo en memoria a la vez (`ollama_one_model_at_a_time`), cada imagen descarga el 7B y lo vuelve a cargar después. Preguntar antes de descargar.
 - Modo confidencial: las imágenes llevan la etiqueta "adjunto", así que son locales por defecto (ni la imagen ni el texto del OCR salen sin autorización).
 
-### Servidor y acceso remoto (siempre disponible)
+**Cambio de modelo seguro.**
+- Perfil por modelo en la configuración: contexto, si razona, si ve imágenes y ajustes de prompt propios (por ejemplo, el recordatorio de brevedad al final). Asia lee el perfil en vez de suponer.
+- Comando de evaluación: corre con un modelo candidato los intents (`check_intents`), el benchmark de revisión (`check_review_quality`) y las pruebas de velocidad (`check_speed`), y da una tabla contra el modelo actual: aciertos, errores, velocidad.
+- Los modelos abiertos (Gemma, Qwen, Llama, etc.) entran por Ollama; Claude y otros, solo por API, con un proveedor nuevo de una clase y siempre pasando por el modo confidencial.
+
+**Especialistas internos** (no varios asistentes separados).
+- Un orquestador manda cada mensaje a un especialista (prompt + modelo + herramientas), todos con la misma memoria, biblioteca de conocimiento y barrera de confidencialidad. `models_by_domain` es la primera versión.
+- Verificación cruzada (uno genera, otro revisa) solo en tareas importantes, porque duplica el tiempo.
+- Con el servidor (L), los especialistas podrían ser servicios separados en la red.
+
+**Control y estimación.**
+- Estimar el ruido de fondo del micrófono y ajustar el umbral del VAD (ampliar `/calibrar voz` para que sea automático).
+- Control automático de ganancia del micrófono para J3 (palabra de activación a distancia).
+- Filtro de Kalman o bayesiano para el estado emocional en la fase de afecto, para que un solo mensaje no cambie la estimación.
+- Regla: no usar un controlador donde una regla simple basta.
+
+**Asia → ROS 2 → Bolitabot.** Control jerárquico: Asia entiende la orden y publica objetivos de alto nivel en un tópico de ROS 2; el controlador del robot (punto desplazado, PID) cierra el lazo en el dispositivo. El LLM nunca va dentro del lazo de control.
+
+**Voz propia.** Fine-tuning de Piper en Colab a partir de una voz en español; el `.onnx` y su `.onnx.json` se dejan en `data/voices/` y se elige con `voice.tts_voice`, sin cambiar código.
+- Permiso: la voz es de una persona que dio permiso; audios y modelo son solo de uso privado y se borran si lo pide.
+- Preparar los audios: juntar todos, separar por origen, limpiar (Demucs, DeepFilterNet con moderación), cortar y transcribir con Whisper.
+- Con 15–30 min limpios, fine-tuning directo de Piper en Colab; con menos, generar frases sintéticas con XTTS-v2 y entrenar Piper con ellas.
+- La voz base del fine-tuning debe coincidir en género y acento con la final.
+
+**Afecto y cognición social** (fase de afecto).
+- Biblioteca de casos del usuario: situación → cómo la leyó → opciones → tono elegido y por qué → resultado. Anonimizar a terceros.
+- Perfil de principios sacado de los casos, revisable por el usuario.
+- Control de tono: elegir entre variantes; más adelante, DPO o LoRA.
+- Evaluación con casos apartados que el sistema no vio.
+- Reglas: todo local con la etiqueta "emocional"; sin adulación; no es terapeuta; el usuario puede ver, corregir y borrar lo que Asia cree de su estado; lo que simula "pensamiento" se documenta como simulación.
+
+**Tareas grandes.**
+- Bucle de agente: planear, dividir en tareas pequeñas, hacer una, verificar (pruebas, sandbox, simulación), corregir, siguiente. El plan se guarda en un archivo para retomarlo.
+- Con el 7B: el usuario planea y Asia ejecuta y verifica cada paso.
+- Modo híbrido: un modelo externo planea (con autorización o en modo abierto) y el local ejecuta los pasos simples.
+- Con más VRAM (14–32B), planear en local. Medir con la evaluación de "Cambio de modelo seguro" antes de confiarle planes largos.
+- El usuario sigue decidiendo el diseño; puntos de confirmación antes de cambios grandes.
+
+**MCP** (implementación natural de la fase N).
+- Asia como cliente MCP: conectar servidores existentes (archivos, GitHub, calendario) en lugar de programar cada integración.
+- Lista de servidores permitidos; nada se conecta solo.
+- Niveles de permiso por herramienta: leer libre; escribir, enviar o borrar siempre con confirmación mostrando qué va a hacer.
+- Lo que devuelve una herramienta es dato, nunca instrucción, con su propia etiqueta en el modo confidencial (protección contra inyección de instrucciones desde páginas, correos o issues).
+- Bitácora de cada llamada a herramientas.
+- Empezar solo con lectura y abrir escritura poco a poco.
+- Asia como servidor MCP: exponer sus acciones locales a Claude u otro cliente, con la barrera de confidencialidad aplicada.
+- Candidato: AutoCAD (Windows). Revisar si hay servidor MCP existente o construir uno con su API (COM, .NET o AutoLISP). Reglas: trabajar siempre sobre una copia del dibujo, confirmar cada cambio y empezar por lectura (capas, bloques, medidas).
+
+### Servidor y acceso remoto, siempre disponible (fase L)
 
 Va después de los extras.
 - Medir el uso real de RAM/VRAM antes de comprar el Jetson Orin Nano Super (8 GB de RAM soldada).
@@ -279,13 +342,26 @@ Va después de los extras.
 - Tailscale para acceso remoto, con modo reducido en conexiones lentas.
 - Respaldos de `memory/memory.json`, `memory/projects/` y `data/chroma/`.
 
+### Posibles pendientes sin fecha
+
+- Monólogo interno y reflexión nocturna (dentro de R).
+- Casco o dispositivo ponible con Asia por Tailscale.
+
 ### Orden de trabajo
+
+**Meta Asia 1.0 (objetivo: diciembre de 2026):**
+
+1. Voz completa: J2 (hecho) y J3.
+2. Reflexión y proactividad (R).
+3. Ejecutable nativo (I).
+4. Biblioteca de conocimiento offline (H).
+
+**Asia 2.0 (todo lo demás), en este orden:**
 
 1. Estabilizar el modelo actual con uso real.
 2. Fase 4 (limpieza) y revisión sin síntesis.
 3. Cambio entre modelos.
-4. Wikipedia offline.
-5. Voz.
-6. Avatar.
-7. Extras: imágenes en la terminal.
-8. Jetson, servidor y uso remoto (siempre disponible).
+4. Voz: J4 y voz propia.
+5. Avatar.
+6. Extras: imágenes en la terminal, cambio de modelo seguro, especialistas internos, control y estimación, Asia → ROS 2 → Bolitabot, afecto y cognición social, tareas grandes y MCP.
+7. Jetson, servidor y uso remoto (siempre disponible).
