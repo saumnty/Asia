@@ -85,8 +85,9 @@ Medido con `test/manual/check_speed.py` (una sesión, `qwen2.5-coder:7b`, `num_c
 
 Ctrl+C, comprobado con una consola real y `jarvis.exe`: sin voz corta la respuesta en ~0,2 s y vuelve al prompt, sin dejar el turno en el historial; con voz, el primero corta la lectura y el segundo la respuesta (~0,1 s); en el prompt vacío cierra con código 0, sin S/N. El mensaje siguiente al corte responde normal.
 
-- Pendiente: la primera carga de la voz de Piper tarda ~9 s, detiene los tokens ~7,5 s y retrasa Ctrl+C mientras dura (5,4 s medidos). Precargar la voz en un hilo al activar `/voz` lo evitaría, si la carga no bloquea el resto.
+- ~~La primera carga de la voz de Piper tarda ~9 s, detiene los tokens ~7,5 s y retrasa Ctrl+C.~~ Hecho (`b63a9506`): la voz se precarga en un hilo con `/voz` o `--voz` (3,6 s, mientras se escribe). La primera frase pasó de 9,2 a 1,8 s, sin huecos de más de 0,7 s entre tokens. Medido con el 7B al 100 % en CPU; repetir con la GPU.
 - Pendiente: `jarvis "mensaje"` (una sola ejecución) sigue cerrando con Ctrl+C.
+- Pendiente: en Windows Ctrl+C no interrumpe la espera del socket: solo actúa al llegar el siguiente dato. Con tokens llegando es inmediato, pero mientras el modelo carga, procesa el prompt o decide la intención, espera a que termine (2,7 s en la intención; 65 s medidos en CPU con el modelo descargado). Arreglarlo requiere otro hilo para la llamada al modelo o cerrar la conexión desde un manejador de consola.
 
 ## Fases futuras (diseño pendiente)
 
@@ -287,11 +288,15 @@ Conocimiento, pendientes generales:
 
 ### Reflexión y proactividad (fase R, Asia 1.0)
 
-Alcance en 1.0: solo dentro de la sesión, sin proceso en segundo plano (eso es J4, en 2.0).
-- Resumen al abrir Asia: qué se hizo en la sesión anterior (a partir del historial y la bitácora) y los pendientes anotados.
-- `/pendiente <texto>` para anotar pendientes, `/pendientes` para verlos y `/hecho <n>` para cerrarlos, guardados en local.
-- Resumen al salir: qué se hizo en esta sesión, en 2–3 frases.
-- Consolidación de memoria bajo demanda (`/revisar memoria`): detectar entradas duplicadas o contradictorias y proponer cambios con confirmación, nunca automático.
+Alcance en 1.0 (hecho): solo dentro de la sesión, sin proceso en segundo plano (eso es J4, en 2.0). Commits: `84813165`, `e76574ea`, `fac62387`, `c355a084`. Prueba manual: `test/manual/check_reflexion.py`, con carpetas temporales.
+- Resumen al abrir Asia: la sesión anterior en 1–2 frases y los pendientes abiertos; si no hay nada, no muestra nada. Solo lee `data/reflexion/`, sin modelo (1,3 ms).
+- `/pendiente <texto>` para anotar pendientes, `/pendientes` para verlos y `/hecho <n>` para cerrarlos, en `data/reflexion/pendientes.json` con escritura atómica y origen "usuario". Los cerrados se conservan con su fecha.
+- Resumen al salir: 2–3 frases con el Ollama local, a partir de lo pedido, el principio de cada respuesta, las acciones y los envíos de la bitácora. Si no responde en `reflection.summary_timeout_s` (30 s) o se pulsa Ctrl+C, se guarda la lista de acciones y Asia sale igual. Nunca va a un proveedor externo ni a un Ollama en otra máquina. Los comandos de sesión no cuentan; una sesión sin mensajes conserva el resumen anterior.
+- `/revisar memoria`: propone cada caso, y solo se borra con 1 o 2; cualquier otra respuesta deja las dos. Primero reglas (claves casi iguales, valores iguales), después el modelo local, del que solo valen claves que existen.
+
+Tiempos con el 7B al 100 % en CPU, solo como referencia (repetir con la GPU; `summary_timeout_s` y los topes no se ajustaron con ellos): salir 8,8–21,1 s; `/revisar memoria` 14,6–24 s con la memoria de prueba de 8 entradas.
+
+Pendiente: el modelo aporta poco en `/revisar memoria`. Las reglas encontraron los 2 casos que les tocaban; el 7B encontró `ciudad`/`vivo_en` (contradicción que las reglas no ven) en 1 de 4 intentos y llamó "duplicada" a UAM/UNAM. Medir con la GPU o con otro modelo antes de decidir si se queda.
 
 El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Posibles pendientes sin fecha").
 
@@ -358,7 +363,7 @@ Va después de los extras.
 - Medir el uso real de RAM/VRAM antes de comprar el Jetson Orin Nano Super (8 GB de RAM soldada).
 - Portar a ARM64 y revisar requisitos del Jetson.
 - Tailscale para acceso remoto, con modo reducido en conexiones lentas.
-- Respaldos de `memory/memory.json`, `memory/projects/` y `data/chroma/`.
+- Respaldos de `memory/memory.json`, `memory/projects/`, `data/chroma/` y `data/reflexion/`.
 
 ### Posibles pendientes sin fecha
 
@@ -370,7 +375,7 @@ Va después de los extras.
 **Meta Asia 1.0 (objetivo: diciembre de 2026):**
 
 1. Voz completa: J2 (hecho) y J3.
-2. Reflexión y proactividad (R), solo dentro de la sesión.
+2. Reflexión y proactividad (R), solo dentro de la sesión: hecho.
 3. Ejecutable nativo (I): hecho (`jarvis.bat` queda como respaldo por un tiempo).
 4. Biblioteca de conocimiento offline (H).
 
