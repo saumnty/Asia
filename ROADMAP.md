@@ -243,7 +243,7 @@ Hecho en la fase G (ver la tabla). Pendientes:
 **J2, frase por frase e interrupción (hecho):** `core/voice/reading.py`. Cada frase completa del streaming (nunca dentro de un bloque de código ni de una fila de tabla) se genera en un hilo y suena en otro, en orden; la respuesta sigue sonando al volver al prompt. Enter (mientras escribe o al mandar otra línea), Ctrl+C (corta la lectura, no Asia) o volver a escuchar cortan la lectura y vacían la cola. "Te dejo el código en pantalla" se dice una vez al final. `--timing` añade "primer audio".
 - Hasta el primer audio, desde que termina la frase dicha (`check_voz.py --sin-microfono`, con altavoz): "qué es un grafo bipartito" 15,8 s → 9,1 s; "sobre el blog de notas" 29,6 s → 10,2 s (con la brevedad en voz); "cuéntame un chiste" 11,2 s → 9,3 s (respuesta de una frase: casi todo es la intención y el modelo). Voz a texto aparte: 2,7 → 3,1 s.
 
-**J3, palabra de activación:** "Hey Jarvis" de openWakeWord para las pruebas; después, "Oye Asia" entrenada.
+**J3, palabra de activación:** "Hey Jarvis" de openWakeWord para las pruebas; después, "Oye Asia" entrenada. En 1.0 se prueba con el micrófono de la laptop a distancia corta; la activación a distancia queda para cuando haya un micrófono externo.
 
 **J4, servicio en segundo plano:** Asia escuchando sin la terminal abierta (bandeja del sistema o servicio), con el mismo modo confidencial.
 
@@ -275,7 +275,13 @@ Conocimiento, pendientes generales:
 
 ### Reflexión y proactividad (fase R, Asia 1.0)
 
-Alcance por definir. Sin fecha dentro de esta fase: monólogo interno y reflexión nocturna (ver "Posibles pendientes sin fecha").
+Alcance en 1.0: solo dentro de la sesión, sin proceso en segundo plano (eso es J4, en 2.0).
+- Resumen al abrir Asia: qué se hizo en la sesión anterior (a partir del historial y la bitácora) y los pendientes anotados.
+- `/pendiente <texto>` para anotar pendientes, `/pendientes` para verlos y `/hecho <n>` para cerrarlos, guardados en local.
+- Resumen al salir: qué se hizo en esta sesión, en 2–3 frases.
+- Consolidación de memoria bajo demanda (`/revisar memoria`): detectar entradas duplicadas o contradictorias y proponer cambios con confirmación, nunca automático.
+
+El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Posibles pendientes sin fecha").
 
 ### Extras
 
@@ -298,7 +304,7 @@ Alcance por definir. Sin fecha dentro de esta fase: monólogo interno y reflexi�
 
 **Control y estimación.**
 - Estimar el ruido de fondo del micrófono y ajustar el umbral del VAD (ampliar `/calibrar voz` para que sea automático).
-- Control automático de ganancia del micrófono para J3 (palabra de activación a distancia).
+- Control automático de ganancia del micrófono para la palabra de activación a distancia (2.0, cuando haya un micrófono externo). En 1.0, J3 se prueba con el micrófono de la laptop a distancia corta.
 - Filtro de Kalman o bayesiano para el estado emocional en la fase de afecto, para que un solo mensaje no cambie la estimación.
 - Regla: no usar un controlador donde una regla simple basta.
 
@@ -344,7 +350,7 @@ Va después de los extras.
 
 ### Posibles pendientes sin fecha
 
-- Monólogo interno y reflexión nocturna (dentro de R).
+- Monólogo interno y reflexión nocturna (continuación de R, en 2.0).
 - Casco o dispositivo ponible con Asia por Tailscale.
 
 ### Orden de trabajo
@@ -352,15 +358,15 @@ Va después de los extras.
 **Meta Asia 1.0 (objetivo: diciembre de 2026):**
 
 1. Voz completa: J2 (hecho) y J3.
-2. Reflexión y proactividad (R).
+2. Reflexión y proactividad (R), solo dentro de la sesión.
 3. Ejecutable nativo (I).
 4. Biblioteca de conocimiento offline (H).
 
 **Asia 2.0 (todo lo demás), en este orden:**
 
 1. Estabilizar el modelo actual con uso real.
-2. Fase 4 (limpieza) y revisión sin síntesis.
-3. Cambio entre modelos.
+2. ~~Fase 4 (limpieza) y revisión sin síntesis.~~ Hecho (`254dc3cd`, `284c1bdc`).
+3. Cambio entre modelos. ~~Ver y cambiar el modelo por comando, `--model`, `models_by_domain`.~~ Hecho (`1231b36b`, `fccf75bd`). Falta lo de "Qué falta" en "Multi-modelo según tipo de tarea".
 4. Voz: J4 y voz propia.
 5. Avatar.
 6. Extras: imágenes en la terminal, cambio de modelo seguro, especialistas internos, control y estimación, Asia → ROS 2 → Bolitabot, afecto y cognición social, tareas grandes y MCP.
