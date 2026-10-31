@@ -22,3 +22,7 @@ config/apps_learned.json
 # Voz (fase J1): modelos de Whisper y voces de Piper, se descargan aparte.
 data/models/
 data/voices/
+
+# Instalación editable (pip install -e .): genera jarvis.exe en .venv/Scripts.
+*.egg-info/
+build/
