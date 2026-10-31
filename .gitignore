@@ -26,3 +26,6 @@ data/voices/
 # Instalación editable (pip install -e .): genera jarvis.exe en .venv/Scripts.
 *.egg-info/
 build/
+
+# Pendientes y resumen de sesión (fase R): datos personales, solo en local.
+data/reflexion/

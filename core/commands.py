@@ -94,6 +94,13 @@ COMMANDS = [
     Command("tiempos", "/sin tiempos", "deja de mostrar los tiempos",
             "/sin tiempos", phrase="oculta tiempos", aliases=("oculta tiempos",)),
 
+    Command("pendientes", "/pendiente <texto>", "anota un pendiente, guardado en local",
+            "/pendiente revisar el PID del Bolitabot", action=("add_task", "text")),
+    Command("pendientes", "/pendientes", "muestra los pendientes abiertos, numerados",
+            "/pendientes", action=("list_tasks", "text")),
+    Command("pendientes", "/hecho <n>", "cierra el pendiente con ese número",
+            "/hecho 2", action=("close_task", "number")),
+
     Command("voz", "/voz",
             "Enter en una línea vacía escucha lo que dices; las respuestas se leen en voz alta "
             "(como --voz)",
@@ -150,6 +157,10 @@ def resolve(text: str):
     for command in commands:
         if ARG in command.slash:
             prefix = command_text(head(command))
+
+            # "/hecho" sin argumento: lo explica su acción.
+            if normalized == prefix and command.action:
+                return Resolved(command)
 
             if normalized.startswith(prefix + " "):
                 # El argumento se toma del texto original (puede llevar mayúsculas).

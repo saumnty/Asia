@@ -27,6 +27,10 @@ BACKUPS_DIR = MEMORY_DIR / "backups"
 
 DATA_DIR = PROJECT_ROOT / "data"
 CHROMA_DIR = DATA_DIR / "chroma"
+# Fase R: pendientes y resumen de la última sesión (no versionados).
+REFLECTION_DIR = DATA_DIR / "reflexion"
+TASKS_FILE = REFLECTION_DIR / "pendientes.json"
+SESSION_SUMMARY_FILE = REFLECTION_DIR / "ultima_sesion.json"
 
 LOGS_DIR = PROJECT_ROOT / "logs"
 # Una línea por envío a un proveedor externo, sin el texto (fase G).

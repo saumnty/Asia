@@ -9,6 +9,7 @@ from core.actions.explore import ExploreActions
 from core.actions.memory import MemoryActions
 from core.actions.models import ModelActions, model_command
 from core.actions.confidential import ConfidentialActions, confidential_command
+from core.actions.tasks import TaskActions
 from core.actions.timing import TimingActions, timing_command
 from core.actions.voice import VoiceActions, voice_command
 from core import timing
@@ -153,7 +154,7 @@ SHORTCUT_ACTIONS = {
 
 
 class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxActions, ModelActions, ConfidentialActions,
-            TimingActions, VoiceActions):
+            TimingActions, VoiceActions, TaskActions):
     # Acción del IntentEngine -> método que la atiende (ver core/actions).
     HANDLERS = {
         **MemoryActions.HANDLERS,
@@ -161,6 +162,7 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         **ReviewActions.HANDLERS,
         **CodeActions.HANDLERS,
         **SandboxActions.HANDLERS,
+        **TaskActions.HANDLERS,
     }
 
     def __init__(self):

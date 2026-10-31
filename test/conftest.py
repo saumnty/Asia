@@ -18,6 +18,15 @@ def audit_in_tmp(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def reflection_in_tmp(tmp_path, monkeypatch):
+    """Los pendientes y el resumen de sesión de las pruebas no van a data/ real."""
+    from core import paths
+
+    monkeypatch.setattr(paths, "TASKS_FILE", tmp_path / "reflexion" / "pendientes.json")
+    monkeypatch.setattr(paths, "SESSION_SUMMARY_FILE", tmp_path / "reflexion" / "ultima_sesion.json")
+
+
+@pytest.fixture(autouse=True)
 def no_preload(monkeypatch):
     """El modo interactivo precarga el modelo en Ollama: en las pruebas, no."""
     from core.brain import Brain
