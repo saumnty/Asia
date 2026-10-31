@@ -4,6 +4,8 @@ Interfaz: synthesize(texto) -> (audio float32, frecuencia). PiperTTS lee la
 voz tts_voice (un .onnx con su .onnx.json) de voices_dir, en CPU: una voz
 propia entrenada con Piper se usa igual, dejando sus dos archivos ahí.
 """
+import threading
+
 import numpy as np
 
 from core.voice import project_path
@@ -17,14 +19,20 @@ class PiperTTS:
     def __init__(self, config):
         self.config = config
         self.voice = None
+        # La precarga y la primera frase pueden llegar a la vez: se carga una vez.
+        self.loading = threading.Lock()
 
     def voice_path(self):
         return project_path(self.config["voices_dir"]) / f"{self.config['tts_voice']}.onnx"
 
     def load(self):
-        if self.voice is not None:
-            return self.voice
+        with self.loading:
+            if self.voice is None:
+                self.voice = self.read_voice()
 
+        return self.voice
+
+    def read_voice(self):
         path = self.voice_path()
 
         if not path.exists() or not path.with_suffix(".onnx.json").exists():
@@ -35,8 +43,7 @@ class PiperTTS:
 
         from piper import PiperVoice
 
-        self.voice = PiperVoice.load(path)
-        return self.voice
+        return PiperVoice.load(path)
 
     def synthesize(self, text: str):
         from piper import SynthesisConfig

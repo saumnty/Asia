@@ -486,6 +486,16 @@ def interactive_mode(brain=None, read=None, voice=None):
 
     try:
         while True:
+            # Con /voz o --voz, la voz de Piper carga mientras se escribe.
+            if voice_enabled(brain.settings):
+                if voice is None:
+                    from core.voice.session import VoiceSession
+
+                    voice = VoiceSession(brain.settings)
+
+                if hasattr(voice, "preload_voice"):
+                    voice.preload_voice()
+
             # La respuesta anterior puede seguir sonando: Ctrl+C la corta (sin
             # cerrar Asia) y cualquier Enter también, antes de atender la línea.
             try:
@@ -503,11 +513,6 @@ def interactive_mode(brain=None, read=None, voice=None):
             # Modo voz: Enter en una línea vacía escucha; lo dictado es "usuario",
             # igual que lo tecleado.
             if block is None and not user.strip() and voice_enabled(brain.settings):
-                if voice is None:
-                    from core.voice.session import VoiceSession
-
-                    voice = VoiceSession(brain.settings)
-
                 heard = listen(voice, brain.settings)
                 user = heard.text if heard else ""
 
@@ -552,11 +557,6 @@ def interactive_mode(brain=None, read=None, voice=None):
             # Modo voz: la respuesta se muestra entera y se lee su texto normal,
             # frase por frase mientras se escribe.
             voice_on = voice_enabled(brain.settings)
-
-            if voice_on and voice is None:
-                from core.voice.session import VoiceSession
-
-                voice = VoiceSession(brain.settings)
 
             respond(
                 brain, text, prefix="\nAsia: ", attachments=attachments,

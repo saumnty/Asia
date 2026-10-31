@@ -3,6 +3,7 @@
 Los motores se crean al primer uso: activar la voz no carga Whisper hasta
 que se escucha algo. Micrófono, VAD y motores se pueden inyectar (pruebas).
 """
+import threading
 import time
 from dataclasses import dataclass
 
@@ -83,6 +84,7 @@ class VoiceSession:
         self._tts = tts
         self._speaker = speaker
         self.reading = None
+        self.voice_preload = None
 
     @property
     def tts(self):
@@ -99,6 +101,32 @@ class VoiceSession:
             self._speaker = Speaker()
 
         return self._speaker
+
+    def preload_voice(self):
+        """Carga la voz en un hilo: la primera lectura no detiene los tokens ni retrasa Ctrl+C.
+
+        Si falla, no se avisa aquí: lo dirá la primera lectura.
+        """
+        if self.voice_preload is not None:
+            return self.voice_preload
+
+        try:
+            tts = self.tts
+        except Exception:
+            return None
+
+        if not hasattr(tts, "load"):
+            return None
+
+        def load():
+            try:
+                tts.load()
+            except Exception:
+                pass
+
+        self.voice_preload = threading.Thread(target=load, name="asia-voz", daemon=True)
+        self.voice_preload.start()
+        return self.voice_preload
 
     def start_reading(self) -> Reading:
         """Una lectura frase por frase (core/voice/reading.py); corta la anterior si seguía."""
@@ -145,6 +173,7 @@ class VoiceSession:
                 engine.unload()
 
         self._stt = self._tts = None
+        self.voice_preload = None
 
     @property
     def stt(self):
