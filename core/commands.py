@@ -102,10 +102,14 @@ COMMANDS = [
             "/hecho 2", action=("close_task", "number")),
 
     Command("memoria", "/revisar memoria",
-            "busca entradas duplicadas o contradictorias y propone cambios uno por uno; "
+            "busca entradas duplicadas o contradictorias con reglas y propone cambios uno por uno; "
             "nada cambia sin tu confirmación",
             "/revisar memoria", special="revisar_memoria",
             aliases=("revisa la memoria", "revisar memoria")),
+    Command("memoria", "/revisar memoria a fondo",
+            "lo mismo, y además le pregunta al modelo local (más lento y menos fiable que las reglas)",
+            "/revisar memoria a fondo", special="revisar_memoria_a_fondo",
+            aliases=("revisa la memoria a fondo", "revisar memoria a fondo")),
 
     Command("voz", "/voz",
             "Enter en una línea vacía escucha lo que dices; las respuestas se leen en voz alta "

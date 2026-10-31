@@ -47,8 +47,13 @@ def session(tmp_path, data, model_answer="[]", **settings):
     return brain
 
 
-def run(brain, lines):
-    launcher.interactive_mode(brain, read=reader(["/revisar memoria", *lines, "salir"]))
+def review_prompts(brain):
+    """Sin el resumen de la sesión, que también pasa por el modelo simulado."""
+    return [p for p in brain.provider_router.prompts if "Revisa estas entradas" in p]
+
+
+def run(brain, lines, command="/revisar memoria"):
+    launcher.interactive_mode(brain, read=reader([command, *lines, "salir"]))
     return brain.memory.load()
 
 
@@ -148,8 +153,29 @@ def test_el_modelo_nunca_cambia_nada_por_si_solo(tmp_path):
     memory = {"ciudad": "CDMX", "vivo_en": "Puebla"}
     brain = session(tmp_path, dict(memory), answer)
 
-    assert run(brain, ["n"]) == memory
+    assert run(brain, ["n"], "/revisar memoria a fondo") == memory
     assert "CDMX" in brain.provider_router.prompts[0]
+
+
+@pytest.mark.parametrize("command", ["/revisar memoria", "revisa la memoria"])
+def test_por_defecto_no_usa_el_modelo(tmp_path, capsys, command):
+    brain = session(tmp_path, dict(MEMORY))
+
+    run(brain, ["n", "n"], command)
+
+    assert review_prompts(brain) == []
+    # Solo avisa si se pidió a fondo y el modelo no estuvo.
+    assert "Revisé solo con reglas" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("command", ["/revisar memoria a fondo", "revisa la memoria a fondo"])
+def test_a_fondo_pregunta_al_modelo(tmp_path, command):
+    answer = json.dumps([{"a": "ciudad", "b": "vivo_en", "tipo": "contradictoria"}])
+    brain = session(tmp_path, {"ciudad": "CDMX", "vivo_en": "Puebla"}, answer)
+
+    run(brain, ["n"], command)
+
+    assert len(review_prompts(brain)) == 1
 
 
 def test_ctrl_c_en_la_pregunta_termina_sin_cambiar_nada(tmp_path, capsys):
@@ -188,7 +214,7 @@ def test_sin_casos_lo_dice(tmp_path, capsys):
 def test_ollama_en_otra_maquina_no_recibe_la_memoria(tmp_path, capsys):
     brain = session(tmp_path, dict(MEMORY), ollama_host="http://10.0.0.9:11434")
 
-    run(brain, ["n", "n"])
+    run(brain, ["n", "n"], "/revisar memoria a fondo")
 
     assert brain.provider_router.prompts == []
     assert "Revisé solo con reglas" in capsys.readouterr().err
@@ -197,8 +223,10 @@ def test_ollama_en_otra_maquina_no_recibe_la_memoria(tmp_path, capsys):
 def test_fuera_del_modo_interactivo_lo_explica():
     assert make_brain().process("/revisar memoria") == REVIEW_ONLY_INTERACTIVE
     assert make_brain().process("revisa la memoria") == REVIEW_ONLY_INTERACTIVE
+    assert make_brain().process("/revisar memoria a fondo") == REVIEW_ONLY_INTERACTIVE
 
 
 def test_en_la_tabla_de_opciones():
     assert any(c.slash == "/revisar memoria" and c.group == "memoria" for c in COMMANDS)
-    assert "/revisar memoria" in options_text()
+    assert any(c.slash == "/revisar memoria a fondo" and c.group == "memoria" for c in COMMANDS)
+    assert "/revisar memoria" in options_text() and "/revisar memoria a fondo" in options_text()

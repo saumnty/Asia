@@ -1,9 +1,11 @@
 """/revisar memoria (fase R): entradas duplicadas o contradictorias en memory.json.
 
-Primero reglas, que no inventan: claves casi iguales y valores iguales. Después
-el modelo local, para lo que las reglas no ven ("ciudad" y "vivo_en"); de su
-respuesta solo vale lo que nombra claves que existen. Aquí nada se cambia: el
-launcher propone cada caso y solo borra lo que el usuario confirma.
+Por defecto, solo reglas, que no inventan: claves casi iguales y valores
+iguales. "/revisar memoria a fondo" le pregunta además al modelo local por lo que
+las reglas no ven ("ciudad" y "vivo_en"); de su respuesta solo vale lo que nombra
+claves que existen. Medido con el 7B en CPU acierta poco: 1 de 4 intentos.
+Aquí nada se cambia: el launcher propone cada caso y solo borra lo que el usuario
+confirma.
 """
 import json
 import re

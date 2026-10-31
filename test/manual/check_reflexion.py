@@ -102,7 +102,7 @@ def main():
     print(f"{len(proposals)} casos en {time.perf_counter() - start:.1f} s (modelo: {'sí' if used else 'no'}).")
     print("(Solo las reglas: " + str(len(find_proposals(memory.load())[0])) + " casos.)")
 
-    launcher.review_memory(brain, lambda prompt: print(prompt + "n") or "n")
+    launcher.review_memory(brain, lambda prompt: print(prompt + "n") or "n", deep=True)
 
     same = memory.load() == TEST_MEMORY
     print(f"\nLa memoria de prueba quedó igual: {'sí' if same else 'NO'}.")

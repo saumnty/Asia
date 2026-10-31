@@ -292,11 +292,13 @@ Alcance en 1.0 (hecho): solo dentro de la sesión, sin proceso en segundo plano 
 - Resumen al abrir Asia: la sesión anterior en 1–2 frases y los pendientes abiertos; si no hay nada, no muestra nada. Solo lee `data/reflexion/`, sin modelo (1,3 ms).
 - `/pendiente <texto>` para anotar pendientes, `/pendientes` para verlos y `/hecho <n>` para cerrarlos, en `data/reflexion/pendientes.json` con escritura atómica y origen "usuario". Los cerrados se conservan con su fecha.
 - Resumen al salir: 2–3 frases con el Ollama local, a partir de lo pedido, el principio de cada respuesta, las acciones y los envíos de la bitácora. Si no responde en `reflection.summary_timeout_s` (30 s) o se pulsa Ctrl+C, se guarda la lista de acciones y Asia sale igual. Nunca va a un proveedor externo ni a un Ollama en otra máquina. Los comandos de sesión no cuentan; una sesión sin mensajes conserva el resumen anterior.
-- `/revisar memoria`: propone cada caso, y solo se borra con 1 o 2; cualquier otra respuesta deja las dos. Primero reglas (claves casi iguales, valores iguales), después el modelo local, del que solo valen claves que existen.
+- `/revisar memoria`: propone cada caso, y solo se borra con 1 o 2; cualquier otra respuesta deja las dos. Por defecto, solo reglas (claves casi iguales, valores iguales); con "a fondo", también el modelo local, del que solo valen claves que existen.
 
 Tiempos con el 7B al 100 % en CPU, solo como referencia (repetir con la GPU; `summary_timeout_s` y los topes no se ajustaron con ellos): salir 8,8–21,1 s; `/revisar memoria` 14,6–24 s con la memoria de prueba de 8 entradas.
 
-Pendiente: el modelo aporta poco en `/revisar memoria`. Las reglas encontraron los 2 casos que les tocaban; el 7B encontró `ciudad`/`vivo_en` (contradicción que las reglas no ven) en 1 de 4 intentos y llamó "duplicada" a UAM/UNAM. Medir con la GPU o con otro modelo antes de decidir si se queda.
+Por eso `/revisar memoria` usa solo reglas y el modelo queda en `/revisar memoria a fondo`: las reglas encontraron los 2 casos que les tocaban; el 7B encontró `ciudad`/`vivo_en` (contradicción que las reglas no ven) en 1 de 4 intentos y llamó "duplicada" a UAM/UNAM.
+
+Pendiente: medir de nuevo `/revisar memoria a fondo` con la GPU (`check_reflexion.py`) antes de decidir si se queda.
 
 El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Posibles pendientes sin fecha").
 

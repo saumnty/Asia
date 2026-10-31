@@ -445,19 +445,23 @@ def listen(voice, settings, stop_requested=enter_pressed):
     return heard
 
 
-def review_memory(brain, read):
-    """/revisar memoria: propone cada caso y solo borra lo que se confirma. Devuelve cuántas entradas borró."""
+def review_memory(brain, read, deep=False):
+    """/revisar memoria: propone cada caso y solo borra lo que se confirma. Devuelve cuántas entradas borró.
+
+    deep ("a fondo"): además de las reglas, pregunta al modelo local.
+    """
     memory = brain.memory
     timeout = (brain.settings.get("reflection") or {}).get("memory_review_timeout_s", 60)
     print("[Revisando la memoria]", file=sys.stderr, flush=True)
 
     try:
-        proposals, model_used = find_proposals(memory.load(), local_model(brain), timeout)
+        model = local_model(brain) if deep else None
+        proposals, model_used = find_proposals(memory.load(), model, timeout)
     except Exception as e:
         print(f"No pude revisar la memoria: {e}")
         return 0
 
-    if not model_used:
+    if deep and not model_used:
         print("(Revisé solo con reglas: el modelo local no estuvo disponible.)", file=sys.stderr)
 
     if not proposals:
@@ -593,8 +597,10 @@ def interactive_mode(brain=None, read=None, voice=None):
                 calibrate(voice)
                 continue
 
-            if block is None and is_launcher_command(user, "revisar_memoria"):
-                changes = review_memory(brain, read)
+            deep_review = block is None and is_launcher_command(user, "revisar_memoria_a_fondo")
+
+            if deep_review or block is None and is_launcher_command(user, "revisar_memoria"):
+                changes = review_memory(brain, read, deep=deep_review)
                 session_log.add(user, f"{changes} entradas borradas de la memoria", "revisar_memoria")
                 continue
 

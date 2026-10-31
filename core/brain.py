@@ -233,7 +233,7 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
             if slash.command.special == "calibrar":
                 return CALIBRATE_ONLY_INTERACTIVE
 
-            if slash.command.special == "revisar_memoria":
+            if slash.command.special in ("revisar_memoria", "revisar_memoria_a_fondo"):
                 return REVIEW_ONLY_INTERACTIVE
 
             if slash.command.action:
@@ -245,7 +245,7 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         if is_launcher_command(text, "calibrar"):
             return CALIBRATE_ONLY_INTERACTIVE
 
-        if is_launcher_command(text, "revisar_memoria"):
+        if is_launcher_command(text, "revisar_memoria") or is_launcher_command(text, "revisar_memoria_a_fondo"):
             return REVIEW_ONLY_INTERACTIVE
 
         if is_launcher_command(text, "carpeta"):
