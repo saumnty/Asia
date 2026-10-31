@@ -35,6 +35,7 @@ from core.commands import is_launcher_command, options_text
 from core.confidential import LOCAL_MODE, OPEN_MODE, current_mode
 from core.model_selection import model_for
 from core.provenance import ADJUNTO, USUARIO, Fragment, request_sources
+from core.reflection import opening_text
 from core.paths import PROJECT_ROOT
 from providers.ollama_models import full_name, installed_models as ollama_installed_models
 from core.session import Session
@@ -476,6 +477,12 @@ def interactive_mode(brain=None, read=None, voice=None):
     read = read or make_reader()
 
     print(startup_message(brain.settings))
+
+    # Resumen de la sesión anterior y pendientes: solo lee archivos, sin modelo.
+    opening = opening_text()
+
+    if opening:
+        print(f"\n{opening}")
 
     # Mientras se escribe el primer mensaje, Ollama carga el modelo (~15 s).
     if hasattr(brain, "preload_in_background"):
