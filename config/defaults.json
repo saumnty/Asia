@@ -83,7 +83,8 @@
     },
 
     "reflection": {
-        "summary_timeout_s": 30
+        "summary_timeout_s": 30,
+        "memory_review_timeout_s": 60
     },
 
     "answer_limits": {

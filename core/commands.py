@@ -101,6 +101,12 @@ COMMANDS = [
     Command("pendientes", "/hecho <n>", "cierra el pendiente con ese número",
             "/hecho 2", action=("close_task", "number")),
 
+    Command("memoria", "/revisar memoria",
+            "busca entradas duplicadas o contradictorias y propone cambios uno por uno; "
+            "nada cambia sin tu confirmación",
+            "/revisar memoria", special="revisar_memoria",
+            aliases=("revisa la memoria", "revisar memoria")),
+
     Command("voz", "/voz",
             "Enter en una línea vacía escucha lo que dices; las respuestas se leen en voz alta "
             "(como --voz)",

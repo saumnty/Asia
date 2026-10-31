@@ -35,7 +35,8 @@ from core.commands import is_launcher_command, options_text
 from core.confidential import LOCAL_MODE, OPEN_MODE, current_mode
 from core.model_selection import model_for
 from core.provenance import ADJUNTO, USUARIO, Fragment, request_sources
-from core.reflection import SessionLog, close_session, opening_text
+from core.memory_review import find_proposals
+from core.reflection import SessionLog, close_session, local_model, opening_text
 from core.paths import PROJECT_ROOT
 from providers.ollama_models import full_name, installed_models as ollama_installed_models
 from core.session import Session
@@ -444,6 +445,61 @@ def listen(voice, settings, stop_requested=enter_pressed):
     return heard
 
 
+def review_memory(brain, read):
+    """/revisar memoria: propone cada caso y solo borra lo que se confirma. Devuelve cuántas entradas borró."""
+    memory = brain.memory
+    timeout = (brain.settings.get("reflection") or {}).get("memory_review_timeout_s", 60)
+    print("[Revisando la memoria]", file=sys.stderr, flush=True)
+
+    try:
+        proposals, model_used = find_proposals(memory.load(), local_model(brain), timeout)
+    except Exception as e:
+        print(f"No pude revisar la memoria: {e}")
+        return 0
+
+    if not model_used:
+        print("(Revisé solo con reglas: el modelo local no estuvo disponible.)", file=sys.stderr)
+
+    if not proposals:
+        print("No encontré entradas duplicadas ni contradictorias.")
+        return 0
+
+    deleted = 0
+
+    for number, proposal in enumerate(proposals, 1):
+        data = memory.load()
+
+        # Un caso anterior ya borró una de las dos.
+        if proposal.first not in data or proposal.second not in data:
+            continue
+
+        print(f"\n{number} de {len(proposals)}. Entradas {proposal.kind}s:")
+        print(f"  1. {proposal.first}: {data[proposal.first]}")
+        print(f"  2. {proposal.second}: {data[proposal.second]}")
+
+        try:
+            answer = read("Borrar la 1, la 2, dejar las dos (n) o terminar (s): ").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            break
+
+        if answer == "s":
+            break
+
+        # Cualquier otra respuesta deja las dos: nunca se borra por defecto.
+        target = {"1": proposal.first, "2": proposal.second}.get(answer)
+
+        if target is None:
+            print("Las dejo como están.")
+            continue
+
+        memory.forget(target)
+        deleted += 1
+        print(f"Borrada: {target}")
+
+    print(f"\nRevisión terminada: {deleted} entradas borradas.")
+    return deleted
+
+
 def calibrate(voice, seconds=3):
     """/calibrar voz: mide el ruido del cuarto y sube el umbral del VAD si el ruido parece voz."""
     print(f"[Calibrando: quédate en silencio {seconds} s]", file=sys.stderr, flush=True)
@@ -535,6 +591,11 @@ def interactive_mode(brain=None, read=None, voice=None):
                     voice = VoiceSession(brain.settings)
 
                 calibrate(voice)
+                continue
+
+            if block is None and is_launcher_command(user, "revisar_memoria"):
+                changes = review_memory(brain, read)
+                session_log.add(user, f"{changes} entradas borradas de la memoria", "revisar_memoria")
                 continue
 
             # "¿Quisiste decir @X?" seguido de "sí": el mensaje de antes con la ruta corregida.

@@ -24,6 +24,22 @@ Resume en 2 a 3 frases.
 """
 
 
+def memory_review(memory):
+    return f"""
+Revisa estas entradas de memoria de un asistente. Busca pares que digan lo mismo
+("duplicada") o que no puedan ser ciertas a la vez ("contradictoria").
+
+Reglas:
+- Usa solo las claves exactas que aparecen abajo.
+- Dos datos distintos sobre temas distintos no son una contradicción.
+- Si no hay ningún par, responde [].
+- Responde solo con JSON: [{{"a": "clave1", "b": "clave2", "tipo": "duplicada"}}]
+
+Memoria:
+{memory}
+"""
+
+
 # --- Memoria del proyecto ----------------------------------------------------
 
 def summarize_and_save_project(project_name, content):
