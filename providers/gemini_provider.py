@@ -1,10 +1,12 @@
-from google import genai
-from google.genai import types
 from config.settings_manager import SettingsManager
 
 
 class GeminiProvider:
     def __init__(self):
+        # Aquí y no arriba: google.genai tarda ~3 s en cargar y el router solo
+        # crea este proveedor cuando se usa Gemini.
+        from google import genai
+
         self.settings = SettingsManager()
         self.client = genai.Client()
         self.model = self.settings.get("gemini_model", "gemini-2.5-flash")
@@ -18,6 +20,8 @@ class GeminiProvider:
         de revisión, models_by_domain y think_domains son solo de Ollama
         (Gemini usa gemini_model).
         """
+        from google.genai import types
+
         system_instruction = "\n\n".join(
             message["content"]
             for message in messages

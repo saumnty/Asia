@@ -1,5 +1,3 @@
-import requests
-
 from config.settings_manager import SettingsManager
 from core.confidential import is_open_mode, ollama_is_external
 
@@ -28,6 +26,9 @@ class OllamaEmbedder:
                 "para indexar ni buscar con RAG. Agrega el host a trusted_local_hosts en "
                 "config/settings.json si es tuyo."
             )
+
+        # Aquí y no arriba: requests tarda ~1 s en cargar y solo hace falta con RAG.
+        import requests
 
         response = requests.post(
             self.url,

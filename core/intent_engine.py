@@ -2,9 +2,6 @@ import json
 import re
 import sys
 
-import httpx
-import ollama
-
 from config.settings_manager import SettingsManager
 from core import timing
 from core.confidential import is_local_mode, is_open_mode, ollama_is_external, only_user
@@ -238,7 +235,21 @@ Usuario: muestra el cambio pendiente
 class IntentEngine:
     def __init__(self):
         self.settings = SettingsManager()
-        self.client = ollama.Client(host=self.settings.get("ollama_host"))
+        self._client = None
+
+    @property
+    def client(self):
+        """Cliente de Ollama. Se importa al primer uso: la librería tarda ~2 s en cargar."""
+        if self._client is None:
+            import ollama
+
+            self._client = ollama.Client(host=self.settings.get("ollama_host"))
+
+        return self._client
+
+    @client.setter
+    def client(self, client):
+        self._client = client
 
     def preload(self):
         """Carga intent_model en Ollama sin prompt, para que el primer mensaje no espere la carga.
@@ -247,6 +258,10 @@ class IntentEngine:
         (p. ej. el modelo no está descargado) se avisa por stderr.
         """
         model = self.settings.get("intent_model")
+
+        # Aquí, en el hilo de la precarga: la librería carga mientras se
+        # escribe el primer mensaje. Si ese mensaje llega antes, espera a que termine.
+        import httpx
 
         try:
             unload_others(self.client, model, self.settings)

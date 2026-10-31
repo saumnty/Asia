@@ -1,7 +1,5 @@
 import sys
 
-import ollama
-
 from config.settings_manager import SettingsManager
 from core.timing import ollama_metrics
 from providers.ollama_models import ThinkFilter, strip_think, think_kwargs, unload_others
@@ -64,7 +62,21 @@ def cut_notice(response, max_tokens) -> str:
 class OllamaProvider:
     def __init__(self):
         self.settings = SettingsManager()
-        self.client = ollama.Client(host=self.settings.get("ollama_host"))
+        self._client = None
+
+    @property
+    def client(self):
+        """Cliente de Ollama. Se importa al primer uso: la librería tarda ~2 s en cargar."""
+        if self._client is None:
+            import ollama
+
+            self._client = ollama.Client(host=self.settings.get("ollama_host"))
+
+        return self._client
+
+    @client.setter
+    def client(self, client):
+        self._client = client
 
     def complete(self, messages: list[dict], on_chunk=None, review=False, model=None, think=False, max_tokens=None) -> str:
         """Envía los mensajes y devuelve la respuesta completa.

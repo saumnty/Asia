@@ -1,7 +1,5 @@
 import re
 
-import chromadb
-
 from core.paths import CHROMA_DIR
 
 
@@ -29,6 +27,8 @@ class VectorStore:
         persist_dir=CHROMA_DIR,
         collection_name="default"
     ):
+        # Aquí y no arriba: chromadb tarda ~3 s en cargar y solo hace falta con RAG.
+        import chromadb
 
         self.client = chromadb.PersistentClient(
             path=str(persist_dir)
