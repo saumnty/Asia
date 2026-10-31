@@ -76,6 +76,18 @@ Medido con `test/manual/check_speed.py` (una sesión, `qwen2.5-coder:7b`, `num_c
 | "muestra el proyecto activo" | 2,5 s (intención) | 0,0 s (atajo) |
 | "qué es un grafo bipartito" | 28,6 s (160 tokens) | 14,6 s (81 tokens, 2 frases) |
 
+**Fase I, ejecutable nativo** (`07cb95b9`, `55081129`, `320f6d41`): `pyproject.toml` con el entry point `jarvis = launcher:main`, instalado con `pip install -e .` en el `.venv`; `jarvis.exe` copiado a `C:\Tools`, sin tocar el PATH (`.exe` gana a `.bat`). La carpeta actual, los flags, stdin y el código de salida no cambian. Cambiar el contenido de `C:\Tools\jarvis.bat` no servía: con cualquier `.bat` en la cadena sigue el S/N. Librerías pesadas al primer uso: `google.genai` al usar Gemini, `chromadb` y `requests` con RAG, `ollama` al primer uso del cliente, que en el modo interactivo es el hilo de precarga.
+
+| Arranque (mediana) | Antes (`.bat`) | `.exe` solo | `.exe` y carga diferida |
+|---|---|---|---|
+| `jarvis --help` | 10,01 s | 9,67 s | 0,91 s |
+| Modo interactivo, hasta el primer prompt | 10,39 s | — | 0,88 s |
+
+Ctrl+C, comprobado con una consola real y `jarvis.exe`: sin voz corta la respuesta en ~0,2 s y vuelve al prompt, sin dejar el turno en el historial; con voz, el primero corta la lectura y el segundo la respuesta (~0,1 s); en el prompt vacío cierra con código 0, sin S/N. El mensaje siguiente al corte responde normal.
+
+- Pendiente: la primera carga de la voz de Piper tarda ~9 s, detiene los tokens ~7,5 s y retrasa Ctrl+C mientras dura (5,4 s medidos). Precargar la voz en un hilo al activar `/voz` lo evitaría, si la carga no bloquea el resto.
+- Pendiente: `jarvis "mensaje"` (una sola ejecución) sigue cerrando con Ctrl+C.
+
 ## Fases futuras (diseño pendiente)
 
 ### Multi-modelo según tipo de tarea
@@ -197,7 +209,7 @@ Hecho en la fase C (`af003d2a`, `4f25b229`): `@ruta`, autocompletado, stdin, `--
 
 - Imágenes desde el portapapeles y `@ruta.png`: ver "Extras: imágenes en la terminal".
 - PDF y texto largo vía RAG en vez de recortar.
-- **Fase I (Asia 1.0):** reemplazar `jarvis.bat` por un ejecutable nativo, para evitar el "¿Desea terminar el trabajo por lotes (S/N)?" de Windows al interrumpir con Ctrl+C.
+- ~~**Fase I (Asia 1.0):** reemplazar `jarvis.bat` por un ejecutable nativo, para evitar el "¿Desea terminar el trabajo por lotes (S/N)?" de Windows al interrumpir con Ctrl+C.~~ Hecho, ver "Velocidad" y el README. `jarvis.bat` se mantiene por un tiempo como respaldo: para volver a él, borrar `C:\Tools\jarvis.exe`.
 - stdin: si Asia se lanza sin terminal y con un stdin abierto que nunca se cierra (no una tubería real), la lectura espera indefinidamente. Si pasa, agregar un flag `--no-stdin`.
 
 ### Generación de código con verificación
@@ -359,7 +371,7 @@ Va después de los extras.
 
 1. Voz completa: J2 (hecho) y J3.
 2. Reflexión y proactividad (R), solo dentro de la sesión.
-3. Ejecutable nativo (I).
+3. Ejecutable nativo (I): hecho (`jarvis.bat` queda como respaldo por un tiempo).
 4. Biblioteca de conocimiento offline (H).
 
 **Asia 2.0 (todo lo demás), en este orden:**
