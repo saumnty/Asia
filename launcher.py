@@ -66,7 +66,7 @@ def warn(messages):
 
 
 def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label=USUARIO, speak=None, heard=None,
-            voice=None):
+            voice=None, cuttable=False):
     """Procesa un mensaje e imprime la respuesta.
 
     Si Brain no reconoce una acción (devuelve None), el mensaje se trata
@@ -81,6 +81,10 @@ def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label
     voice (modo voz interactivo): la respuesta se lee frase por frase
     mientras se escribe y sigue sonando al volver al prompt. speak (una sola
     ejecución, jarvis --voz "mensaje"): se lee entera al final.
+
+    cuttable (modo interactivo): Ctrl+C corta la respuesta y se vuelve al
+    prompt; el turno cortado no queda en el historial. Con voz, si algo
+    suena, el primer Ctrl+C corta solo la lectura (ctrl_c_stops).
     """
     print(prefix, end="", flush=True)
 
@@ -99,7 +103,15 @@ def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label
         reading = start_reading(voice)
 
         with ctrl_c_stops(reading):
-            answer = respond_in_context(brain, text, attachments, use_actions, reading)
+            try:
+                answer = respond_in_context(brain, text, attachments, use_actions, reading)
+            except KeyboardInterrupt:
+                if not cuttable:
+                    raise
+
+                print(RESPONSE_CUT, file=sys.stderr)
+                answer = None
+
             timing.mark_answered()
 
             if reading is not None:
@@ -120,6 +132,7 @@ def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label
 # Lo más que se espera a la primera frase para la línea de --timing.
 FIRST_AUDIO_WAIT = 20
 READING_CUT = "\n(Lectura cortada.)"
+RESPONSE_CUT = "\n(Respuesta cortada.)"
 
 
 def start_reading(voice):
@@ -548,7 +561,7 @@ def interactive_mode(brain=None, read=None, voice=None):
             respond(
                 brain, text, prefix="\nAsia: ", attachments=attachments,
                 use_actions=use_actions, text_label=text_label,
-                heard=heard, voice=voice if voice_on else None
+                heard=heard, voice=voice if voice_on else None, cuttable=True
             )
 
             # "/sin voz": se liberan Whisper y la voz (~380 MB).
