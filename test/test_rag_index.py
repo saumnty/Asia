@@ -4,7 +4,7 @@ import pytest
 from core.rag import embedder as embedder_module
 from core.rag.embedder import OllamaEmbedder
 from core.rag.indexer import ProjectIndexer
-from core.rag.retriever import ProjectRetriever
+from core.rag.retriever import search_collections
 
 
 class FakeResponse:
@@ -63,5 +63,12 @@ def test_indexa_y_busca_en_una_carpeta_propia(tmp_path, embeddings):
 
     count = ProjectIndexer(str(project), "prueba", persist_dir=tmp_path / "indice").index_project()
 
-    results = ProjectRetriever("prueba", persist_dir=tmp_path / "indice").search("x", n_results=1)
-    assert count == 1 and results["documents"][0] == ["x = 1\n"]
+    hits = search_collections("x", ["prueba"], n_results=1, persist_dir=tmp_path / "indice")
+    assert count == 1 and hits[0].document == "x = 1\n"
+
+
+def test_prefijos_de_nomic_solo_con_nomic(embeddings):
+    embedder = OllamaEmbedder(model="nomic-embed-text")
+
+    assert embedder.prefixed("search_query: ", "hola") == "search_query: hola"
+    assert OllamaEmbedder(model="otro").prefixed("search_query: ", "hola") == "hola"

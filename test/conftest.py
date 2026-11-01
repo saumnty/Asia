@@ -24,6 +24,7 @@ def reflection_in_tmp(tmp_path, monkeypatch):
 
     monkeypatch.setattr(paths, "TASKS_FILE", tmp_path / "reflexion" / "pendientes.json")
     monkeypatch.setattr(paths, "SESSION_SUMMARY_FILE", tmp_path / "reflexion" / "ultima_sesion.json")
+    monkeypatch.setattr(paths, "SOURCES_FILE", tmp_path / "biblioteca" / "fuentes.json")
 
 
 @pytest.fixture(autouse=True)

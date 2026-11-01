@@ -17,8 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from core.rag.indexer import ProjectIndexer
-from core.rag.retriever import ProjectRetriever
+from core.rag.indexer import ProjectIndexer, unload_chat_models
+from core.rag.retriever import search_collections
 
 COLLECTION = "asia"
 KINDS = ("concepto", "documento", "nombre")
@@ -54,11 +54,8 @@ def relative(path: str) -> str:
 
 
 def build_index(folder):
+    unload_chat_models()
     indexer = ProjectIndexer(str(ROOT), COLLECTION, persist_dir=folder)
-    # Hasta tener las exclusiones (paso 2), sin los modelos de data/: serían 2 400 fragmentos de basura.
-    indexable = indexer.should_index
-    indexer.should_index = lambda path: indexable(path) and not relative(path.as_posix()).startswith("data/")
-
     start = time.perf_counter()
     count = indexer.index_project()
     return count, time.perf_counter() - start
@@ -69,14 +66,13 @@ def rank_of(expected, files):
 
 
 def measure(folder):
-    retriever = ProjectRetriever(COLLECTION, persist_dir=folder)
     rows, seconds = [], 0.0
 
     for question, expected, kind in QUESTIONS:
         start = time.perf_counter()
-        results = retriever.search(question, n_results=max(TOPS))
+        hits = search_collections(question, [COLLECTION], n_results=max(TOPS), persist_dir=folder)
         seconds += time.perf_counter() - start
-        files = [relative(m["file_path"]) for m in results["metadatas"][0]]
+        files = [relative(hit.metadata["file_path"]) for hit in hits]
         rows.append((kind, rank_of(expected, files), question, files[:3]))
 
     return rows, seconds / len(QUESTIONS)

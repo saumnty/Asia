@@ -31,6 +31,8 @@ CHROMA_DIR = DATA_DIR / "chroma"
 REFLECTION_DIR = DATA_DIR / "reflexion"
 TASKS_FILE = REFLECTION_DIR / "pendientes.json"
 SESSION_SUMMARY_FILE = REFLECTION_DIR / "ultima_sesion.json"
+# Fase H: las fuentes de la biblioteca de conocimiento (no versionadas).
+SOURCES_FILE = DATA_DIR / "biblioteca" / "fuentes.json"
 
 LOGS_DIR = PROJECT_ROOT / "logs"
 # Una línea por envío a un proveedor externo, sin el texto (fase G).

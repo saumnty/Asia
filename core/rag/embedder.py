@@ -5,6 +5,11 @@ from core.confidential import is_open_mode, ollama_is_external
 # Por lotes: en CPU, 0,67 s por fragmento frente a 2,8 s de uno en uno.
 BATCH_SIZE = 16
 
+# nomic-embed-text espera estos prefijos: con ellos, 9 de 18 preguntas sacan el
+# archivo correcto en primer lugar, contra 7 sin ellos.
+DOCUMENT_PREFIX = "search_document: "
+QUERY_PREFIX = "search_query: "
+
 
 class ExternalEmbeddingBlocked(RuntimeError):
     pass
@@ -31,6 +36,15 @@ class OllamaEmbedder:
                 "para indexar ni buscar con RAG. Agrega el host a trusted_local_hosts en "
                 "config/settings.json si es tuyo."
             )
+
+    def prefixed(self, prefix: str, text: str) -> str:
+        return f"{prefix}{text}" if self.model.startswith("nomic") else text
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self.embed_many([self.prefixed(DOCUMENT_PREFIX, text) for text in texts])
+
+    def embed_query(self, text: str) -> list[float]:
+        return self.embed(self.prefixed(QUERY_PREFIX, text))
 
     def embed_many(self, texts: list[str]) -> list[list[float]]:
         """Los embeddings de texts, en el mismo orden."""

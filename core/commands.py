@@ -111,6 +111,12 @@ COMMANDS = [
             "/revisar memoria a fondo", special="revisar_memoria_a_fondo",
             aliases=("revisa la memoria a fondo", "revisar memoria a fondo")),
 
+    Command("biblioteca", "/indexar <nombre> [ruta] [tipo]",
+            "agrega o actualiza una fuente: proyecto, reporte o notas (por defecto, la carpeta actual)",
+            "/indexar Bolitabot C:\\Robots\\bolitabot proyecto", action=("add_source", "spec")),
+    Command("biblioteca", "/fuentes", "muestra las fuentes de la biblioteca",
+            "/fuentes", action=("list_sources", "text")),
+
     Command("voz", "/voz",
             "Enter en una línea vacía escucha lo que dices; las respuestas se leen en voz alta "
             "(como --voz)",

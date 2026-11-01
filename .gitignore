@@ -29,3 +29,6 @@ build/
 
 # Pendientes y resumen de sesión (fase R): datos personales, solo en local.
 data/reflexion/
+
+# Las fuentes de la biblioteca (fase H): rutas personales.
+data/biblioteca/

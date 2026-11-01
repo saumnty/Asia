@@ -6,6 +6,7 @@ from memory.project_memory import ProjectMemory
 from config.settings_manager import SettingsManager
 from core.actions.code import CodeActions
 from core.actions.explore import ExploreActions
+from core.actions.library import LibraryActions
 from core.actions.memory import MemoryActions
 from core.actions.models import ModelActions, model_command
 from core.actions.confidential import ConfidentialActions, confidential_command
@@ -155,7 +156,7 @@ SHORTCUT_ACTIONS = {
 
 
 class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxActions, ModelActions, ConfidentialActions,
-            TimingActions, VoiceActions, TaskActions):
+            TimingActions, VoiceActions, TaskActions, LibraryActions):
     # Acción del IntentEngine -> método que la atiende (ver core/actions).
     HANDLERS = {
         **MemoryActions.HANDLERS,
@@ -164,6 +165,7 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         **CodeActions.HANDLERS,
         **SandboxActions.HANDLERS,
         **TaskActions.HANDLERS,
+        **LibraryActions.HANDLERS,
     }
 
     def __init__(self):
