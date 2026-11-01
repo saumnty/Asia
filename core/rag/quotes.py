@@ -5,6 +5,7 @@ existan; responde solo con las que sobreviven. Es lo mismo que hace la revisión
 de código con sus citas (tools/review_findings.py).
 """
 import re
+import textwrap
 from dataclasses import dataclass
 
 from core import prompts
@@ -28,9 +29,14 @@ class Fragment:
 
 @dataclass(frozen=True)
 class Quote:
-    cite: str
+    path: str
+    line: int
     label: str
     text: str
+
+    @property
+    def cite(self) -> str:
+        return f"{self.path}:{self.line}" if self.line else self.path
 
 
 def parse_fragments(context: str) -> list:
@@ -51,14 +57,16 @@ def parse_quotes(response: str) -> list:
     return [(tag, clean_quote(text)) for tag, text in QUOTE.findall(response)]
 
 
-def cite_of(fragment: Fragment, number: int) -> str:
-    """"core/brain.py:42": la línea real de la cita. number cuenta la primera línea de text."""
+def quote_at(fragment: Fragment, number: int) -> Quote:
+    """La línea number de fragment.text tal como está en el archivo, no como la copió el modelo."""
+    text = fragment.text.splitlines()[number - 1].rstrip()
     first = FIRST_LINE.search(fragment.tag)
 
     if not first:
-        return fragment.tag
+        return Quote(fragment.tag, None, fragment.label, text)
 
-    return f"{fragment.tag[:first.start()]}:{int(first.group(1)) + number - 2}"
+    # number cuenta la primera línea de text, que no es del archivo.
+    return Quote(fragment.tag[:first.start()], int(first.group(1)) + number - 2, fragment.label, text)
 
 
 def verify_quotes(response: str, context: str) -> list:
@@ -74,22 +82,46 @@ def verify_quotes(response: str, context: str) -> list:
             number = locate_quote(text, fragment.text)
 
             if number and number > 1:
-                verified.append(Quote(cite_of(fragment, number), fragment.label, text))
+                verified.append(quote_at(fragment, number))
                 break
 
     return list(dict.fromkeys(verified))
 
 
 def quotes_text(quotes: list) -> str:
-    return "\n".join(f"[{quote.cite}] {quote.text}" for quote in quotes)
+    return "\n".join(f"[{quote.cite}] {quote.text.strip()}" for quote in quotes)
 
 
-def quotes_footer(quotes: list) -> str:
-    """La lista "Fuentes:", sacada de las citas verificadas y no del modelo."""
-    cites = dict.fromkeys(
-        f"{quote.cite} ({quote.label})" if quote.label else quote.cite for quote in quotes
-    )
-    return "\n\nFuentes:\n" + "\n".join(f"- {cite}" for cite in cites)
+def block_of(run: list) -> str:
+    """Un tramo de líneas seguidas: "core/brain.py:40-45 (Brain.process)" y su texto."""
+    first, last = run[0], run[-1]
+    cite = first.cite if first.line == last.line else f"{first.cite}-{last.line}"
+    label = f" ({first.label})" if first.label else ""
+    text = textwrap.dedent("\n".join(quote.text for quote in run))
+    return f"{cite}{label}\n{textwrap.indent(text, '  ')}"
+
+
+def verified_lines(quotes: list) -> str:
+    """Las citas verificadas por archivo, juntando las seguidas. Las escribe el código."""
+    by_file = {}
+
+    for quote in quotes:
+        by_file.setdefault(quote.path, []).append(quote)
+
+    blocks = []
+
+    for group in by_file.values():
+        runs = []
+
+        for quote in sorted(group, key=lambda q: q.line or 0):
+            if runs and quote.line and runs[-1][-1].line == quote.line - 1:
+                runs[-1].append(quote)
+            else:
+                runs.append([quote])
+
+        blocks += [block_of(run) for run in runs]
+
+    return f"{prompts.VERIFIED_LINES}\n\n" + "\n\n".join(blocks)
 
 
 def best_fragments(context: str) -> str:

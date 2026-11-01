@@ -12,8 +12,8 @@ También mira las preguntas que no tienen respuesta en C:\\Asia: lo que ayuda a
 decidir cuándo decir "no lo encontré".
 
 Punta a punta, con el modelo real y el índice real (data/chroma, solo lectura):
-cuántas de 8 preguntas responde, cuántas citan el archivo correcto en "Fuentes:",
-que sale de líneas verificadas, y a cuántas de 4 trampas responde. Las trampas pasan
+cuántas de 8 preguntas responde, cuántas citan el archivo correcto en las líneas
+verificadas, y a cuántas de 4 trampas responde. Las trampas pasan
 el filtro de cobertura pero no tienen respuesta en C:\\Asia: una cita verificada
 prueba que la línea existe, no que responda, así que su respuesta se imprime entera
 para leerla. Mide sobre una copia del índice sin este archivo ni los fragmentos que
@@ -166,7 +166,7 @@ def answer_row(brain, question, expected=None):
     if shown.startswith(prompts.NO_DIRECT_ANSWER):
         return "sin respuesta directa", False, seconds, shown
 
-    sources = shown.rpartition("Fuentes:")[2].lower()
+    sources = shown.rpartition(prompts.VERIFIED_LINES)[2].lower()
     return "respondió", bool(expected) and Path(expected).name.lower() in sources, seconds, shown
 
 

@@ -5,7 +5,7 @@ from core import prompts
 from core.commands import COMMANDS, options_text
 from core.prompts import NOT_FOUND
 from core.rag.library import is_refusal
-from core.rag.quotes import Quote, best_fragments, verify_quotes
+from core.rag.quotes import Quote, best_fragments, verified_lines, verify_quotes
 from core.rag.retriever import Hit, relevant
 from test_confidencial import make_brain
 from tools.rag_tool import RagTool
@@ -108,7 +108,13 @@ def test_buscar_va_directo_sin_intent_engine():
 def test_la_cita_se_verifica_normalizando_espacios():
     [quote] = verify_quotes("[control/pid.py:40-55] self.kp = 2.5", CONTEXT)
 
-    assert quote == Quote("control/pid.py:41", "Pid.salida", "self.kp = 2.5")
+    assert quote == Quote("control/pid.py", 41, "Pid.salida", "    self.kp   =   2.5")
+
+
+def test_se_muestra_la_linea_del_archivo_y_no_la_copia_del_modelo():
+    [quote] = verify_quotes("[README.md:1-8] Un robot quebalancea una bolita.", CONTEXT)
+
+    assert quote.text == "Un robot que balancea una bolita."
 
 
 def test_una_linea_que_no_existe_se_descarta():
@@ -149,16 +155,36 @@ def test_el_modelo_responde_solo_con_las_verificadas():
 
     answer = brain.process("/buscar qué ganancia tiene")
 
-    assert answer == ANSWER + "\n\nFuentes:\n- control/pid.py:41 (Pid.salida)"
-    assert "[control/pid.py:41] self.kp = 2.5" in brain.provider_router.prompts[1]
+    assert answer == f"{ANSWER}\n\n{prompts.VERIFIED_LINES}\n\ncontrol/pid.py:41 (Pid.salida)\n  self.kp   =   2.5"
+    assert "[control/pid.py:41] self.kp   =   2.5" in brain.provider_router.prompts[1]
     assert "inventado" not in brain.provider_router.prompts[1]
 
 
-def test_fuentes_sale_de_las_lineas_y_no_de_lo_que_diga_el_modelo():
-    answer = brain_with(QUOTED, "Lo dice README.md y otros.py [otros.py:1].").process("/buscar qué ganancia")
+def quote(path, line, text, label=""):
+    return Quote(path, line, label, text)
 
-    assert answer.endswith("Fuentes:\n- control/pid.py:41 (Pid.salida)")
-    assert "- README.md" not in answer
+
+def test_junta_las_lineas_seguidas():
+    shown = verified_lines([quote("a.py", 41, "    b = 2"), quote("a.py", 40, "    a = 1"), quote("a.py", 42, "    c = 3")])
+
+    assert shown == f"{prompts.VERIFIED_LINES}\n\na.py:40-42\n  a = 1\n  b = 2\n  c = 3"
+
+
+def test_las_lineas_salteadas_van_en_tramos_aparte():
+    shown = verified_lines([quote("a.py", 40, "uno", "f"), quote("a.py", 45, "dos", "f")])
+
+    assert "a.py:40 (f)\n  uno\n\na.py:45 (f)\n  dos" in shown
+
+
+def test_agrupa_por_archivo():
+    shown = verified_lines([quote("a.py", 1, "uno"), quote("b.py", 1, "otro"), quote("a.py", 2, "dos")])
+
+    assert shown.index("a.py:1-2") < shown.index("b.py:1")
+    assert "a.py:1" not in shown.partition("b.py:1")[2]
+
+
+def test_una_cita_sin_linea():
+    assert "viejo.py\n  uno" in verified_lines([quote("viejo.py", None, "uno")])
 
 
 @pytest.mark.parametrize("extracted", ["NINGUNA", "[inventado.py:1-9] esta linea no existe en nada", "La ganancia es 3."])
@@ -170,7 +196,7 @@ def test_sin_lineas_verificadas_no_hay_respuesta_del_modelo(extracted):
     assert answer.startswith(prompts.NO_DIRECT_ANSWER)
     assert "[control/pid.py:40-55] Pid.salida\ndef salida" in answer and "[README.md:1-8]\nUn robot" in answer
     assert "control/pid.py · Pid.salida" not in answer
-    assert "Fuentes:" not in answer and len(brain.provider_router.prompts) == 1
+    assert prompts.VERIFIED_LINES not in answer and len(brain.provider_router.prompts) == 1
 
 
 def test_sin_nada_relevante_no_llama_al_modelo():
@@ -231,7 +257,7 @@ def test_los_mejores_son_tres_y_cortos():
 def test_una_respuesta_parcial_se_conserva():
     answer = brain_with(QUOTED, "Está kp, pero no se dice cuánto vale ki [control/pid.py:41].").process("/buscar qué ganancia")
 
-    assert answer.startswith("Está kp") and "Fuentes:" in answer
+    assert answer.startswith("Está kp") and prompts.VERIFIED_LINES in answer
 
 
 def test_pide_los_fragmentos_configurados(monkeypatch):

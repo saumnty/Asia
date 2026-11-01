@@ -3,7 +3,7 @@ from pathlib import Path
 
 from core import prompts
 from core.rag.library import is_refusal
-from core.rag.quotes import best_fragments, quotes_footer, quotes_text, verify_quotes
+from core.rag.quotes import best_fragments, quotes_text, verified_lines, verify_quotes
 
 # Los mismos que config/defaults.json, por si falta la clave.
 DEFAULT_ANSWER_LIMITS = {
@@ -101,7 +101,7 @@ class ExploreActions:
         if is_refusal(answer):
             return best_fragments(rag_context)
 
-        return answer + quotes_footer(quotes)
+        return f"{answer}\n\n{verified_lines(quotes)}"
 
     def handle_explain_file(self, text, params):
         file_path = params.get("file_path")

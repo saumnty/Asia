@@ -11,6 +11,8 @@ antes: cambiar uno es un cambio de comportamiento.
 NOT_FOUND = "No lo encontré en tus proyectos."
 # Lo que encabeza los fragmentos si había material, pero ninguna línea lo responde.
 NO_DIRECT_ANSWER = "No encontré una respuesta directa. Esto es lo más relevante:"
+# Lo que encabeza, debajo de cada respuesta de /buscar, las líneas que comprobó el código.
+VERIFIED_LINES = "Líneas verificadas:"
 
 
 # --- Reflexión (fase R) ---------------------------------------------------------
