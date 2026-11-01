@@ -84,6 +84,7 @@
 
     "reflection": {
         "summary_timeout_s": 30,
+        "summary_idle_s": 3,
         "memory_review_timeout_s": 60
     },
 

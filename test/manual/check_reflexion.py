@@ -30,8 +30,10 @@ import launcher
 from config.settings_manager import SettingsManager
 from core.brain import Brain
 from core.memory_review import find_proposals
-from core.reflection import SessionLog, load_summary, local_model, opening_text, summarize
+from core.reflection import SessionLog, SessionSummarizer, load_summary, local_model, opening_text, simple_summary
 from memory.memory_manager import MemoryManager
+
+BACKGROUND_WAIT = 90
 
 MESSAGES = ["/pendiente Revisar el PID del Bolitabot", "qué es un grafo bipartito", "muestra el proyecto activo",
             "/pendientes"]
@@ -54,20 +56,35 @@ def section(title):
 
 
 def session_with_model(brain):
+    """Una sesión que da tiempo a que el resumen se ponga al día en segundo plano.
+
+    Devuelve cuánto tardó en estar al día tras la última respuesta y cuánto tardó en salir.
+    """
     lines = iter([*MESSAGES, "salir"])
-    start = []
+    times = {}
 
     def read(prompt):
         line = next(lines)
 
         if line == "salir":
-            start.append(time.perf_counter())
+            start = time.perf_counter()
+
+            while time.perf_counter() - start < BACKGROUND_WAIT:
+                summary = load_summary()
+
+                if summary and summary["mensajes"] == 2:
+                    break
+
+                time.sleep(0.2)
+
+            times["fondo"] = time.perf_counter() - start
+            times["salir"] = time.perf_counter()
 
         print(f"{prompt.strip()} {line}")
         return line
 
     launcher.interactive_mode(launcher.with_confirmation(brain), read=read)
-    return time.perf_counter() - start[0]
+    return times["fondo"], time.perf_counter() - times["salir"]
 
 
 def main():
@@ -75,9 +92,10 @@ def main():
     brain = Brain()
 
     section("Sesión y resumen al salir (modelo real)")
-    seconds = session_with_model(brain)
+    background, leaving = session_with_model(brain)
     summary = load_summary()
-    print(f"\nSalir tardó {seconds:.1f} s. Origen del resumen: {summary['origen']}.")
+    print(f"\nAl día en segundo plano: {background:.1f} s tras la última respuesta.")
+    print(f"Salir tardó {leaving:.1f} s. Origen del resumen: {summary['origen']}.")
 
     section("Apertura siguiente (sin modelo)")
     start = time.perf_counter()
@@ -89,8 +107,8 @@ def main():
     log.add("qué es un grafo", "Un grafo es...", "chat")
     log.add("revisa core/brain.py", "Revisé...", "review_file")
     start = time.perf_counter()
-    text, source = summarize(log, local_model(brain), 0.05)
-    print(f"{source}: {text} ({time.perf_counter() - start:.1f} s)")
+    text = SessionSummarizer(log, local_model(brain), idle=0).finish(0.05) or simple_summary(log)
+    print(f"{text} ({time.perf_counter() - start:.1f} s)")
 
     section("/revisar memoria (memoria de prueba, respuestas: n)")
     memory = MemoryManager(TMP / "memory.json")

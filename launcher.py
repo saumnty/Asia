@@ -36,7 +36,7 @@ from core.confidential import LOCAL_MODE, OPEN_MODE, current_mode
 from core.model_selection import model_for
 from core.provenance import ADJUNTO, USUARIO, Fragment, request_sources
 from core.memory_review import find_proposals
-from core.reflection import SessionLog, close_session, local_model, opening_text
+from core.reflection import DEFAULT_SUMMARY_IDLE, SessionLog, SessionSummarizer, close_session, local_model, opening_text
 from core.paths import PROJECT_ROOT
 from providers.ollama_models import full_name, installed_models as ollama_installed_models
 from core.session import Session
@@ -553,8 +553,20 @@ def interactive_mode(brain=None, read=None, voice=None):
     session_log = SessionLog()
     farewell = "Asia apagada."
 
+    def busy():
+        """El resumen espera si suena una lectura o si el modelo en uso no es el suyo."""
+        return getattr(voice, "speaking", False) or other_model_in_use(brain)
+
+    summarizer = SessionSummarizer(
+        session_log, local_model(brain), busy=busy,
+        idle=(brain.settings.get("reflection") or {}).get("summary_idle_s", DEFAULT_SUMMARY_IDLE),
+    )
+
     try:
         while True:
+            # Mientras se lee la respuesta, se pone al día el resumen de la sesión.
+            summarizer.schedule()
+
             # Con /voz o --voz, la voz de Piper carga mientras se escribe.
             if voice_enabled(brain.settings):
                 if voice is None:
@@ -582,11 +594,15 @@ def interactive_mode(brain=None, read=None, voice=None):
             # Modo voz: Enter en una línea vacía escucha; lo dictado es "usuario",
             # igual que lo tecleado.
             if block is None and not user.strip() and voice_enabled(brain.settings):
+                summarizer.interrupt()
                 heard = listen(voice, brain.settings)
                 user = heard.text if heard else ""
 
             if block is None and is_launcher_command(user, "salir"):
                 break
+
+            # El mensaje nuevo no compite con el resumen en marcha.
+            summarizer.interrupt()
 
             if block is None and is_launcher_command(user, "calibrar"):
                 if voice is None:
@@ -655,13 +671,19 @@ def interactive_mode(brain=None, read=None, voice=None):
         stop_speaking(voice)
 
     if session_log:
-        print("[Guardando el resumen de la sesión]", file=sys.stderr, flush=True)
-        summary = close_session(brain, session_log)
+        summary = close_session(brain, session_log, summarizer)
 
         if summary:
             print(f"\nResumen de la sesión: {summary}")
 
     print(farewell)
+
+
+def other_model_in_use(brain) -> bool:
+    """True si la sesión usa otro modelo (matemáticas): resumir lo descargaría."""
+    last = getattr(getattr(brain, "provider_router", None), "last_request", None)
+    model = last[1].get("model") if last else None
+    return bool(model) and model != brain.settings.get("ollama_model")
 
 
 def stop_speaking(voice) -> bool:

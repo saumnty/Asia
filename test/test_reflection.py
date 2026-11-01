@@ -11,6 +11,7 @@ from core import paths
 from core.paths import DEFAULTS_FILE
 from core.reflection import (
     SessionLog,
+    SessionSummarizer,
     clean_summary,
     external_sends,
     first_sentences,
@@ -20,7 +21,6 @@ from core.reflection import (
     save_summary,
     session_description,
     simple_summary,
-    summarize,
 )
 from core.tasks import TaskList
 from test_confidencial import make_brain
@@ -63,16 +63,14 @@ def test_solo_pendientes_o_solo_resumen():
 def test_abrir_no_llama_al_modelo(capsys):
     save_summary("Hablamos de grafos.", "modelo", 2)
 
-    class NoModel(FakeBrain):
-        @property
-        def provider_router(self):
+    class NoModel:
+        def get_provider(self, name):
             raise AssertionError("abrir Asia no debe usar el modelo")
 
-        @provider_router.setter
-        def provider_router(self, value):
-            pass
+    brain = FakeBrain("hecho")
+    brain.provider_router = NoModel()
 
-    launcher.interactive_mode(NoModel("hecho"), read=reader(["salir"]))
+    launcher.interactive_mode(brain, read=reader(["salir"]))
 
     assert "Hablamos de grafos." in capsys.readouterr().out
 
@@ -95,7 +93,7 @@ def test_primeras_frases():
 # --- Al salir ----------------------------------------------------------------------
 
 class Model:
-    """Ollama simulado: responde answer, o falla, o tarda."""
+    """Ollama simulado: model(messages), como el modelo local; responde answer, o falla, o tarda."""
 
     def __init__(self, answer="Hablamos de grafos. Revisamos brain.py.", error=None, delay=0):
         self.answer = answer
@@ -113,6 +111,9 @@ class Model:
             raise self.error
 
         return self.answer
+
+    def __call__(self, messages):
+        return self.complete(messages, max_tokens=None)
 
 
 class Router:
@@ -178,7 +179,7 @@ def test_sesion_vacia_no_llama_al_modelo_ni_borra_el_anterior(capsys):
 def test_prompt_con_lo_pedido_y_la_accion():
     model = Model()
 
-    summarize(filled_log("chat", "explain_file"), model.complete, 5)
+    SessionSummarizer(filled_log("chat", "explain_file"), model, idle=0).finish(5)
 
     [(messages, _)] = model.calls
     prompt = messages[0]["content"]
@@ -211,10 +212,8 @@ def test_cuenta_los_envios_externos_de_la_sesion(monkeypatch):
 def test_si_el_modelo_falla_o_tarda_resumen_simple(model):
     log = filled_log("chat", "chat", "explain_file")
 
-    text, source = summarize(log, model.complete, 0.2)
-
-    assert source == "simple"
-    assert text == "Sesión de 3 mensajes: conversación (2), explain_file (1)."
+    assert SessionSummarizer(log, model, idle=0).finish(0.2) is None
+    assert simple_summary(log) == "Sesión de 3 mensajes: conversación (2), explain_file (1)."
 
 
 def test_si_el_modelo_no_responde_sale_igual_y_a_tiempo(capsys):
