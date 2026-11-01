@@ -24,14 +24,14 @@ class VectorStore:
 
     def __init__(
         self,
-        persist_dir=CHROMA_DIR,
+        persist_dir=None,
         collection_name="default"
     ):
         # Aquí y no arriba: chromadb tarda ~3 s en cargar y solo hace falta con RAG.
         import chromadb
 
         self.client = chromadb.PersistentClient(
-            path=str(persist_dir)
+            path=str(persist_dir or CHROMA_DIR)
         )
 
         self.collection = self.client.get_or_create_collection(

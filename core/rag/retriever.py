@@ -5,11 +5,13 @@ from core.rag.vector_store import VectorStore
 class ProjectRetriever:
     def __init__(
         self,
-        project_name: str
+        project_name: str,
+        persist_dir=None
     ):
         self.embedder = OllamaEmbedder()
 
         self.store = VectorStore(
+            persist_dir=persist_dir,
             collection_name=project_name
         )
 

@@ -7,7 +7,7 @@ from core.rag.vector_store import VectorStore
 
 
 class ProjectIndexer:
-    def __init__(self, project_path: str, project_name: str):
+    def __init__(self, project_path: str, project_name: str, persist_dir=None):
         # Ruta absoluta: los fragmentos se identifican igual sin importar
         # desde qué carpeta se indexe o se pregunte.
         self.project_path = Path(project_path).resolve()
@@ -18,6 +18,7 @@ class ProjectIndexer:
         self.ignored_dirs = settings.ignored_dirs(include_tests=True)
 
         self.store = VectorStore(
+            persist_dir=persist_dir,
             collection_name=project_name
         )
 
@@ -41,7 +42,6 @@ class ProjectIndexer:
     def index_project(self):
         ids = []
         documents = []
-        embeddings = []
         metadatas = []
 
         for file_path in iter_files(self.project_path, self.ignored_dirs):
@@ -60,11 +60,12 @@ class ProjectIndexer:
 
                 ids.append(doc_id)
                 documents.append(chunk)
-                embeddings.append(self.embedder.embed(chunk))
                 metadatas.append({
                     "file_path": file_path.as_posix(),
                     "chunk": i
                 })
+
+        embeddings = self.embedder.embed_many(documents)
 
         # Se borran los fragmentos previos de esta carpeta (incluidos los de
         # archivos que ya no existen) solo después de generar todos los
