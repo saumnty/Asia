@@ -274,7 +274,7 @@ Hecho en la fase G (ver la tabla). Pendientes:
 Antes "Wikipedia offline". Va por capas, y cada fuente lleva su etiqueta para poder citarla:
 
 1. Proyectos propios (repos, reportes, notas) con el RAG actual: primera capa, la más útil. Hecha, ver abajo.
-2. Documentación técnica offline (ROS 2, Gazebo, Python, MATLAB), empaquetada para Kiwix o convertida con zimit.
+2. Documentación técnica offline (ROS 2, Gazebo, Python, MATLAB), empaquetada para Kiwix o convertida con zimit. En esta capa (Asia 1.0), la búsqueda por palabras pasa a SQLite FTS5, con los tokens ya pasados por el stemmer, en lugar de reconstruir BM25 en cada búsqueda. Hace falta para las fuentes grandes (Wikipedia, Stack Overflow).
 3. Wikipedia en español e inglés: herramienta offline con Kiwix/ZIM, separada del RAG de proyectos.
 4. Preguntas y respuestas (Stack Overflow, Robotics Stack Exchange).
 
@@ -345,7 +345,7 @@ Pendientes:
 - "Cómo se cifra la contraseña" y las otras trampas dependen de que el 7B escriba NINGUNA: la cobertura no las separa. Una línea real que no responde pasaría la verificación.
 - Un archivo sin fragmentos (`__init__.py` vacío) no guarda hash y `/indexar` lo cuenta como reindexado cada vez. No embebe nada; solo infla la cifra.
 - El troceado solo no ayuda: sin el tope por archivo, las secciones del ROADMAP acapararon los resultados.
-- BM25 se reconstruye en cada búsqueda con todos los documentos: revisar con fuentes grandes.
+- BM25 se reconstruye en cada búsqueda con todos los documentos: se resuelve con SQLite FTS5 en la capa 2.
 
 Conocimiento, pendientes generales:
 
@@ -402,6 +402,14 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 - Con 15–30 min limpios, fine-tuning directo de Piper en Colab; con menos, generar frases sintéticas con XTTS-v2 y entrenar Piper con ellas.
 - La voz base del fine-tuning debe coincidir en género y acento con la final.
 
+**SQLite como almacenamiento** (Asia 2.0), por partes.
+- Historial completo de sesiones con búsqueda ("¿qué hablamos del PID la semana pasada?"). Base para R y para la fase de afecto.
+- Memoria con fecha, origen y etiqueta de confidencialidad por entrada, para poder exportar lo inofensivo y retener lo sensible. Resuelve que hoy `memory.json` no tenga etiquetas por entrada. Hacerlo antes de la fase de afecto.
+- Pendientes, bitácora y tiempos: migrarlos solo cuando se toquen por otro motivo.
+- Se quedan en JSON: `settings.json`, `defaults.json` y `apps.json`, pequeños y editables a mano. Los vectores siguen en ChromaDB.
+- Comandos para exportar y ver los datos, para no perder la comodidad de leer un JSON.
+- `sqlite3` de Python, sin instalar nada, con transacciones para los hilos en segundo plano.
+
 **Afecto y cognición social** (fase de afecto).
 - Biblioteca de casos del usuario: situación → cómo la leyó → opciones → tono elegido y por qué → resultado. Anonimizar a terceros.
 - Perfil de principios sacado de los casos, revisable por el usuario.
@@ -455,5 +463,5 @@ Va después de los extras.
 3. Cambio entre modelos. ~~Ver y cambiar el modelo por comando, `--model`, `models_by_domain`.~~ Hecho (`1231b36b`, `fccf75bd`). Falta lo de "Qué falta" en "Multi-modelo según tipo de tarea".
 4. Voz: J4 y voz propia.
 5. Avatar.
-6. Extras: imágenes en la terminal, cambio de modelo seguro, especialistas internos, control y estimación, Asia → ROS 2 → Bolitabot, afecto y cognición social, tareas grandes y MCP.
+6. Extras: imágenes en la terminal, cambio de modelo seguro, especialistas internos, control y estimación, Asia → ROS 2 → Bolitabot, SQLite como almacenamiento, afecto y cognición social, tareas grandes y MCP.
 7. Jetson, servidor y uso remoto (siempre disponible).
