@@ -9,7 +9,7 @@ import textwrap
 from dataclasses import dataclass
 
 from core import prompts
-from core.rag.library import FRAGMENT_HEADER
+from core.rag.library import FRAGMENT_HEADER, ORIGIN_PREFIX
 from tools.review_findings import clean_quote, locate_quote, squash
 
 # "- [core/brain.py:40-55] línea copiada". La etiqueta es opcional: sin ella, la
@@ -35,6 +35,7 @@ class Fragment:
     tag: str
     label: str
     text: str
+    origin: str = ""
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,7 @@ class Quote:
     line: int
     label: str
     text: str
+    origin: str = ""
 
     @property
     def cite(self) -> str:
@@ -56,8 +58,9 @@ def parse_fragments(context: str) -> list:
 
     for i, header in enumerate(headers):
         end = headers[i + 1].start() if i + 1 < len(headers) else len(context)
-        text = context[header.end():end].partition("Contenido:\n")[2].strip()
-        fragments.append(Fragment(header.group(1), header.group(2) or "", text))
+        head, _, text = context[header.end():end].partition("Contenido:\n")
+        origin = next((line.removeprefix(ORIGIN_PREFIX) for line in head.splitlines() if line.startswith(ORIGIN_PREFIX)), "")
+        fragments.append(Fragment(header.group(1), header.group(2) or "", text.strip(), origin))
 
     return fragments
 
@@ -73,10 +76,10 @@ def quote_at(fragment: Fragment, number: int) -> Quote:
     first = FIRST_LINE.search(fragment.tag)
 
     if not first:
-        return Quote(fragment.tag, None, fragment.label, text)
+        return Quote(fragment.tag, None, fragment.label, text, fragment.origin)
 
     # number cuenta la primera línea de text, que no es del archivo.
-    return Quote(fragment.tag[:first.start()], int(first.group(1)) + number - 2, fragment.label, text)
+    return Quote(fragment.tag[:first.start()], int(first.group(1)) + number - 2, fragment.label, text, fragment.origin)
 
 
 def verify_quotes(response: str, context: str) -> list:
@@ -156,6 +159,8 @@ def block_of(run: list) -> str:
     """Un tramo de líneas seguidas: "core/brain.py:40-45 (Brain.process)" y su texto."""
     first, last = run[0], run[-1]
     cite = first.cite if first.line == last.line else f"{first.cite}-{last.line}"
+    # En una página web, los números de línea no significan nada para quien lee.
+    cite = first.origin or cite
     label = f" ({first.label})" if first.label else ""
     text = textwrap.dedent("\n".join(quote.text for quote in run))
     return f"{cite}{label}\n{textwrap.indent(text, '  ')}"
@@ -194,6 +199,7 @@ def best_fragments(context: str) -> str:
     for fragment in parse_fragments(context)[:FALLBACK_FRAGMENTS]:
         text = fragment.text.partition("\n")[2].strip()
         cut = "…" if len(text) > FALLBACK_CHARS else ""
-        blocks.append(f"[{fragment.tag}] {fragment.label}".strip() + f"\n{text[:FALLBACK_CHARS]}{cut}")
+        place = f"[{fragment.origin or fragment.tag}] {fragment.label}".strip()
+        blocks.append(f"{place}\n{text[:FALLBACK_CHARS]}{cut}")
 
     return f"{prompts.NO_DIRECT_ANSWER}\n\n" + "\n\n".join(blocks)

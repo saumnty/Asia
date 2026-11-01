@@ -95,11 +95,17 @@ def test_en_fuente(question, expected):
 @pytest.mark.parametrize(
     "spec, expected",
     [
-        ("Bolitabot", ("Bolitabot", ".", "proyecto")),
-        ("Bolitabot C:\\robots", ("Bolitabot", "C:\\robots", "proyecto")),
-        ("Notas C:\\notas notas", ("Notas", "C:\\notas", "notas")),
-        ("Tesis reporte", ("Tesis", ".", "reporte")),
-        ('Tesis "C:\\mis docs" reporte', ("Tesis", "C:\\mis docs", "reporte")),
+        ("Bolitabot", ("Bolitabot", ".", "proyecto", "", "")),
+        ("Bolitabot C:\\robots", ("Bolitabot", "C:\\robots", "proyecto", "", "")),
+        ("Notas C:\\notas notas", ("Notas", "C:\\notas", "notas", "", "")),
+        ("Tesis reporte", ("Tesis", ".", "reporte", "", "")),
+        ('Tesis "C:\\mis docs" reporte', ("Tesis", "C:\\mis docs", "reporte", "", "")),
+        (
+            'ros2 C:\\docs documentacion https://docs.ros.org/en/jazzy/{}.html "CC BY 4.0"',
+            ("ros2", "C:\\docs", "documentacion", "https://docs.ros.org/en/jazzy/{}.html", "CC BY 4.0"),
+        ),
+        ("ros2 https://a.org/{}", ("ros2", ".", "proyecto", "https://a.org/{}", "")),
+        ("ros2 C:\\docs https://a.org/sin-marca", None),
         ("", None),
         ("a b c d", None),
         ("a b c", None),
@@ -147,7 +153,7 @@ def test_sin_fuentes_lo_dice():
 
 
 def test_en_la_tabla_de_opciones():
-    for slash in ("/indexar <nombre> [ruta] [tipo]", "/fuentes"):
+    for slash in ("/indexar <nombre> [ruta] [tipo] [url] [licencia]", "/fuentes"):
         assert any(c.slash == slash and c.group == "biblioteca" for c in COMMANDS)
         assert slash in options_text()
 

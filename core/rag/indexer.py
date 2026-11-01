@@ -6,6 +6,7 @@ from config.settings_manager import SettingsManager
 from core.rag.chunking import chunk_text
 from core.rag.embedder import OllamaEmbedder
 from core.rag.exclusions import SourceFilter
+from core.rag.library import origin_of
 from core.rag.simulink import is_model_name, model_text
 from core.rag.vector_store import VectorStore
 
@@ -38,12 +39,14 @@ def indexable_text(chunk, relative_path: str) -> str:
 
 
 class ProjectIndexer:
-    def __init__(self, project_path: str, project_name: str, persist_dir=None, kind="proyecto"):
+    def __init__(self, project_path: str, project_name: str, persist_dir=None, kind="proyecto", url="", license=""):
         # Ruta absoluta: los fragmentos se identifican igual sin importar
         # desde qué carpeta se indexe o se pregunte.
         self.project_path = Path(project_path).resolve()
         self.project_name = project_name
         self.kind = kind
+        self.url = url
+        self.license = license
         self.embedder = OllamaEmbedder()
         self.changed = 0
         self.unchanged = 0
@@ -87,6 +90,7 @@ class ProjectIndexer:
                     "relative_path": relative,
                     "source": self.project_name,
                     "kind": self.kind,
+                    "origin": origin_of(relative, self.url, self.license),
                     "chunk": i,
                     "start_line": chunk.start_line,
                     "end_line": chunk.end_line,

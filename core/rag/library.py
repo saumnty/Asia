@@ -8,14 +8,16 @@ import json
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from pathlib import PurePosixPath
 
 from core import paths
 from core.atomic_write import write_json_atomic
 from core.rag.tokens import without_accents
 from core.rag.vector_store import safe_collection_name
 
-KINDS = ("proyecto", "reporte", "notas")
+KINDS = ("proyecto", "reporte", "notas", "documentacion")
 DEFAULT_KIND = "proyecto"
+ORIGIN_PREFIX = "Página: "
 FRAGMENT_HEADER = re.compile(r"^--- \[(.+?)\](?: (.+))? ---$", re.MULTILINE)
 REFUSAL = re.compile(
     r"\bno (lo |la |se )?(encontr|encuentr|hay informacion|tengo informacion|dispongo|puedo (responder|determinar))"
@@ -35,6 +37,9 @@ class Source:
     collection: str
     fragments: int = 0
     indexed: str = ""
+    # Para documentación con página pública: "https://docs.ros.org/en/jazzy/{}.html".
+    url: str = ""
+    license: str = ""
 
 
 class Library:
@@ -50,11 +55,11 @@ class Library:
     def get(self, name: str):
         return next((s for s in self.all() if s.name.lower() == name.lower()), None)
 
-    def save(self, name: str, kind: str, path: str, fragments: int) -> Source:
+    def save(self, name: str, kind: str, path: str, fragments: int, url: str = "", license: str = "") -> Source:
         """Añade la fuente o actualiza la que ya tiene ese nombre."""
         source = Source(
             name, kind, path, safe_collection_name(name), fragments,
-            datetime.now().isoformat(timespec="seconds"),
+            datetime.now().isoformat(timespec="seconds"), url, license,
         )
         sources = [s for s in self.all() if s.name.lower() != name.lower()] + [source]
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -99,6 +104,15 @@ def citation(metadata: dict) -> str:
         return file_path
 
     return f"{file_path}:{start}" if start == end else f"{file_path}:{start}-{end}"
+
+
+def origin_of(relative_path: str, url: str, license: str) -> str:
+    """La página pública de un archivo: "https://.../Tutorials/Foo.html · CC BY 4.0"."""
+    if not url:
+        return ""
+
+    page = url.format(PurePosixPath(relative_path).with_suffix("").as_posix())
+    return f"{page} · {license}" if license else page
 
 
 def fragment_header(metadata: dict) -> str:

@@ -2,7 +2,7 @@
 
 - Python: una pieza por función, método y clase (ast), más lo que queda fuera
   de ellas (imports, constantes).
-- .md y .tex: una pieza por sección.
+- .md, .rst y .tex: una pieza por sección.
 - Simulink: cada bloque con código, como un .m (core/rag/simulink.py).
 - El resto: bloques separados por líneas en blanco.
 
@@ -25,6 +25,7 @@ MIN_BLOCK_CHARS = 200
 
 MD_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 MD_FENCE = re.compile(r"^ {0,3}(`|~)\1\1")
+RST_UNDERLINE = re.compile(r"""^([=\-~^"'`*+#:.])\1{2,}\s*$""")
 TEX_HEADING = re.compile(r"^\s*\\(chapter|section|subsection|subsubsection)\*?\{(.+?)\}")
 DOCUMENT_SUFFIXES = {".md": MD_HEADING, ".markdown": MD_HEADING, ".tex": TEX_HEADING}
 
@@ -124,6 +125,42 @@ def document_pieces(lines: list, heading) -> list:
     return [piece for piece in pieces if piece.end >= piece.start]
 
 
+def rst_pieces(lines: list) -> list:
+    """Una pieza por sección de un .rst. En rst el nivel lo da el orden en que aparece cada subrayado."""
+    pieces = [Piece(1, 0)]
+    trail, levels = [], []
+
+    for index in range(1, len(lines)):
+        underline, title = RST_UNDERLINE.match(lines[index]), lines[index - 1].rstrip()
+
+        if not underline or not title or title[0].isspace() or RST_UNDERLINE.match(title):
+            continue
+
+        if len(lines[index].rstrip()) < len(title):
+            continue
+
+        over = index >= 2 and lines[index - 2].rstrip() == lines[index].rstrip()
+        style = (underline.group(1), over)
+
+        if style not in levels:
+            levels.append(style)
+
+        level = levels.index(style)
+        trail = [t for t in trail if t[0] < level] + [(level, title)]
+        start = index - 1 if over else index
+        pieces.append(Piece(start, index + 1, " > ".join(name for _, name in trail)))
+
+    if len(pieces) == 1:
+        return None
+
+    pieces[-1].end = len(lines)
+
+    for piece, following in zip(pieces, pieces[1:]):
+        piece.end = following.start - 1
+
+    return [piece for piece in pieces if piece.end >= piece.start]
+
+
 TEX_LEVELS = {"chapter": 1, "section": 2, "subsection": 3, "subsubsection": 4}
 
 
@@ -188,6 +225,8 @@ def chunk_text(text: str, suffix: str) -> list:
 
     if suffix == ".py":
         pieces = python_pieces(text, lines)
+    elif suffix == ".rst":
+        pieces = rst_pieces(lines)
     elif suffix in DOCUMENT_SUFFIXES:
         pieces = document_pieces(lines, DOCUMENT_SUFFIXES[suffix])
     else:

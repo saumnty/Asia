@@ -114,8 +114,9 @@ COMMANDS = [
     Command("biblioteca", "/buscar <pregunta>",
             "responde con tus fuentes y cita de dónde sale; \"en <fuente>\" busca solo en esa",
             "/buscar cómo funciona el PID en Bolitabot", action=("search_project_rag", "question")),
-    Command("biblioteca", "/indexar <nombre> [ruta] [tipo]",
-            "agrega o actualiza una fuente: proyecto, reporte o notas (por defecto, la carpeta actual)",
+    Command("biblioteca", "/indexar <nombre> [ruta] [tipo] [url] [licencia]",
+            "agrega o actualiza una fuente: proyecto, reporte, notas o documentacion (por defecto, la carpeta "
+            "actual); la url es la de sus páginas, con {} en lugar de la ruta",
             "/indexar Bolitabot C:\\Robots\\bolitabot proyecto", action=("add_source", "spec")),
     Command("biblioteca", "/fuentes", "muestra las fuentes de la biblioteca",
             "/fuentes", action=("list_sources", "text")),

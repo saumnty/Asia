@@ -56,7 +56,7 @@
         ".m", ".dart", ".swift", ".sh", ".ps1", ".sql"
     ],
     "text_extensions": [
-        ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".xml",
+        ".md", ".rst", ".txt", ".json", ".yaml", ".yml", ".toml", ".xml",
         ".gradle", ".properties", ".ini", ".cfg",
         ".html", ".css", ".sdf", ".urdf", ".launch"
     ],
