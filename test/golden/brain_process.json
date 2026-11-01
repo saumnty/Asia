@@ -328,7 +328,7 @@
    ],
    [
     "ask",
-    "\nResponde la pregunta del usuario usando únicamente estos fragmentos de sus proyectos.\n\nProyecto activo:\nasia\n\nPregunta:\ndónde se usa ollama\n\nFragmentos encontrados:\n<search_project_rag>\n\nInstrucciones:\n- Responde solo con lo que dicen los fragmentos. No agregues nada de tu conocimiento general.\n- Di de dónde sale cada dato, con la cita del fragmento tal como aparece en \"Cita\".\n- Si los fragmentos no responden la pregunta, responde exactamente: No lo encontré en tus proyectos.\n- Responde claro y breve.\n",
+    "\nResponde la pregunta del usuario usando únicamente estos fragmentos de sus proyectos.\n\nProyecto activo:\nasia\n\nPregunta:\ndónde se usa ollama\n\nFragmentos encontrados:\n<search_project_rag>\n\nInstrucciones:\n- Responde solo con lo que dicen los fragmentos. No agregues nada de tu conocimiento general.\n- Di de dónde sale cada dato, con la etiqueta [archivo:líneas] del fragmento, tal como aparece. No escribas \"fragmento 1\".\n- Si los fragmentos no responden la pregunta, responde exactamente: No lo encontré en tus proyectos.\n- Responde claro y breve.\n",
     false
    ]
   ]

@@ -143,7 +143,7 @@ Fragmentos encontrados:
 
 Instrucciones:
 - Responde solo con lo que dicen los fragmentos. No agregues nada de tu conocimiento general.
-- Di de dónde sale cada dato, con la cita del fragmento tal como aparece en "Cita".
+- Di de dónde sale cada dato, con la etiqueta [archivo:líneas] del fragmento, tal como aparece. No escribas "fragmento 1".
 - Si los fragmentos no responden la pregunta, responde exactamente: {NOT_FOUND}
 - Responde claro y breve.
 """

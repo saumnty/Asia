@@ -1,7 +1,7 @@
 from config.settings_manager import SettingsManager
 from core.prompts import NOT_FOUND
 from core.rag.indexer import ProjectIndexer, unload_chat_models
-from core.rag.library import CITE_PREFIX, DEFAULT_KIND, Library, citation, named_in_question, without_source
+from core.rag.library import DEFAULT_KIND, Library, fragment_header, named_in_question, without_source
 from core.rag.retriever import relevant, search_collections
 
 # El mismo que rag.min_coverage en config/defaults.json, por si falta la clave.
@@ -30,13 +30,12 @@ class RagTool:
 
         response = ""
 
-        for i, hit in enumerate(hits, start=1):
+        for hit in hits:
             source = hit.metadata.get("source", project_name)
             kind = hit.metadata.get("kind", DEFAULT_KIND)
 
-            response += f"\n--- Fragmento {i} ---\n"
+            response += f"\n{fragment_header(hit.metadata)}\n"
             response += f"Fuente: {source} ({kind})\n"
-            response += f"{CITE_PREFIX}{citation(hit.metadata)}\n"
             response += f"Contenido:\n{hit.document.strip()[:1200]}\n"
 
         return response

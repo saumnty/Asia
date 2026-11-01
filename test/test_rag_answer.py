@@ -10,15 +10,18 @@ from test_confidencial import make_brain
 from tools.rag_tool import RagTool
 
 CONTEXT = """
---- Fragmento 1 ---
+--- [control/pid.py:40-55] Pid.salida ---
 Fuente: Bolitabot (proyecto)
-Cita: control/pid.py, líneas 40–55 (Pid.salida)
 Contenido:
 kp = 2
 
---- Fragmento 2 ---
+--- [control/pid.py:60-70] Pid.reinicia ---
 Fuente: Bolitabot (proyecto)
-Cita: README.md, líneas 1–8
+Contenido:
+error = 0
+
+--- [README.md:1-8] ---
+Fuente: Bolitabot (proyecto)
 Contenido:
 Robot.
 """
@@ -44,7 +47,7 @@ class Router:
         return self.answer
 
 
-def brain_with(answer="La ganancia es 2 (control/pid.py, líneas 40–55).", context=CONTEXT):
+def brain_with(answer="La ganancia es 2 [control/pid.py:40-55].", context=CONTEXT):
     brain = make_brain()
     brain.tool_registry = Registry(context)
     brain.provider_router = Router(answer)
@@ -55,8 +58,8 @@ def test_el_prompt_exige_fragmentos_citas_y_no_lo_encontre():
     prompt = prompts.search_project_rag("asia", "qué ganancia", CONTEXT)
 
     assert "Responde solo con lo que dicen los fragmentos" in prompt
-    assert 'la cita del fragmento tal como aparece en "Cita"' in prompt
-    assert NOT_FOUND in prompt and "control/pid.py, líneas 40–55" in prompt
+    assert "la etiqueta [archivo:líneas]" in prompt
+    assert NOT_FOUND in prompt and "[control/pid.py:40-55]" in prompt
 
 
 def test_buscar_va_directo_sin_intent_engine():
@@ -79,13 +82,36 @@ def test_buscar_va_directo_sin_intent_engine():
 def test_las_fuentes_las_pone_el_codigo_no_el_modelo():
     answer = brain_with().process("/buscar qué ganancia tiene")
 
-    assert answer.endswith("Fuentes:\n- control/pid.py, líneas 40–55 (Pid.salida)")
+    assert answer.endswith("Fuentes:\n- control/pid.py:40-55 (Pid.salida)")
     assert "README.md" not in answer
+
+
+def test_la_etiqueta_gana_al_nombre_de_archivo():
+    # Medido con el 7B: citaba un fragmento y mencionaba otro archivo de paso.
+    footer = sources_footer(CONTEXT, "Según [README.md:1-8], la ganancia está en control/pid.py.")
+
+    assert footer == "\n\nFuentes:\n- README.md:1-8"
+
+
+def test_de_un_archivo_solo_el_fragmento_citado():
+    footer = sources_footer(CONTEXT, "Se reinicia a cero [control/pid.py:60-70].")
+
+    assert footer == "\n\nFuentes:\n- control/pid.py:60-70 (Pid.reinicia)"
+
+
+def test_la_etiqueta_se_reconoce_con_raya():
+    assert "README.md:1-8" in sources_footer(CONTEXT, "Es un robot [README.md:1–8].")
+
+
+def test_lineas_inventadas_caen_en_el_nombre_de_archivo():
+    footer = sources_footer(CONTEXT, "Es un robot [README.md:90-99].")
+
+    assert footer == "\n\nFuentes:\n- README.md:1-8"
 
 
 def test_si_no_menciona_ninguno_lista_todos_los_consultados():
     assert sources_footer(CONTEXT, "La ganancia es 2.") == (
-        "\n\nFuentes:\n- control/pid.py, líneas 40–55 (Pid.salida)\n- README.md, líneas 1–8"
+        "\n\nFuentes:\n- control/pid.py:40-55 (Pid.salida)\n- control/pid.py:60-70 (Pid.reinicia)\n- README.md:1-8"
     )
 
 

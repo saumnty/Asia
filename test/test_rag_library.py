@@ -7,7 +7,7 @@ from core.prompts import NOT_FOUND
 from core.provenance import RAG, TOOL_LABELS
 from core.rag.chunking import chunk_text
 from core.rag.indexer import ProjectIndexer
-from core.rag.library import Library, Source, citation, named_in_question, without_source
+from core.rag.library import Library, Source, citation, fragment_header, named_in_question, without_source
 from core.rag.retriever import search_collections
 from test_confidencial import make_brain
 from test_rag_index import embeddings  # noqa: F401
@@ -48,13 +48,20 @@ def test_lineas_de_cada_fragmento():
 @pytest.mark.parametrize(
     "metadata, expected",
     [
-        ({"relative_path": "controlador.py", "start_line": 40, "end_line": 55}, "controlador.py, líneas 40–55"),
-        ({"relative_path": "a.py", "start_line": 7, "end_line": 7}, "a.py, línea 7"),
+        ({"relative_path": "controlador.py", "start_line": 40, "end_line": 55}, "controlador.py:40-55"),
+        ({"relative_path": "a.py", "start_line": 7, "end_line": 7}, "a.py:7"),
         ({"file_path": "viejo.py", "chunk": 3}, "viejo.py"),
     ],
 )
 def test_cita(metadata, expected):
     assert citation(metadata) == expected
+
+
+def test_encabezado_de_fragmento():
+    metadata = {"relative_path": "launcher.py", "start_line": 40, "end_line": 55}
+
+    assert fragment_header(metadata) == "--- [launcher.py:40-55] ---"
+    assert fragment_header({**metadata, "label": "main"}) == "--- [launcher.py:40-55] main ---"
 
 
 def test_registro_guarda_y_actualiza(tmp_path):
@@ -164,7 +171,7 @@ def test_busca_en_todas_las_fuentes_y_dice_de_donde_viene(tmp_path, embeddings, 
     only_one = RagTool().search_project("bbbb en Dos", "asia")
 
     assert "Fuente: Uno (proyecto)" in everywhere and "Fuente: Dos (proyecto)" in everywhere
-    assert "Cita: a.py, línea 1" in everywhere
+    assert "--- [a.py:1] ---" in everywhere and "Fragmento" not in everywhere
     assert "Fuente: Dos (proyecto)" in only_one and "Fuente: Uno" not in only_one
 
 

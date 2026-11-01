@@ -16,7 +16,8 @@ from core.rag.vector_store import safe_collection_name
 
 KINDS = ("proyecto", "reporte", "notas")
 DEFAULT_KIND = "proyecto"
-CITE_PREFIX = "Cita: "
+FRAGMENT_HEADER = re.compile(r"^--- \[(.+?)\](?: (.+))? ---$", re.MULTILINE)
+LINES = re.compile(r":[\d-]+$")
 
 
 @dataclass
@@ -75,29 +76,40 @@ def without_source(question: str, source) -> str:
 def sources_footer(context: str, answer: str) -> str:
     """La lista "Fuentes:" de una respuesta, sacada de los fragmentos y no del modelo.
 
-    Solo los archivos que la respuesta menciona; si no menciona ninguno, todos los
-    consultados. Así una cita nunca es inventada. "" si la respuesta no usa fragmentos.
+    Los fragmentos que la respuesta cita con su etiqueta. Si no cita ninguna, los
+    archivos que menciona, y si tampoco, todos los consultados. Así una cita nunca es
+    inventada. "" si la respuesta no usa fragmentos.
     """
-    cites = list(dict.fromkeys(line.removeprefix(CITE_PREFIX) for line in context.splitlines() if line.startswith(CITE_PREFIX)))
+    fragments = list(dict.fromkeys(FRAGMENT_HEADER.findall(context)))
+    said = answer.lower().replace("–", "-")
 
-    if not cites or prompts.NOT_FOUND.lower().rstrip(".") in answer.lower():
+    if not fragments or prompts.NOT_FOUND.lower().rstrip(".") in said:
         return ""
 
-    def mentioned(cite):
-        return Path(cite.split(",")[0]).name.lower() in answer.lower()
+    def cited(fragment):
+        return fragment[0].lower() in said
 
-    used = [cite for cite in cites if mentioned(cite)] or cites
-    return "\n\nFuentes:\n" + "\n".join(f"- {cite}" for cite in used)
+    def mentioned(fragment):
+        return Path(LINES.sub("", fragment[0])).name.lower() in said
+
+    used = [f for f in fragments if cited(f)] or [f for f in fragments if mentioned(f)] or fragments
+    return "\n\nFuentes:\n" + "\n".join(
+        f"- {cite} ({label})" if label else f"- {cite}" for cite, label in used
+    )
 
 
 def citation(metadata: dict) -> str:
-    """"core/brain.py, líneas 40–55". Los índices viejos no guardan líneas."""
+    """"core/brain.py:40-55". Los índices viejos no guardan líneas."""
     file_path = metadata.get("relative_path") or metadata.get("file_path", "archivo desconocido")
     start, end = metadata.get("start_line"), metadata.get("end_line")
 
     if not start:
         return file_path
 
-    lines = f"línea {start}" if start == end else f"líneas {start}–{end}"
-    label = f" ({metadata['label']})" if metadata.get("label") else ""
-    return f"{file_path}, {lines}{label}"
+    return f"{file_path}:{start}" if start == end else f"{file_path}:{start}-{end}"
+
+
+def fragment_header(metadata: dict) -> str:
+    """"--- [core/brain.py:40-55] Brain.process ---": la etiqueta que cita el modelo."""
+    label = f" {metadata['label']}" if metadata.get("label") else ""
+    return f"--- [{citation(metadata)}]{label} ---"
