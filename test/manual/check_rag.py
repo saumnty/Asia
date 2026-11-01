@@ -12,9 +12,11 @@ También mira las preguntas que no tienen respuesta en C:\\Asia: lo que ayuda a
 decidir cuándo decir "no lo encontré".
 
 Punta a punta, con el modelo real y el índice real (data/chroma, solo lectura):
-cuántas de 8 preguntas responde sin negarse y cuántas citan el archivo correcto.
-Se mide sobre el texto del modelo, no sobre lo que se muestra: "Fuentes:" y lo que
-ponga el código no cuentan. Cada corrida tarda minutos en CPU.
+cuántas de 8 preguntas responde, cuántas citan el archivo correcto en "Fuentes:",
+que sale de líneas verificadas, y a cuántas de 4 trampas responde. Las trampas pasan
+el filtro de cobertura pero no tienen respuesta en C:\\Asia: una cita verificada
+prueba que la línea existe, no que responda, así que su respuesta se imprime entera
+para leerla. Cada corrida tarda minutos en CPU.
 
     .venv\\Scripts\\python.exe test\\manual\\check_rag.py --punta-a-punta 2
 """
@@ -29,9 +31,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
+from core import prompts
 from core.actions import explore
 from core.rag.indexer import ProjectIndexer, unload_chat_models
-from core.rag.library import is_refusal
 from core.rag.retriever import relevant, search_collections
 from tools.rag_tool import DEFAULT_MIN_COVERAGE
 
@@ -84,6 +86,15 @@ END_TO_END = [
     ("cómo vuelvo a jarvis.bat si quito el ejecutable", "README.md"),
     ("drop_client", "providers/ollama_models.py"),
     ("SentenceSplitter", "core/voice/reading.py"),
+]
+
+
+# Pasan el filtro de cobertura y nada en C:\\Asia las responde.
+TRAPS = [
+    "cómo se configura el firewall",
+    "cómo se conecta la base de datos de usuarios",
+    "cómo se cifra la contraseña del usuario",
+    "qué puerto usa el servidor web",
 ]
 
 
@@ -140,19 +151,20 @@ def table(rows) -> str:
     return "\n".join(lines)
 
 
-def answer_row(brain, spoken, question, expected):
-    """(estado, citó el archivo, segundos) de una pregunta con el modelo real."""
-    spoken.clear()
+def answer_row(brain, question, expected=None):
+    """(estado, cita el archivo, segundos, lo que se muestra) de una pregunta con el modelo real."""
     start = time.perf_counter()
-    brain.process(f"/buscar {question}")
+    shown = brain.process(f"/buscar {question}")
     seconds = time.perf_counter() - start
 
-    if not spoken:
-        return "el código negó", False, seconds, ""
+    if shown == prompts.NOT_FOUND:
+        return "el código negó", False, seconds, shown
 
-    answer = spoken[-1]
-    state = "negó" if is_refusal(answer) else "respondió"
-    return state, Path(expected).name.lower() in answer.lower(), seconds, answer
+    if shown.startswith(prompts.NO_DIRECT_ANSWER):
+        return "sin respuesta directa", False, seconds, shown
+
+    sources = shown.rpartition("Fuentes:")[2].lower()
+    return "respondió", bool(expected) and Path(expected).name.lower() in sources, seconds, shown
 
 
 def end_to_end(runs):
@@ -162,32 +174,40 @@ def end_to_end(runs):
 
     Session.set_paths(project_root=paths.PROJECT_ROOT, user_cwd=ROOT)
     brain = Brain()
-    spoken = []
-    ask = brain.provider_router.ask
-
-    def recording(prompt, **options):
-        spoken.append(ask(prompt, **options))
-        return spoken[-1]
-
-    brain.provider_router.ask = recording
-    summary = ["| Corrida | Responde | Cita el archivo | Segundos por pregunta |", "|---|---|---|---|"]
+    summary = [
+        "| Corrida | Responde | Cita el archivo | Trampas respondidas | Segundos por pregunta |",
+        "|---|---|---|---|---|",
+    ]
 
     for run in range(1, runs + 1):
         rows = []
 
         for question, expected in END_TO_END:
-            row = answer_row(brain, spoken, question, expected)
+            row = answer_row(brain, question, expected)
             rows.append(row)
-            state, cited, seconds, answer = row
-            opening = " ".join(answer.split())[:90]
+            state, cited, seconds, shown = row
+            opening = " ".join(shown.split())[:90]
             print(f"[{run}] {state}, {'cita' if cited else 'no cita'}, {seconds:.0f} s: {question[:45]} -> {opening}", flush=True)
+
+        traps = []
+
+        for question in TRAPS:
+            row = answer_row(brain, question)
+            traps.append(row)
+            state, _, seconds, shown = row
+            print(f"\n[{run}] TRAMPA {state}, {seconds:.0f} s: {question}", flush=True)
+
+            if state == "respondió":
+                print(shown, flush=True)
 
         answered = sum(1 for r in rows if r[0] == "respondió")
         cited = sum(1 for r in rows if r[1])
-        seconds = sum(r[2] for r in rows) / len(rows)
-        summary.append(f"| {run} | {answered}/{len(rows)} | {cited}/{len(rows)} | {seconds:.0f} |")
+        fell = sum(1 for r in traps if r[0] == "respondió")
+        seconds = sum(r[2] for r in rows + traps) / len(rows + traps)
+        summary.append(f"| {run} | {answered}/{len(rows)} | {cited}/{len(rows)} | {fell}/{len(traps)} | {seconds:.0f} |")
+        print()
 
-    print("\n" + "\n".join(summary))
+    print("\n".join(summary))
     return 0
 
 
