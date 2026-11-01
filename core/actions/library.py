@@ -1,9 +1,11 @@
 """/indexar y /fuentes: la biblioteca de conocimiento (core/rag/library.py)."""
 import shlex
 
+from core.rag.glossary import glossary_path, read_glossary
 from core.rag.library import DEFAULT_KIND, KINDS, Library
 
 USAGE = f"Uso: /indexar <nombre> [ruta] [tipo]. El tipo es {', '.join(KINDS)}."
+GLOSSARY_EXAMPLE = '{"punto desplazado": ["x_front", "y_front"]}'
 
 
 def parse_source(spec: str):
@@ -31,7 +33,28 @@ class LibraryActions:
     HANDLERS = {
         "add_source": "handle_add_source",
         "list_sources": "handle_list_sources",
+        "show_glossary": "handle_show_glossary",
     }
+
+    def handle_show_glossary(self, text, params):
+        name = params.get("source", "").strip()
+        source = Library().get(name)
+
+        if source is None:
+            return f"No conozco la fuente '{name}'. Mira /fuentes." if name else "Uso: /glosario <fuente>."
+
+        path = glossary_path(source.name)
+
+        try:
+            glossary = read_glossary(source.name)
+        except (ValueError, TypeError) as error:
+            return f"No puedo leer {path}: {error}"
+
+        if not glossary:
+            return f"{source.name} no tiene glosario. Si lo quieres, créalo a mano en {path}:\n{GLOSSARY_EXAMPLE}"
+
+        lines = [f"- {term} = {', '.join(values)}" for term, values in glossary.items()]
+        return f"Glosario de {source.name} ({path}):\n" + "\n".join(lines)
 
     def handle_add_source(self, text, params):
         parsed = parse_source(params.get("spec", ""))

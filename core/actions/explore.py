@@ -2,7 +2,8 @@
 from pathlib import Path
 
 from core import prompts
-from core.rag.library import is_refusal
+from core.rag.glossary import expand
+from core.rag.library import Library, is_refusal
 from core.rag.quotes import best_fragments, draft_problems, is_thin, quotes_text, verified_lines, verify_quotes
 
 # Los mismos que config/defaults.json, por si falta la clave.
@@ -77,6 +78,9 @@ class ExploreActions:
 
         # También por "/buscar", que no pasa por el IntentEngine.
         self.last_action = "search_project_rag"
+
+        # También para el modelo: si no, no ve la relación con lo que dicen los fragmentos.
+        question = expand(question, Library().all())
 
         rag_context = self.tool_registry.execute(
             "search_project_rag",

@@ -119,6 +119,9 @@ COMMANDS = [
             "/indexar Bolitabot C:\\Robots\\bolitabot proyecto", action=("add_source", "spec")),
     Command("biblioteca", "/fuentes", "muestra las fuentes de la biblioteca",
             "/fuentes", action=("list_sources", "text")),
+    Command("biblioteca", "/glosario <fuente>",
+            "muestra las equivalencias de esa fuente (\"punto desplazado\" = x_front); el archivo lo mantienes tú",
+            "/glosario Bolitabot", action=("show_glossary", "source")),
 
     Command("voz", "/voz",
             "Enter en una línea vacía escucha lo que dices; las respuestas se leen en voz alta "
