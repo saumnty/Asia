@@ -395,8 +395,11 @@ Respuestas falsas que pasaron todas las comprobaciones, leídas contra el códig
 
 Pendientes de la capa 2:
 - Python 3.12: sin descargar. Es `.txt`, hay que decidir cómo trocearlo.
-- Averiguar por qué la extracción se queda sin líneas con el documento correcto delante: traducir la pregunta no lo resuelve (abajo). Casi siempre es NINGUNA. Con QoS, el primer fragmento es la sección "QoS events", no la lista de políticas: a mirar si la respuesta llega a los fragmentos.
-- Etiquetas que el 7B escribe y no se reconocen: `[README.md:289, 290, 291]`, `[69]`. Eliminan frases buenas.
+- QoS: la lista de políticas no llega a los 5 fragmentos (abajo). Es de búsqueda, no del 7B. Falta decidir el arreglo. El mismo caso se puede repetir en otras preguntas sin líneas: mirar el puesto del fragmento correcto antes de culpar a la extracción.
+- Sin traducción, publicar un tópico, QoS, launch y mundo SDF no pasan el filtro y enseñan fragmentos sin pasar por el modelo. Con traducción lo pasaban. Decidir si eso compensa el tiempo.
+- Falsas eliminaciones: un nombre de la propia pregunta (`ros_gz_bridge`, 3 de 10) y un número entre comillas invertidas (`1.2`) cuentan como código.
+- Al indexar Python 3.12: `/publica python sí`. `ros_gz_bridge` sigue privada (Apache-2.0, no estaba en la lista).
+- `test_varias_colecciones` falló una vez, con "Nothing found on disk" de Chroma al abrir un índice recién escrito; no se repitió en 4 corridas. No se investigó.
 - "No lo encontré en tus proyectos" suena raro con documentación.
 
 Una pregunta con "en <fuente>" que el filtro rechaza enseña los fragmentos en lugar de negar, sin pasar por el modelo. Sin fuente nombrada, sigue negando.
@@ -422,6 +425,21 @@ Se elimina la mitad de las frases (45 de 87), y 35 de esas 45 por no llevar etiq
 - Límite: el código comprueba nombres, no significado. `Debes abrirlo con el modo "w" [core/atomic_write.py:3]` pasa, porque esa línea contiene `"w"` aunque diga lo contrario. Solo queda rebajada a "no verificado".
 - Cayeron frases verdaderas: "dura 6 segundos" (la línea es `T_v = [6.0,...]`, sin unidad), los comandos de `ros2 pkg create` (etiqueta en otra línea) y frases que quedan cojas ("Este comando [...]" sin el comando). Las líneas verificadas siguen encima.
 - Siguen pasando frases vacías o inventadas con etiqueta real: "fórmula de desplazamiento circular", o "las líneas no contienen información" sobre líneas que sí responden.
+
+Cierre de los ajustes de la capa 2:
+- Traducción desactivada por defecto: `rag.translate_question` en `config/defaults.json`. El código sigue.
+- Solo se eliminan las frases con nombres de código que no están en sus líneas citadas. Las que no tienen etiqueta, tienen una no reconocida, o traen un dato dudoso, se muestran con "(sin cita)" dentro del resumen. `[README.md:289, 290]` ya se reconoce. Decisión: una frase sin ninguna línea citada compara sus nombres con todas las verificadas; si no, quitar la etiqueta bastaría para colar un nombre inventado.
+
+| Corrida | Con resumen | Asia | Bolitabot | Docs | Solo líneas | Sin respuesta directa en docs | Frases | Limpias | Eliminadas | Sin cita | Prohibidas sin marca | Cita | Trampas | Ajenas | s/pregunta |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 9/20 | 6/8 | 1/3 | 2/9 | 1 | 6 | 36 | 21 | 4 | 11 | 0 | 8/20 | 0/8 | 0/5 | 57 |
+| 2 | 13/20 | 8/8 | 2/3 | 3/9 | 1 | 5 | 46 | 17 | 6 | 23 | 0 | 12/20 | 0/8 | 0/5 | 34 |
+
+Se eliminan 10 de 82 frases, frente a 45 de 87, y se marcan 34. El precio se vio en la corrida 2: `primero debe abrirlo con el modo "w". (sin cita)` vuelve a mostrarse, marcado, sin la línea correcta delante. Docs baja a 2/9 y 3/9 porque cuatro preguntas no pasan el filtro sin traducción.
+
+QoS, con la pregunta del benchmark: la lista está entera en `About-Quality-of-Service-Settings.rst:28-61`, pero sale 13.ª sin tope por archivo y no sale con el tope de 2 ni de 4: "QoS events" y "QoS compatibilities" gastan el cupo del archivo. Con traducción, 8.ª. Con "(policies)" añadido, 8.ª. Con "(QoS policies, History, Reliability, Durability)", 1.ª, incluso con tope 2. Sin arreglar: pendiente de decisión.
+
+Fuentes públicas: atributo `publica` en `fuentes.json`, `false` por defecto; `ros2` y `gazebo` en `true` con `/publica <fuente> sí|no`. Reindexar lo conserva. La búsqueda lleva la etiqueta `publica`, exportable, solo si todas las fuentes consultadas lo son, aunque los fragmentos encontrados sean todos de una pública: una pregunta sin "en <fuente>" también consulta las privadas y cuenta como local. Lo demás de la petición sigue valiendo: un adjunto la vuelve local y en modo local no sale nada. La bitácora registra los envíos con la etiqueta y `exportable`. Probado con Gemini simulado (`test/test_rag_public.py`); nunca se envió nada a Gemini de verdad.
 
 `test/` nunca entró en `asia`: el indexador ignora `test_dirs`. Va aparte, en `asia-pruebas`, que solo se consulta con "en asia-pruebas": `/indexar asia-pruebas C:\Asia\test solo-nombrada`. `/indexar <nombre>` sin ruta ni tipo conserva los de la fuente; antes indexaba la carpeta actual en ella.
 
