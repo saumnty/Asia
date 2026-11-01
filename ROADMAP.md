@@ -273,13 +273,39 @@ Hecho en la fase G (ver la tabla). Pendientes:
 
 Antes "Wikipedia offline". Va por capas, y cada fuente lleva su etiqueta para poder citarla:
 
-1. Proyectos propios (repos, reportes, notas) con el RAG actual: primera capa, la más útil.
+1. Proyectos propios (repos, reportes, notas) con el RAG actual: primera capa, la más útil. Hecha, ver abajo.
 2. Documentación técnica offline (ROS 2, Gazebo, Python, MATLAB), empaquetada para Kiwix o convertida con zimit.
 3. Wikipedia en español e inglés: herramienta offline con Kiwix/ZIM, separada del RAG de proyectos.
 4. Preguntas y respuestas (Stack Overflow, Robotics Stack Exchange).
 
 - Búsqueda: la de texto de Kiwix encuentra los artículos y los embeddings se usan solo dentro de ellos, sin indexar todo.
 - Regla en el prompt: responder con lo que dice la fuente y decir "no lo encontré" si no está.
+
+**Capa 1, proyectos propios (hecho):** commits `a3953a4a` (benchmark y lotes), `df964630` (fuentes y exclusiones), `8b387639` (troceado e incremental), `1cb51f31` (híbrida), `2826f8f9` (respuesta con fuente).
+- Fuentes: cada una es una colección con nombre y tipo (proyecto, reporte, notas), en `data/biblioteca/fuentes.json`. `/indexar <nombre> [ruta] [tipo]`, `/fuentes` y `/buscar <pregunta>`. Busca en todas, salvo "en <fuente>".
+- Nunca entran `data/`, `memory/`, `logs/` ni `config/settings.json` de Asia, secretos (`.env`, `*.key`, `*.pem`, `id_rsa`...), binarios, archivos de más de 1 MB ni lo que ignore el `.gitignore` de la fuente (`core/rag/exclusions.py`). Antes entraban los modelos de Whisper (83 % de los fragmentos) y `memory/`.
+- Troceado: Python por funciones y métodos con `ast`, `.md` y `.tex` por secciones, el resto por bloques; cada fragmento lleva delante dónde vive. Un hash por archivo reindexa solo lo que cambió.
+- Búsqueda: embeddings con los prefijos de nomic y BM25 propio, fusionados por posición (RRF), con 2 fragmentos por archivo como mucho.
+- Respuesta: solo con los fragmentos y citándolos. "Fuentes:" la pone el código, no el modelo. Si la cobertura de la pregunta en los fragmentos no llega a `rag.min_coverage` (0,3), dice "No lo encontré en tus proyectos." sin llamar al modelo. La distancia de los embeddings no sirve para esto (se solapan) y la puntuación de BM25 tampoco (depende del tamaño de la colección).
+
+Aciertos con `test/manual/check_rag.py` (20 preguntas sobre C:\Asia, archivo correcto en 1.º / top 3 / top 5):
+
+| Paso | Total | Concepto (12) | Documento (2) | Nombre (6) |
+|---|---|---|---|---|
+| Línea base | 8 / 13 / 16 | 4 / 6 / 8 | 1 / 2 / 2 | 3 / 5 / 6 |
+| Fuentes y prefijos | 10 / 15 / 16 | 4 / 7 / 8 | 1 / 2 / 2 | 5 / 6 / 6 |
+| Troceado | 10 / 12 / 14 | 3 / 4 / 6 | 1 / 2 / 2 | 6 / 6 / 6 |
+| Híbrida y tope por archivo | 13 / 16 / 19 | 5 / 8 / 11 | 2 / 2 / 2 | 6 / 6 / 6 |
+
+"No lo encontré": 5 de 5 preguntas sin respuesta y 0 de 20 falsos rechazos, con una muestra pequeña: cobertura hasta 0,16 sin respuesta y desde 0,41 con ella. Vigilar en uso real.
+
+Tiempos en CPU, solo como referencia (repetir con la GPU; no se ajustó nada por ellos): índice completo de 984 fragmentos, 389 s; incremental de 11 archivos, 41 s; consulta, 2,5 s, y `/buscar` entero, 45–72 s.
+
+Pendientes:
+- Medir con la GPU si `nomic-embed-text` junto al 7B le quita VRAM (389 MB en CPU); hoy conviven para no recargar en cada pregunta.
+- A veces el modelo cita "Fragmento 1" en lugar del archivo; entonces "Fuentes:" lista todos los consultados, no solo los usados.
+- El troceado solo no ayuda: sin el tope por archivo, las secciones del ROADMAP acapararon los resultados.
+- BM25 se reconstruye en cada búsqueda con todos los documentos: revisar con fuentes grandes.
 
 Conocimiento, pendientes generales:
 
