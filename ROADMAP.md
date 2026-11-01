@@ -391,14 +391,16 @@ La verificación aguanta sin filtro: con 430 las 26 trampas y ajenas llegan a la
 Respuestas falsas que pasaron todas las comprobaciones, leídas contra el código (la medición no las cuenta):
 - "Para escribir un archivo sin dejarlo a medias, debes abrirlo con el modo "w"": lo contrario de lo que dice `core/atomic_write.py`. Sin cita (1 de 4 corridas).
 - `drop_client` atribuida a `providers/ollama_provider.py`, donde solo se importa y se llama; está en `ollama_models.py` (3 de 4).
-- El resumen "cada 3 segundos": probablemente de un texto inventado en `test/test_rag_answer.py:231`. Las pruebas se indexan y sus datos falsos se leen como hechos.
+- El resumen "cada 3 segundos": sale de `DEFAULT_SUMMARY_IDLE = 3`, que es esperar 3 s de inactividad, no repetir cada 3 s. Número real, frase falsa.
 
 Pendientes de la capa 2:
 - Python 3.12: sin descargar. Es `.txt`, hay que decidir cómo trocearlo.
 - Averiguar por qué la extracción escribe NINGUNA con el documento correcto delante: si es el inglés, el tamaño del fragmento o que la respuesta no está en él.
-- Decidir si una pregunta con "en <fuente>" que el filtro rechaza enseña los fragmentos en lugar de negar.
 - "No lo encontré en tus proyectos" suena raro con documentación.
-- Decidir si `test/` entra en la fuente `asia`.
+
+Una pregunta con "en <fuente>" que el filtro rechaza enseña los fragmentos en lugar de negar, sin pasar por el modelo. Sin fuente nombrada, sigue negando.
+
+`test/` nunca entró en `asia`: el indexador ignora `test_dirs`. Va aparte, en `asia-pruebas`, que solo se consulta con "en asia-pruebas": `/indexar asia-pruebas C:\Asia\test solo-nombrada`. `/indexar <nombre>` sin ruta ni tipo conserva los de la fuente; antes indexaba la carpeta actual en ella.
 
 Conocimiento, pendientes generales:
 

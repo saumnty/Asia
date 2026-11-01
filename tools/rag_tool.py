@@ -1,7 +1,7 @@
 from config.settings_manager import SettingsManager
 from core.prompts import NOT_FOUND
 from core.rag.indexer import ProjectIndexer, unload_chat_models
-from core.rag.library import DEFAULT_KIND, ORIGIN_PREFIX, Library, fragment_header, named_in_question, without_source
+from core.rag.library import DEFAULT_KIND, ORIGIN_PREFIX, Library, Source, fragment_header, named_in_question, without_source
 from core.rag.quotes import best_fragments
 from core.rag.retriever import relevant, search_collections
 
@@ -21,7 +21,7 @@ class RagTool:
         """Busca en todas las fuentes, o en la de "en <fuente>". Sin fuentes, en el proyecto activo."""
         sources = Library().all()
         named = named_in_question(question, sources)
-        collections = [named.collection] if named else [s.collection for s in sources] or [project_name]
+        collections = [named.collection] if named else [s.collection for s in sources if not s.named_only] or [project_name]
 
         query = without_source(question, named) if named else question
         hits = search_collections(query, collections, n_results=n_results)
@@ -53,17 +53,21 @@ class RagTool:
     def index_project(
         self,
         project_name: str,
-        project_path: str = ".",
-        kind: str = DEFAULT_KIND,
+        project_path: str = None,
+        kind: str = None,
         url: str = "",
-        license: str = ""
+        license: str = "",
+        named_only: bool = None
     ):
         unload_chat_models()
 
-        # Volver a indexar con /indexar <nombre> no le quita la URL a la fuente.
-        known = Library().get(project_name)
-        url = url or (known.url if known else "")
-        license = license or (known.license if known else "")
+        # Volver a indexar con /indexar <nombre> no le cambia nada a la fuente.
+        known = Library().get(project_name) or Source(project_name, DEFAULT_KIND, ".", "")
+        project_path = project_path or known.path
+        kind = kind or known.kind
+        url = url or known.url
+        license = license or known.license
+        named_only = known.named_only if named_only is None else named_only
 
         indexer = ProjectIndexer(
             project_path=project_path,
@@ -74,7 +78,7 @@ class RagTool:
         )
 
         count = indexer.index_project()
-        Library().save(project_name, kind, indexer.project_path.as_posix(), count, url, license)
+        Library().save(project_name, kind, indexer.project_path.as_posix(), count, url, license, named_only)
 
         return (
             f"Fuente '{project_name}' al día: {count} fragmentos "

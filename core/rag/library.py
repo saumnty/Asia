@@ -40,6 +40,8 @@ class Source:
     # Para documentación con página pública: "https://docs.ros.org/en/jazzy/{}.html".
     url: str = ""
     license: str = ""
+    # Solo se consulta con "en <fuente>".
+    named_only: bool = False
 
 
 class Library:
@@ -55,11 +57,13 @@ class Library:
     def get(self, name: str):
         return next((s for s in self.all() if s.name.lower() == name.lower()), None)
 
-    def save(self, name: str, kind: str, path: str, fragments: int, url: str = "", license: str = "") -> Source:
+    def save(
+        self, name: str, kind: str, path: str, fragments: int, url: str = "", license: str = "", named_only: bool = False,
+    ) -> Source:
         """Añade la fuente o actualiza la que ya tiene ese nombre."""
         source = Source(
             name, kind, path, safe_collection_name(name), fragments,
-            datetime.now().isoformat(timespec="seconds"), url, license,
+            datetime.now().isoformat(timespec="seconds"), url, license, named_only,
         )
         sources = [s for s in self.all() if s.name.lower() != name.lower()] + [source]
         self.path.parent.mkdir(parents=True, exist_ok=True)

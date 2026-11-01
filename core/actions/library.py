@@ -2,23 +2,30 @@
 import shlex
 
 from core.rag.glossary import glossary_path, read_glossary
-from core.rag.library import DEFAULT_KIND, KINDS, Library
+from core.rag.library import KINDS, Library
 
+NAMED_ONLY = "solo-nombrada"
 USAGE = (
-    f"Uso: /indexar <nombre> [ruta] [tipo] [url] [licencia]. El tipo es {', '.join(KINDS)}. "
-    "En la url, {} es la ruta del archivo sin extensión: https://docs.ros.org/en/jazzy/{}.html"
+    f"Uso: /indexar <nombre> [ruta] [tipo] [url] [licencia] [{NAMED_ONLY}]. El tipo es {', '.join(KINDS)}. "
+    "En la url, {} es la ruta del archivo sin extensión: https://docs.ros.org/en/jazzy/{}.html. "
+    f"Con {NAMED_ONLY}, la fuente solo se consulta con \"en <fuente>\"."
 )
 GLOSSARY_EXAMPLE = '{"punto desplazado": ["x_front", "y_front"]}'
 
 
 def parse_source(spec: str):
-    """(nombre, ruta, tipo, url, licencia) de "/indexar", o None si no se entiende."""
+    """(nombre, ruta, tipo, url, licencia, opciones) de "/indexar", o None si no se entiende.
+
+    Sin ruta ni tipo, None: los conserva la fuente que ya exista.
+    """
     try:
         words = shlex.split(spec, posix=False)
     except ValueError:
         return None
 
     words = [word.strip('"') for word in words]
+    options = {"named_only": True} if NAMED_ONLY in words else {}
+    words = [word for word in words if word != NAMED_ONLY]
     url_at = next((i for i, word in enumerate(words) if word.lower().startswith("http")), None)
     url, license = "", ""
 
@@ -33,12 +40,12 @@ def parse_source(spec: str):
         return None
 
     name, rest = words[0], words[1:]
-    kind = rest.pop() if rest and rest[-1].lower() in KINDS else DEFAULT_KIND
+    kind = rest.pop().lower() if rest and rest[-1].lower() in KINDS else None
 
     if len(rest) > 1:
         return None
 
-    return name, rest[0] if rest else ".", kind.lower(), url, license
+    return name, rest[0] if rest else None, kind, url, license, options
 
 
 class LibraryActions:
@@ -74,7 +81,7 @@ class LibraryActions:
         if parsed is None:
             return USAGE
 
-        name, path, kind, url, license = parsed
+        name, path, kind, url, license, options = parsed
 
         return self.tool_registry.execute(
             "index_project_rag",
@@ -82,7 +89,8 @@ class LibraryActions:
             project_name=name,
             kind=kind,
             url=url,
-            license=license
+            license=license,
+            **options
         )
 
     def handle_list_sources(self, text, params):
@@ -92,7 +100,8 @@ class LibraryActions:
             return "Aún no hay fuentes. Agrega una con /indexar <nombre> [ruta] [tipo]."
 
         lines = [
-            f"- {s.name} ({s.kind}): {s.fragments} fragmentos, {s.url or s.path}, indexada {s.indexed.replace('T', ' ')[:16]}"
+            f"- {s.name} ({s.kind}{', solo si se nombra' if s.named_only else ''}): {s.fragments} fragmentos, "
+            f"{s.url or s.path}, indexada {s.indexed.replace('T', ' ')[:16]}"
             for s in sources
         ]
         return "Fuentes:\n" + "\n".join(lines)
