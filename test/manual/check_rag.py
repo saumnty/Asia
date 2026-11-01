@@ -389,8 +389,8 @@ def end_to_end(runs, glossary_dir):
 
     explore.verify_quotes = showing_extraction
 
-    def showing_removed(answer, quotes):
-        shown, uncited, removed = check(answer, quotes)
+    def showing_removed(answer, quotes, question):
+        shown, uncited, removed = check(answer, quotes, question)
         sentences.extend(["limpia"] * (len(shown) - len(uncited)))
 
         for name, group in (("eliminada", removed), ("sin cita", uncited)):

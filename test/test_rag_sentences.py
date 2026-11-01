@@ -219,6 +219,47 @@ def test_las_varias_lineas_se_cuentan_una_a_una():
     assert sentence_problems("Usa `ros_type` [README.md:289, 290].", lines) == [(UNKNOWN_NAME, "ros_type")]
 
 
+def test_un_nombre_de_la_pregunta_cuenta_como_conocido():
+    # Medido con el 7B: ros_gz_bridge eliminaba 3 de 10 frases.
+    sentence = "El tipo en `ros_gz_bridge` es 2.5 [control/pid.py:41]."
+
+    assert sentence_problems(sentence, VERIFIED) == [(UNKNOWN_NAME, "ros_gz_bridge")]
+    assert sentence_problems(sentence, VERIFIED, "qué tipo usa en ros_gz_bridge") == []
+
+
+def test_un_nombre_de_la_pregunta_cuenta_sin_comillas_ni_etiqueta():
+    assert check_draft("Lo usa ros_gz_bridge.", VERIFIED, "en ros_gz_bridge")[0] == ["Lo usa ros_gz_bridge. (sin cita)"]
+
+
+def test_un_nombre_que_no_esta_en_la_pregunta_sigue_eliminandose():
+    assert check_draft("Lo calcula `calcula_pid` [control/pid.py:41].", VERIFIED, "qué ganancia tiene")[0] == []
+
+
+def test_una_definicion_no_se_salva_por_estar_en_la_pregunta():
+    assert kinds("`salida` se define aquí [control/pid.py:41].") == {NOT_DEFINED}
+    assert sentence_problems("`salida` se define aquí [control/pid.py:41].", VERIFIED, "dónde está salida") != []
+
+
+@pytest.mark.parametrize("value", ["`1.2`", "`1.2 metros`", "`0.7 m/s`", "`3`"])
+def test_un_dato_entre_comillas_invertidas_se_marca_y_no_se_elimina(value):
+    # Medido con el 7B: `1.2` y `0.4` eliminaban una frase por "nombre".
+    sentence = f"La separación es {value} [control/pid.py:41]."
+
+    assert check_draft(sentence, VERIFIED)[0] == [f"{sentence} (sin cita)"]
+
+
+def test_un_dato_entre_comillas_invertidas_que_esta_en_su_linea_vale():
+    assert sentence_problems("La ganancia es `2.5` [control/pid.py:41].", VERIFIED) == []
+
+
+def test_la_unidad_de_tiempo_tambien_cuenta_entre_comillas_invertidas():
+    assert kinds("Espera `2.5 segundos` [control/pid.py:41].") == {UNKNOWN_FIGURE}
+
+
+def test_un_nombre_que_empieza_por_numero_sigue_siendo_codigo():
+    assert kinds("Usa `2to3` [control/pid.py:41].") == {UNKNOWN_NAME}
+
+
 def test_una_etiqueta_con_varias_lineas_sigue_a_su_frase():
     assert draft_sentences("Uno. [a.py:1, 2] Dos.") == ["Uno [a.py:1, 2].", "Dos."]
 

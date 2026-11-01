@@ -26,6 +26,8 @@ DOUBLE_QUOTED = re.compile(r'["“]([^"”\n]+)["”]')
 WORD = re.compile(r"\w+")
 FILE_PATH = re.compile(r"[\w./\\-]+\.\w+")
 NUMBER = re.compile(r"(?<![\w.])\d+(?:\.\d+)?(?!\w)")
+# "`1.2`" o "`0.7 m/s`" entre comillas invertidas es un dato, no un nombre de código.
+VALUE = re.compile(r"\d+(?:\.\d+)?(?:\s*[^\W\d]+(?:/[^\W\d]+)?)?")
 TIME_UNITS = r"segundos?|seg|s|minutos?|min|horas?|h|milisegundos?|ms"
 # "3 segundos": el número puede estar en la línea sin que la línea diga segundos.
 TIMED = re.compile(rf"(?<![\w.])(\d+(?:\.\d+)?)\s*({TIME_UNITS})\b", re.IGNORECASE)
@@ -213,7 +215,7 @@ def unknown_names(answer: str, context: str) -> list:
     text = CITED_LINES.sub(" ", answer)
     code = [line for block in FENCE.findall(text) for line in block.splitlines() if line.strip()]
     text = FENCE.sub(" ", text)
-    code += CITED_FILE.findall(text) + BACKTICKED.findall(text)
+    code += CITED_FILE.findall(text) + [item for item in BACKTICKED.findall(text) if not VALUE.fullmatch(item.strip())]
     known = squash(context)
     words = set(WORD.findall(context))
 
@@ -237,7 +239,8 @@ def prose_of(sentence: str) -> str:
 
 def unknown_figures(sentence: str, own: list) -> list:
     """Los números que no están en las líneas citadas y las unidades de tiempo que esas líneas no dicen."""
-    prose = prose_of(sentence)
+    values = [item for item in BACKTICKED.findall(without_tags(sentence)) if VALUE.fullmatch(item.strip())]
+    prose = " ".join([prose_of(sentence), *values])
     lines = "\n".join(quote.text for quote in own)
     known = set(NUMBER.findall(lines)) | {str(quote.line) for quote in own}
     unknown = [number for number in NUMBER.findall(prose) if number not in known]
@@ -267,14 +270,16 @@ def undefined_names(sentence: str, own: list) -> list:
     return [name for name in dict.fromkeys(names) if not is_defined(name, own)]
 
 
-def sentence_problems(sentence: str, quotes: list) -> list:
+def sentence_problems(sentence: str, quotes: list, question: str = "") -> list:
     """[(motivo, detalle)] de la frase, comprobada contra sus líneas citadas.
 
     Sin ninguna línea citada, sus nombres se comprueban contra todas las verificadas:
-    no llevar etiqueta no puede ser la forma de colar un nombre inventado.
+    no llevar etiqueta no puede ser la forma de colar un nombre inventado. Un nombre
+    de la pregunta lo puso el usuario: repetirlo no es inventarlo.
     """
     own, unverified = cited_lines(sentence, quotes)
-    known = "\n".join(f"{quote.path} {quote.label} {quote.text}" for quote in own or quotes)
+    lines = "\n".join(f"{quote.path} {quote.label} {quote.text}" for quote in own or quotes)
+    known = f"{lines}\n{question}"
     problems = [(UNKNOWN_NAME, name) for name in unknown_names(sentence, known)]
     problems += [(BAD_TAG, tag) for tag in unverified]
 
@@ -291,12 +296,12 @@ def marked(sentence: str) -> str:
     return f"{sentence}\n{prompts.UNCITED}" if sentence.endswith("```") else f"{sentence} {prompts.UNCITED}"
 
 
-def check_draft(answer: str, quotes: list) -> tuple:
+def check_draft(answer: str, quotes: list, question: str = "") -> tuple:
     """(frases que se muestran, [(marcada, problemas)], [(eliminada, problemas)])."""
     shown, uncited, removed = [], [], []
 
     for sentence in draft_sentences(answer):
-        problems = sentence_problems(sentence, quotes)
+        problems = sentence_problems(sentence, quotes, question)
 
         if any(kind == UNKNOWN_NAME for kind, _ in problems):
             removed.append((sentence, problems))

@@ -111,7 +111,7 @@ class ExploreActions:
             return best_fragments(rag_context)
 
         # Las frases que quedan tienen nombres reales, no significado comprobado.
-        shown = check_draft(answer, quotes)[0]
+        shown = check_draft(answer, quotes, question)[0]
         lines = verified_lines(quotes)
 
         if shown:
