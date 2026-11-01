@@ -1,4 +1,4 @@
-"""Búsqueda híbrida: embeddings y palabras (BM25), fusionados por posición (RRF).
+"""Búsqueda híbrida: embeddings y palabras (FTS5, con BM25), fusionados por posición (RRF).
 
 Los embeddings entienden el concepto; BM25 encuentra el nombre exacto. Se usa
 la posición de cada lista y no sus puntuaciones, que no son comparables. Se
@@ -7,7 +7,6 @@ los resultados.
 """
 from dataclasses import dataclass
 
-from core.rag.bm25 import BM25
 from core.rag.embedder import OllamaEmbedder
 from core.rag.vector_store import VectorStore
 
@@ -80,25 +79,26 @@ def merge(vector: list, keyword: list, n_results: int) -> list:
 def search_collections(question: str, collections: list, n_results=5, persist_dir=None) -> list:
     """Los mejores fragmentos de varias colecciones."""
     query_embedding = OllamaEmbedder().embed_query(question)
-    vector, ids, documents, metadatas = [], [], [], []
+    vector, names, words = [], [], None
 
     for collection in collections:
         store = VectorStore(persist_dir=persist_dir, collection_name=collection)
+        store.sync_words()
         vector += vector_hits(store, query_embedding)
-        stored = store.all_documents()
-        ids += stored["ids"]
-        documents += stored["documents"]
-        metadatas += stored["metadatas"]
+        names.append(store.name)
+        words = store.words
+
+    if words is None:
+        return []
 
     vector = sorted(vector, key=lambda pair: pair[1].distance)[:CANDIDATES]
-    words = BM25(documents)
     keyword = [
-        (ids[i], Hit(documents[i], metadatas[i] or {}, keyword_score=score))
-        for i, score in words.top(question, CANDIDATES)
+        (chunk_id, Hit(document, metadata, keyword_score=score))
+        for chunk_id, document, metadata, score in words.top(question, names, CANDIDATES)
     ]
     hits = merge(vector, keyword, n_results)
 
-    for hit in hits:
-        hit.coverage = words.coverage(question, hit.document)
+    for hit, coverage in zip(hits, words.coverage(question, [hit.document for hit in hits], names)):
+        hit.coverage = coverage
 
     return hits

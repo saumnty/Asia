@@ -11,8 +11,8 @@ import json
 import re
 
 from core import paths
-from core.rag.bm25 import without_accents
 from core.rag.library import named_in_question
+from core.rag.tokens import without_accents
 from core.rag.vector_store import safe_collection_name
 
 

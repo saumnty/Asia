@@ -11,7 +11,7 @@ from datetime import datetime
 
 from core import paths
 from core.atomic_write import write_json_atomic
-from core.rag.bm25 import without_accents
+from core.rag.tokens import without_accents
 from core.rag.vector_store import safe_collection_name
 
 KINDS = ("proyecto", "reporte", "notas")

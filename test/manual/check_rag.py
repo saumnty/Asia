@@ -253,9 +253,7 @@ def clean_copy(folder):
         if metadata.get("relative_path") == this_file or any(q in document.lower() for q in questions)
     ]
 
-    if ids:
-        store.collection.delete(ids=ids)
-
+    store.delete_ids(ids)
     vector_store.CHROMA_DIR = folder
     print(f"Índice de la medición: {store.collection.count()} fragmentos, {len(ids)} fuera.", flush=True)
 

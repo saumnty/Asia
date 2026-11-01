@@ -1,6 +1,7 @@
 import re
 
 from core.paths import CHROMA_DIR
+from core.rag.word_index import WordIndex
 
 
 BATCH_SIZE = 1000
@@ -30,12 +31,17 @@ class VectorStore:
         # Aquí y no arriba: chromadb tarda ~3 s en cargar y solo hace falta con RAG.
         import chromadb
 
+        folder = persist_dir or CHROMA_DIR
+
         self.client = chromadb.PersistentClient(
-            path=str(persist_dir or CHROMA_DIR)
+            path=str(folder)
         )
 
+        self.name = safe_collection_name(collection_name)
+        self.words = WordIndex(folder)
+
         self.collection = self.client.get_or_create_collection(
-            name=safe_collection_name(collection_name)
+            name=self.name
         )
 
     def add_documents(
@@ -56,6 +62,20 @@ class VectorStore:
                 metadatas=metadatas[start:end]
             )
 
+        self.words.add(self.name, ids, documents, metadatas)
+
+    def sync_words(self):
+        """Rehace el índice de palabras si no coincide con Chroma, sin tocar los embeddings."""
+        if self.words.count(self.name) != self.collection.count():
+            stored = self.all_documents()
+            self.words.rebuild(self.name, stored["ids"], stored["documents"], stored["metadatas"])
+
+    def delete_ids(self, ids):
+        for start in range(0, len(ids), BATCH_SIZE):
+            self.collection.delete(ids=ids[start:start + BATCH_SIZE])
+
+        self.words.delete(self.name, ids)
+
     def delete_where_file_path(self, matches) -> int:
         """Borra los documentos cuyo metadata file_path cumple matches(path)."""
         existing = self.collection.get(include=["metadatas"])
@@ -66,9 +86,7 @@ class VectorStore:
             if matches((metadata or {}).get("file_path", ""))
         ]
 
-        for start in range(0, len(ids), BATCH_SIZE):
-            self.collection.delete(ids=ids[start:start + BATCH_SIZE])
-
+        self.delete_ids(ids)
         return len(ids)
 
     def file_hashes(self) -> dict:
