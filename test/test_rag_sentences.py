@@ -75,7 +75,7 @@ def test_una_cita_sin_linea_vale_con_su_archivo():
         ("Se calcula con calcula_pid [control/pid.py:41].", UNKNOWN_NAME),
         ("Se calcula con calculaPid [control/pid.py:41].", UNKNOWN_NAME),
         ("Está en [otro.py] [control/pid.py:41].", UNKNOWN_NAME),
-        ('Se abre en modo "w" [control/pid.py:41].', UNKNOWN_NAME),
+        ('Se abre en modo "w" [control/pid.py:41].', UNKNOWN_FIGURE),
         ("Un ejemplo [control/pid.py:41]:\n```python\ndef otra():\n```", UNKNOWN_NAME),
         ("La ganancia es 3.5 [control/pid.py:41].", UNKNOWN_FIGURE),
         ("Se repite cada 2.5 segundos [control/pid.py:41].", UNKNOWN_FIGURE),
@@ -128,8 +128,8 @@ def test_el_modo_w_sin_cita_no_pasa():
     assert kinds('Para escribir un archivo sin dejarlo a medias, debes abrirlo con el modo "w".', [CLOSE]) == {BAD_TAG}
 
 
-def test_el_modo_w_citando_otra_linea_no_pasa():
-    assert UNKNOWN_NAME in kinds('Debes abrirlo con el modo "w" [core/atomic_write.py:15].', [WRITE])
+def test_el_modo_w_citando_otra_linea_no_pasa_limpio():
+    assert UNKNOWN_FIGURE in kinds('Debes abrirlo con el modo "w" [core/atomic_write.py:15].', [WRITE])
 
 
 def test_el_modo_w_citando_la_linea_que_lo_nombra_si_pasa():
@@ -155,19 +155,81 @@ def test_el_numero_sin_unidad_si_pasa():
     assert kinds("El valor por defecto es 3 [core/reflection.py:35].", [IDLE]) == set()
 
 
-def test_se_quita_la_frase_mala_y_quedan_las_demas():
-    kept, removed = check_draft("La ganancia es 2.5 [control/pid.py:41]. Además es muy estable. Vale 9 [control/pid.py:41].", VERIFIED)
+DRAFT = (
+    "La ganancia es 2.5 [control/pid.py:41]. Además es muy estable. Vale 9 [control/pid.py:41]. "
+    "Lo calcula `calcula_pid` [control/pid.py:41]."
+)
 
-    assert kept == ["La ganancia es 2.5 [control/pid.py:41]."]
-    assert [sentence for sentence, _ in removed] == ["Además es muy estable.", "Vale 9 [control/pid.py:41]."]
+
+def test_solo_se_elimina_un_nombre_que_no_esta_en_sus_lineas():
+    shown, uncited, removed = check_draft(DRAFT, VERIFIED)
+
+    assert shown == [
+        "La ganancia es 2.5 [control/pid.py:41].",
+        "Además es muy estable. (sin cita)",
+        "Vale 9 [control/pid.py:41]. (sin cita)",
+    ]
+    assert [sentence for sentence, _ in uncited] == ["Además es muy estable.", "Vale 9 [control/pid.py:41]."]
+    assert [sentence for sentence, _ in removed] == ["Lo calcula `calcula_pid` [control/pid.py:41]."]
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Sale de una etiqueta rara [69].",
+        "Sale de otra línea [control/pid.py:90].",
+        'Muestra "Guardando resumen" [control/pid.py:41].',
+        "`salida` se define aquí [control/pid.py:41].",
+    ],
+)
+def test_lo_dudoso_se_muestra_marcado(sentence):
+    assert check_draft(sentence, VERIFIED)[0] == [f"{sentence} (sin cita)"]
+
+
+def test_la_marca_de_un_bloque_de_codigo_va_debajo():
+    assert check_draft("Usa esto:\n```\nself.kp = 2.5\n```", VERIFIED)[0] == ["Usa esto:\n```\nself.kp = 2.5\n```\n(sin cita)"]
+
+
+def test_sin_etiqueta_un_nombre_inventado_se_elimina():
+    assert check_draft("Lo calcula `calcula_pid`.", VERIFIED)[0] == []
+    assert check_draft("Lo calcula calcula_pid.", VERIFIED)[0] == []
+
+
+def test_sin_etiqueta_un_nombre_de_las_lineas_verificadas_se_muestra_marcado():
+    assert check_draft("Lo usa `self.error`.", VERIFIED)[0] == ["Lo usa `self.error`. (sin cita)"]
+
+
+def test_con_una_etiqueta_mala_un_nombre_inventado_se_elimina():
+    assert check_draft("Lo calcula `calcula_pid` [control/pid.py:90].", VERIFIED)[0] == []
+
+
+@pytest.mark.parametrize(
+    "tag",
+    ["[README.md:289, 290]", "[README.md:289,290]", "[README.md:1, 289-290]", "`README.md:289, 290`", "[README.md:289–290, 400]"],
+)
+def test_etiquetas_con_varias_lineas(tag):
+    lines = [Quote("README.md", 289, "", "topic_name: chatter"), Quote("README.md", 290, "", "ros_type: x")]
+
+    assert sentence_problems(f"Usa `topic_name` y `ros_type` {tag}.", lines) == []
+
+
+def test_las_varias_lineas_se_cuentan_una_a_una():
+    lines = [Quote("README.md", 289, "", "topic_name: chatter"), Quote("README.md", 300, "", "ros_type: x")]
+
+    assert sentence_problems("Usa `ros_type` [README.md:289, 290].", lines) == [(UNKNOWN_NAME, "ros_type")]
+
+
+def test_una_etiqueta_con_varias_lineas_sigue_a_su_frase():
+    assert draft_sentences("Uno. [a.py:1, 2] Dos.") == ["Uno [a.py:1, 2].", "Dos."]
 
 
 def test_primero_las_lineas_y_despues_el_resumen():
     answer = brain_with(QUOTED, "La ganancia es 2.5 [control/pid.py:41]. Además es muy estable.").process("/buscar qué ganancia")
 
     assert answer.index(prompts.VERIFIED_LINES) < answer.index(prompts.UNVERIFIED_SUMMARY)
-    assert answer.endswith(f"{prompts.UNVERIFIED_SUMMARY}\n\nLa ganancia es 2.5 [control/pid.py:41].")
-    assert "estable" not in answer
+    assert answer.endswith(
+        f"{prompts.UNVERIFIED_SUMMARY}\n\nLa ganancia es 2.5 [control/pid.py:41].\nAdemás es muy estable. (sin cita)"
+    )
 
 
 def test_el_titulo_es_el_pedido():
@@ -183,10 +245,10 @@ def test_sin_frases_validas_por_un_nombre_solo_se_muestran_las_lineas_con_el_avi
     )
 
 
-def test_sin_frases_validas_por_faltar_etiquetas_solo_se_muestran_las_lineas():
+def test_sin_etiquetas_todo_el_resumen_queda_marcado():
     answer = brain_with(QUOTED, "La ganancia del control es bastante alta.").process("/buscar qué ganancia")
 
-    assert answer == f"{prompts.VERIFIED_LINES}\n\ncontrol/pid.py:41 (Pid.salida)\n  self.kp   =   2.5"
+    assert answer.endswith(f"{prompts.UNVERIFIED_SUMMARY}\n\nLa ganancia del control es bastante alta. (sin cita)")
 
 
 def test_una_negativa_con_lineas_sigue_mostrando_los_fragmentos():
@@ -198,7 +260,7 @@ def test_una_negativa_con_lineas_sigue_mostrando_los_fragmentos():
 def test_el_prompt_pide_la_etiqueta_tras_cada_frase():
     prompt = prompts.answer_from_quotes("qué ganancia", "[a.py:1] kp = 2")
 
-    assert "Después de cada frase" in prompt and "Se eliminan las frases sin etiqueta" in prompt
+    assert "Después de cada frase" in prompt and "se marcan como sin cita" in prompt
 
 
 def test_una_respuesta_parcial_conserva_lo_que_tiene_etiqueta():

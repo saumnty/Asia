@@ -161,6 +161,12 @@ def test_las_tres_frases_falsas_se_detectan(question, sentence):
     assert check_rag.forbidden_said(question, SUMMARY + sentence)
 
 
+def test_una_frase_prohibida_con_la_marca_no_cuenta():
+    shown = SUMMARY + f"Se actualiza cada 3 segundos [a.py:1]. {check_rag.prompts.UNCITED}"
+
+    assert not check_rag.forbidden_said("cómo se resume la sesión en segundo plano", shown)
+
+
 def test_una_frase_prohibida_en_las_lineas_no_cuenta():
     shown = f"{check_rag.prompts.VERIFIED_LINES}\n\na.py:1\n  cada 3 segundos"
 

@@ -4,7 +4,7 @@ from pathlib import Path
 from core import prompts
 from core.rag.glossary import expand
 from core.rag.library import Library, clean_translation, is_refusal, named_in_question, needs_translation, without_source
-from core.rag.quotes import UNKNOWN_NAME, best_fragments, check_draft, is_thin, quotes_text, verified_lines, verify_quotes
+from core.rag.quotes import best_fragments, check_draft, is_thin, quotes_text, verified_lines, verify_quotes
 
 # Los mismos que config/defaults.json, por si falta la clave.
 DEFAULT_ANSWER_LIMITS = {
@@ -110,18 +110,15 @@ class ExploreActions:
         if is_refusal(answer) or is_thin(answer):
             return best_fragments(rag_context)
 
-        # Las frases que quedan tienen citas y nombres reales, no significado comprobado.
-        kept, removed = check_draft(answer, quotes)
+        # Las frases que quedan tienen nombres reales, no significado comprobado.
+        shown = check_draft(answer, quotes)[0]
         lines = verified_lines(quotes)
 
-        if kept:
-            summary = "\n".join(kept)
+        if shown:
+            summary = "\n".join(shown)
             return f"{lines}\n\n{prompts.UNVERIFIED_SUMMARY}\n\n{summary}"
 
-        if any(kind == UNKNOWN_NAME for _, problems in removed for kind, _ in problems):
-            return f"{prompts.INVALID_DRAFT}\n\n{lines}"
-
-        return lines
+        return f"{prompts.INVALID_DRAFT}\n\n{lines}"
 
     def translated_question(self, question):
         """La pregunta en inglés si consulta una fuente en ese idioma; si no, vacía.

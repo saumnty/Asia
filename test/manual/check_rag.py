@@ -13,8 +13,8 @@ decidir cuándo decir "no lo encontré".
 
 Punta a punta, con el modelo real y el índice real (data/chroma, solo lectura):
 cuántas de 20 preguntas responde (8 de C:\\Asia, 3 de Bolitabot y 9 de documentación), cuántas citan el archivo correcto en las líneas
-verificadas, cuántas frases de la redacción se eliminan y por qué, si dice una de las tres frases falsas conocidas
-(sale con código 1) y a cuántas de 8 trampas responde. "Con resumen" es que quedó alguna frase. Las trampas pasan
+verificadas, cuántas frases de la redacción quedan limpias, se eliminan o se marcan "(sin cita)" y por qué, si dice sin
+marca una de las tres frases falsas conocidas (sale con código 1) y a cuántas de 8 trampas responde. "Con resumen" es que quedó alguna frase. Las trampas pasan
 el filtro de cobertura pero no tienen respuesta en C:\\Asia: una cita verificada
 prueba que la línea existe, no que responda, así que su respuesta se imprime entera
 para leerla. Mide sobre una copia del índice sin este archivo ni los fragmentos que
@@ -273,8 +273,9 @@ def count_answered(rows) -> str:
 
 def forbidden_said(question, shown) -> bool:
     """True si el resumen dice la frase falsa conocida de esa pregunta."""
-    summary = shown.partition(prompts.UNVERIFIED_SUMMARY)[2]
-    return question in FORBIDDEN and bool(re.search(FORBIDDEN[question], summary, re.IGNORECASE))
+    summary = shown.partition(prompts.UNVERIFIED_SUMMARY)[2].splitlines()
+    unmarked = "\n".join(line for line in summary if not line.endswith(prompts.UNCITED))
+    return question in FORBIDDEN and bool(re.search(FORBIDDEN[question], unmarked, re.IGNORECASE))
 
 
 def answer_row(brain, question, expected=None):
@@ -389,21 +390,22 @@ def end_to_end(runs, glossary_dir):
     explore.verify_quotes = showing_extraction
 
     def showing_removed(answer, quotes):
-        kept, removed = check(answer, quotes)
-        sentences.extend(["queda"] * len(kept))
+        shown, uncited, removed = check(answer, quotes)
+        sentences.extend(["limpia"] * (len(shown) - len(uncited)))
 
-        for sentence, problems in removed:
-            sentences.append(problems[0][0])
-            print(f"    frase eliminada, {problems}: {' '.join(sentence.split())[:200]}", flush=True)
+        for name, group in (("eliminada", removed), ("sin cita", uncited)):
+            for sentence, problems in group:
+                sentences.append(UNKNOWN_NAME if group is removed else problems[0][0])
+                print(f"    frase {name}, {problems}: {' '.join(sentence.split())[:200]}", flush=True)
 
-        return kept, removed
+        return shown, uncited, removed
 
     explore.check_draft = showing_removed
     summary = [
-        "| Corrida | Con resumen | Asia | Bolitabot | Docs | Solo líneas | Sin respuesta directa en docs | Frases eliminadas "
-        "| Por etiqueta | Por nombre | Por dato | Por definición | Frases prohibidas | Cita el archivo "
+        "| Corrida | Con resumen | Asia | Bolitabot | Docs | Solo líneas | Sin respuesta directa en docs | Frases "
+        "| Limpias | Eliminadas | Sin etiqueta | Dato | Definición | Frases prohibidas | Cita el archivo "
         "| Trampas respondidas | Ajenas respondidas | Segundos por pregunta |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     said = 0
 
@@ -441,7 +443,7 @@ def end_to_end(runs, glossary_dir):
         answered = sum(1 for r in rows if r[0] == "respondió")
         only_lines = sum(1 for r in rows + traps + strangers if r[0] in ANSWERED[1:])
         tally = Counter(sentences)
-        reasons = " | ".join(str(tally[kind]) for kind in (BAD_TAG, UNKNOWN_NAME, UNKNOWN_FIGURE, NOT_DEFINED))
+        reasons = " | ".join(str(tally[kind]) for kind in ("limpia", UNKNOWN_NAME, BAD_TAG, UNKNOWN_FIGURE, NOT_DEFINED))
         cited = sum(1 for r in rows if r[1])
         forbidden = sum(forbidden_said(question, row[3]) for (question, _), row in zip(END_TO_END, rows))
         fell = sum(1 for r in traps if r[0] in ANSWERED)
@@ -451,7 +453,7 @@ def end_to_end(runs, glossary_dir):
         refused = sum(1 for r in by_source(rows)[2] if r[0] == "sin respuesta directa")
         summary.append(
             f"| {run} | {answered}/{len(rows)} | {groups}{only_lines} | {refused} "
-            f"| {len(sentences) - tally['queda']}/{len(sentences)} | {reasons} | {forbidden} | {cited}/{len(rows)} "
+            f"| {len(sentences)} | {reasons} | {forbidden} | {cited}/{len(rows)} "
             f"| {fell}/{len(traps)} | {strayed}/{len(strangers)} | {seconds:.0f} |"
         )
         print()

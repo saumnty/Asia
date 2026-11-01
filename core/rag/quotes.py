@@ -17,7 +17,7 @@ from tools.review_findings import clean_quote, locate_quote, squash
 QUOTE = re.compile(r"^[\s*>-]*(?:\[([^\]\n]+)\]\s*:?\s*)?(.+)$", re.MULTILINE)
 FIRST_LINE = re.compile(r":(\d+)(?:-\d+)?$")
 # Lo que la redacción del modelo puede citar o nombrar, para comprobarlo.
-CITED_LINES = re.compile(r"[\[`]([\w./\\-]+\.\w+):(\d+)(?:[-–](\d+))?[\]`]")
+CITED_LINES = re.compile(r"[\[`]([\w./\\-]+\.\w+):(\d+(?:[-–]\d+)?(?:,\s*\d+(?:[-–]\d+)?)*)[\]`]")
 CITED_FILE = re.compile(r"\[([\w./\\-]+\.\w+)\]")
 FENCE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)
 FENCE_BLOCK = re.compile(r"(```[^\n]*\n.*?```)", re.DOTALL)
@@ -42,7 +42,7 @@ CODE_LINE = re.compile(r"\s*(?:import|from|def|class|return|if|for|while)\b|\s*[
 MIN_DRAFT_WORDS = 4
 FALLBACK_FRAGMENTS = 3
 FALLBACK_CHARS = 600
-# Por qué se elimina una frase.
+# Qué le pasa a una frase. Solo UNKNOWN_NAME la elimina; lo demás la deja marcada.
 BAD_TAG = "etiqueta"
 UNKNOWN_NAME = "nombre"
 UNKNOWN_FIGURE = "dato"
@@ -173,13 +173,27 @@ def draft_sentences(answer: str) -> list:
     return sentences
 
 
+def line_ranges(spec: str) -> list:
+    """"289, 290-292" -> [(289, 289), (290, 292)]."""
+    ranges = []
+
+    for part in spec.split(","):
+        first, _, last = part.strip().replace("–", "-").partition("-")
+        ranges.append((int(first), int(last or first)))
+
+    return ranges
+
+
 def cited_lines(sentence: str, quotes: list) -> tuple:
     """(las líneas verificadas que cita la frase, sus etiquetas que no tocan ninguna)."""
     own, unverified = [], []
 
     for match in CITED_LINES.finditer(sentence):
-        path, first, last = match.group(1), int(match.group(2)), int(match.group(3) or match.group(2))
-        found = [quote for quote in quotes if quote.path == path and quote.line and first <= quote.line <= last]
+        ranges = line_ranges(match.group(2))
+        found = [
+            quote for quote in quotes
+            if quote.path == match.group(1) and quote.line and any(first <= quote.line <= last for first, last in ranges)
+        ]
         own += found
 
         if not found:
@@ -206,9 +220,13 @@ def unknown_names(answer: str, context: str) -> list:
     # "os.replace()" nombra lo que el código llama con argumentos.
     unknown = [item.strip() for item in code if squash(item.strip(" .,:;").removesuffix("()")) not in known]
     unknown += [word for word in WORD.findall(BACKTICKED.sub(" ", text)) if is_identifier(word) and word not in words]
-    # Palabra entera: "w" no está en "write".
-    unknown += [item for item in DOUBLE_QUOTED.findall(text) if not re.search(rf"(?<!\w){re.escape(item)}(?!\w)", context)]
     return list(dict.fromkeys(unknown))
+
+
+def unknown_quoted(sentence: str, context: str) -> list:
+    """Lo entrecomillado que no está en context, como palabra entera: "w" no está en "write"."""
+    text = FENCE.sub(" ", without_tags(sentence))
+    return [item for item in DOUBLE_QUOTED.findall(text) if not re.search(rf"(?<!\w){re.escape(item)}(?!\w)", context)]
 
 
 def prose_of(sentence: str) -> str:
@@ -250,33 +268,45 @@ def undefined_names(sentence: str, own: list) -> list:
 
 
 def sentence_problems(sentence: str, quotes: list) -> list:
-    """[(motivo, detalle)] por los que la frase no se muestra. Se comprueba solo contra sus líneas citadas."""
+    """[(motivo, detalle)] de la frase, comprobada contra sus líneas citadas.
+
+    Sin ninguna línea citada, sus nombres se comprueban contra todas las verificadas:
+    no llevar etiqueta no puede ser la forma de colar un nombre inventado.
+    """
     own, unverified = cited_lines(sentence, quotes)
-    problems = [(BAD_TAG, tag) for tag in unverified]
+    known = "\n".join(f"{quote.path} {quote.label} {quote.text}" for quote in own or quotes)
+    problems = [(UNKNOWN_NAME, name) for name in unknown_names(sentence, known)]
+    problems += [(BAD_TAG, tag) for tag in unverified]
 
     if not own:
-        return problems or [(BAD_TAG, "sin etiqueta")]
+        return problems + ([] if unverified else [(BAD_TAG, "sin etiqueta")])
 
-    known = "\n".join(f"{quote.path} {quote.label} {quote.text}" for quote in own)
-    problems += [(UNKNOWN_NAME, name) for name in unknown_names(sentence, known)]
+    problems += [(UNKNOWN_FIGURE, item) for item in unknown_quoted(sentence, known)]
     problems += [(UNKNOWN_FIGURE, figure) for figure in unknown_figures(sentence, own)]
     problems += [(NOT_DEFINED, name) for name in undefined_names(sentence, own)]
     return problems
 
 
+def marked(sentence: str) -> str:
+    return f"{sentence}\n{prompts.UNCITED}" if sentence.endswith("```") else f"{sentence} {prompts.UNCITED}"
+
+
 def check_draft(answer: str, quotes: list) -> tuple:
-    """(frases que se muestran, [(frase eliminada, sus problemas)])."""
-    kept, removed = [], []
+    """(frases que se muestran, [(marcada, problemas)], [(eliminada, problemas)])."""
+    shown, uncited, removed = [], [], []
 
     for sentence in draft_sentences(answer):
         problems = sentence_problems(sentence, quotes)
 
-        if problems:
+        if any(kind == UNKNOWN_NAME for kind, _ in problems):
             removed.append((sentence, problems))
+        elif problems:
+            uncited.append((sentence, problems))
+            shown.append(marked(sentence))
         else:
-            kept.append(sentence)
+            shown.append(sentence)
 
-    return kept, removed
+    return shown, uncited, removed
 
 
 def block_of(run: list) -> str:

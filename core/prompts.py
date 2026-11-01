@@ -20,6 +20,8 @@ INVALID_DRAFT = (
 VERIFIED_LINES = "Líneas verificadas:"
 # Lo que encabeza, debajo de esas líneas, las frases que quedan de la redacción del modelo.
 UNVERIFIED_SUMMARY = "Resumen del modelo (no verificado)"
+# La marca de una frase de ese resumen sin una línea que la respalde.
+UNCITED = "(sin cita)"
 
 
 # --- Reflexión (fase R) ---------------------------------------------------------
@@ -183,7 +185,7 @@ Líneas:
 
 Instrucciones:
 - No agregues nada que no digan las líneas, ni de tu conocimiento general.
-- Después de cada frase, pon entre corchetes la etiqueta de la línea en que se basa, como [archivo:línea]. Se eliminan las frases sin etiqueta.
+- Después de cada frase, pon entre corchetes la etiqueta de la línea en que se basa, como [archivo:línea]. Las frases sin etiqueta se marcan como sin cita.
 - Cada frase solo puede usar los nombres y los números de la línea que cita.
 - Si las líneas responden solo una parte, di qué parte falta.
 - Responde claro y breve.
