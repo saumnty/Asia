@@ -285,6 +285,7 @@ Antes "Wikipedia offline". Va por capas, y cada fuente lleva su etiqueta para po
 - Fuentes: cada una es una colección con nombre y tipo (proyecto, reporte, notas), en `data/biblioteca/fuentes.json`. `/indexar <nombre> [ruta] [tipo]`, `/fuentes` y `/buscar <pregunta>`. Busca en todas, salvo "en <fuente>".
 - Nunca entran `data/`, `memory/`, `logs/` ni `config/settings.json` de Asia, secretos (`.env`, `*.key`, `*.pem`, `id_rsa`...), binarios, archivos de más de 1 MB ni lo que ignore el `.gitignore` de la fuente (`core/rag/exclusions.py`). Antes entraban los modelos de Whisper (83 % de los fragmentos) y `memory/`.
 - Troceado: Python por funciones y métodos con `ast`, `.md` y `.tex` por secciones, el resto por bloques; cada fragmento lleva delante dónde vive. Un hash por archivo reindexa solo lo que cambió.
+- Modelos de Simulink: de un `.slx` (zip con XML) entra el código de los bloques MATLAB Function, como un `.m` con el nombre del bloque de etiqueta y las líneas del bloque (`core/rag/simulink.py`). Sin los estados ni las transiciones de Stateflow, sin formatos viejos (`.mdl`) y con el límite de 1 MB de todo archivo. Probado con un solo modelo real: `controlador_trebol.slx`, de R2025b, un bloque de 85 líneas. Las versiones viejas de MATLAB pueden guardar los charts de otra forma.
 - Búsqueda: embeddings con los prefijos de nomic y BM25 propio con raíces del español (`snowballstemmer`), fusionados por posición (RRF), con 2 fragmentos por archivo como mucho.
 - Respuesta: solo con los fragmentos y citándolos. "Fuentes:" la pone el código, no el modelo. Si la cobertura de la pregunta en los fragmentos no llega a `rag.min_coverage` (0,3), dice "No lo encontré en tus proyectos." sin llamar al modelo. La distancia de los embeddings no sirve para esto (se solapan) y la puntuación de BM25 tampoco (depende del tamaño de la colección).
 
@@ -343,6 +344,7 @@ Pendientes:
 - "Responde" no es "responde bien": una frase real copiada ("Llamadas al modelo que Ctrl+C corta al momento") pasa como respuesta.
 - NINGUNA sale a veces con preguntas válidas, al azar: 2 de 16 en la última medición.
 - "Cómo se cifra la contraseña" y las otras trampas dependen de que el 7B escriba NINGUNA: la cobertura no las separa. Una línea real que no responde pasaría la verificación.
+- El filtro de cobertura rechaza preguntas con respuesta en fuentes pequeñas de código. En Bolitabot (99 fragmentos), "cuánto dura cada tramo del trébol" da "No lo encontré" con el fragmento correcto en 2.º lugar: "cuánto" y "cada" no están en las palabras vacías y, ausentes, pesan mucho (cobertura 0,20). "Punto desplazado" tampoco pasa: el código dice `x_front`, sin esas palabras. Sin tocar `rag.min_coverage`: también sostiene las trampas.
 - Un archivo sin fragmentos (`__init__.py` vacío) no guarda hash y `/indexar` lo cuenta como reindexado cada vez. No embebe nada; solo infla la cifra.
 - El troceado solo no ayuda: sin el tope por archivo, las secciones del ROADMAP acapararon los resultados.
 - BM25 se reconstruye en cada búsqueda con todos los documentos: se resuelve con SQLite FTS5 en la capa 2.
