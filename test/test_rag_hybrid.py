@@ -33,6 +33,17 @@ def test_sin_coincidencias_no_devuelve_nada():
     assert BM25([]).top("tres", 5) == []
 
 
+def test_la_cobertura_no_depende_del_tamano_de_la_coleccion():
+    small = BM25(["kp ganancia", "otra cosa"])
+    large = BM25(["kp ganancia"] + [f"relleno{i} cosa" for i in range(500)])
+
+    assert small.coverage("ganancia", "kp ganancia") == 1.0 == large.coverage("ganancia", "kp ganancia")
+    # "mole" no sale en ningún lado y pesa más que "ganancia".
+    assert 0 < small.coverage("ganancia mole", "kp ganancia") < 0.5
+    assert large.coverage("receta de mole", "kp ganancia") == 0.0
+    assert BM25([]).coverage("de la", "algo") == 0.0
+
+
 def pair(key, file_path="a.py", **values):
     return key, Hit(f"doc {key}", {"file_path": file_path}, **values)
 

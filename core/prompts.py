@@ -7,6 +7,10 @@ antes: cambiar uno es un cambio de comportamiento.
 """
 
 
+# Lo que responde Asia cuando la biblioteca no tiene la respuesta (fase H).
+NOT_FOUND = "No lo encontré en tus proyectos."
+
+
 # --- Reflexión (fase R) ---------------------------------------------------------
 
 def session_summary(session):
@@ -126,7 +130,7 @@ Contenido:
 
 def search_project_rag(project_name, question, rag_context):
     return f"""
-Responde la pregunta del usuario usando únicamente estos fragmentos del proyecto.
+Responde la pregunta del usuario usando únicamente estos fragmentos de sus proyectos.
 
 Proyecto activo:
 {project_name}
@@ -138,9 +142,10 @@ Fragmentos encontrados:
 {rag_context}
 
 Instrucciones:
+- Responde solo con lo que dicen los fragmentos. No agregues nada de tu conocimiento general.
+- Di de dónde sale cada dato, con la cita del fragmento tal como aparece en "Cita".
+- Si los fragmentos no responden la pregunta, responde exactamente: {NOT_FOUND}
 - Responde claro y breve.
-- Menciona los archivos relevantes.
-- Si los fragmentos no alcanzan para responder, dilo.
 """
 
 

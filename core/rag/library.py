@@ -8,13 +8,15 @@ import json
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from pathlib import Path
 
-from core import paths
+from core import paths, prompts
 from core.atomic_write import write_json_atomic
 from core.rag.vector_store import safe_collection_name
 
 KINDS = ("proyecto", "reporte", "notas")
 DEFAULT_KIND = "proyecto"
+CITE_PREFIX = "Cita: "
 
 
 @dataclass
@@ -52,15 +54,40 @@ class Library:
         return source
 
 
+def source_pattern(source) -> str:
+    return rf"\ben\s+(?:la\s+fuente\s+|el\s+proyecto\s+|las\s+notas\s+|el\s+reporte\s+)?{re.escape(source.name)}\b"
+
+
 def named_in_question(question: str, sources: list):
     """La fuente de "en <fuente>" en la pregunta, o None."""
     for source in sorted(sources, key=lambda s: -len(s.name)):
-        pattern = rf"\ben\s+(?:la\s+fuente\s+|el\s+proyecto\s+|las\s+notas\s+|el\s+reporte\s+)?{re.escape(source.name)}\b"
-
-        if re.search(pattern, question, re.IGNORECASE):
+        if re.search(source_pattern(source), question, re.IGNORECASE):
             return source
 
     return None
+
+
+def without_source(question: str, source) -> str:
+    """La pregunta sin "en <fuente>": el nombre de la fuente no es lo que se busca."""
+    return " ".join(re.sub(source_pattern(source), " ", question, flags=re.IGNORECASE).split())
+
+
+def sources_footer(context: str, answer: str) -> str:
+    """La lista "Fuentes:" de una respuesta, sacada de los fragmentos y no del modelo.
+
+    Solo los archivos que la respuesta menciona; si no menciona ninguno, todos los
+    consultados. Así una cita nunca es inventada. "" si la respuesta no usa fragmentos.
+    """
+    cites = list(dict.fromkeys(line.removeprefix(CITE_PREFIX) for line in context.splitlines() if line.startswith(CITE_PREFIX)))
+
+    if not cites or prompts.NOT_FOUND.lower().rstrip(".") in answer.lower():
+        return ""
+
+    def mentioned(cite):
+        return Path(cite.split(",")[0]).name.lower() in answer.lower()
+
+    used = [cite for cite in cites if mentioned(cite)] or cites
+    return "\n\nFuentes:\n" + "\n".join(f"- {cite}" for cite in used)
 
 
 def citation(metadata: dict) -> str:

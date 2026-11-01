@@ -3,10 +3,11 @@ import pytest
 
 from core.actions.library import USAGE, parse_source
 from core.commands import COMMANDS, options_text
+from core.prompts import NOT_FOUND
 from core.provenance import RAG, TOOL_LABELS
 from core.rag.chunking import chunk_text
 from core.rag.indexer import ProjectIndexer
-from core.rag.library import Library, Source, citation, named_in_question
+from core.rag.library import Library, Source, citation, named_in_question, without_source
 from core.rag.retriever import search_collections
 from test_confidencial import make_brain
 from test_rag_index import embeddings  # noqa: F401
@@ -159,18 +160,23 @@ def test_busca_en_todas_las_fuentes_y_dice_de_donde_viene(tmp_path, embeddings, 
         lambda question, collections, n_results: search_collections(question, collections, n_results, folder),
     )
 
-    everywhere = RagTool().search_project("qué hay", "asia")
-    only_one = RagTool().search_project("qué hay en Dos", "asia")
+    everywhere = RagTool().search_project("aaaa bbbb", "asia")
+    only_one = RagTool().search_project("bbbb en Dos", "asia")
 
     assert "Fuente: Uno (proyecto)" in everywhere and "Fuente: Dos (proyecto)" in everywhere
     assert "Cita: a.py, línea 1" in everywhere
     assert "Fuente: Dos (proyecto)" in only_one and "Fuente: Uno" not in only_one
 
 
+def test_el_nombre_de_la_fuente_no_se_busca():
+    assert without_source("cómo funciona el PID en Bolitabot", source("Bolitabot")) == "cómo funciona el PID"
+    assert without_source("qué dice en la fuente Notas sobre PID", source("Notas")) == "qué dice sobre PID"
+
+
 def test_sin_resultados_no_inventa(monkeypatch):
     monkeypatch.setattr("tools.rag_tool.search_collections", lambda *a, **k: [])
 
-    assert "No encontré" in RagTool().search_project("algo", "asia")
+    assert RagTool().search_project("algo", "asia") == NOT_FOUND
 
 
 def test_la_busqueda_lleva_la_etiqueta_rag():

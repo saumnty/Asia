@@ -82,6 +82,10 @@
         "min_speech_ms": 96
     },
 
+    "rag": {
+        "min_coverage": 0.3
+    },
+
     "reflection": {
         "summary_timeout_s": 30,
         "summary_idle_s": 3,

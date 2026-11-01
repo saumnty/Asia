@@ -1,6 +1,11 @@
+from config.settings_manager import SettingsManager
+from core.prompts import NOT_FOUND
 from core.rag.indexer import ProjectIndexer, unload_chat_models
-from core.rag.library import DEFAULT_KIND, Library, citation, named_in_question
-from core.rag.retriever import search_collections
+from core.rag.library import CITE_PREFIX, DEFAULT_KIND, Library, citation, named_in_question, without_source
+from core.rag.retriever import relevant, search_collections
+
+# El mismo que rag.min_coverage en config/defaults.json, por si falta la clave.
+DEFAULT_MIN_COVERAGE = 0.3
 
 
 class RagTool:
@@ -15,10 +20,13 @@ class RagTool:
         named = named_in_question(question, sources)
         collections = [named.collection] if named else [s.collection for s in sources] or [project_name]
 
-        hits = search_collections(question, collections, n_results=n_results)
+        query = without_source(question, named) if named else question
+        hits = search_collections(query, collections, n_results=n_results)
 
-        if not hits:
-            return "No encontré información relevante en tus proyectos."
+        limits = SettingsManager().get("rag") or {}
+
+        if not relevant(hits, limits.get("min_coverage", DEFAULT_MIN_COVERAGE)):
+            return NOT_FOUND
 
         response = ""
 
@@ -28,7 +36,7 @@ class RagTool:
 
             response += f"\n--- Fragmento {i} ---\n"
             response += f"Fuente: {source} ({kind})\n"
-            response += f"Cita: {citation(hit.metadata)}\n"
+            response += f"{CITE_PREFIX}{citation(hit.metadata)}\n"
             response += f"Contenido:\n{hit.document.strip()[:1200]}\n"
 
         return response

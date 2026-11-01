@@ -25,6 +25,17 @@ class Hit:
     score: float = 0.0
     distance: float = None
     keyword_score: float = 0.0
+    coverage: float = 0.0
+
+
+def relevant(hits: list, min_coverage: float) -> bool:
+    """False si la pregunta no tiene que ver con lo encontrado.
+
+    Las distancias de los embeddings no lo distinguen: siempre hay un fragmento
+    "parecido". Lo que separa es cuánto de la pregunta está en algún fragmento
+    (en check_rag.py, hasta 0,16 sin respuesta y desde 0,41 con ella).
+    """
+    return any(hit.coverage >= min_coverage for hit in hits)
 
 
 def vector_hits(store, query_embedding) -> list:
@@ -73,9 +84,14 @@ def search_collections(question: str, collections: list, n_results=5, persist_di
         metadatas += stored["metadatas"]
 
     vector = sorted(vector, key=lambda pair: pair[1].distance)[:CANDIDATES]
+    words = BM25(documents)
     keyword = [
         (ids[i], Hit(documents[i], metadatas[i] or {}, keyword_score=score))
-        for i, score in BM25(documents).top(question, CANDIDATES)
+        for i, score in words.top(question, CANDIDATES)
     ]
+    hits = merge(vector, keyword, n_results)
 
-    return merge(vector, keyword, n_results)
+    for hit in hits:
+        hit.coverage = words.coverage(question, hit.document)
+
+    return hits

@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from core import prompts
+from core.rag.library import sources_footer
 
 # Los mismos que config/defaults.json, por si falta la clave.
 DEFAULT_ANSWER_LIMITS = {
@@ -68,6 +69,12 @@ class ExploreActions:
         question = params.get("question", text)
         project_name = self.active_project()
 
+        if not question.strip():
+            return "Escribe la pregunta: /buscar <pregunta>."
+
+        # También por "/buscar", que no pasa por el IntentEngine.
+        self.last_action = "search_project_rag"
+
         rag_context = self.tool_registry.execute(
             "search_project_rag",
             question=question,
@@ -75,9 +82,14 @@ class ExploreActions:
             n_results=5
         )
 
-        return self.provider_router.ask(
+        # Sin nada relevante, ni se llama al modelo: no hay de dónde responder.
+        if rag_context == prompts.NOT_FOUND:
+            return prompts.NOT_FOUND
+
+        answer = self.provider_router.ask(
             prompts.search_project_rag(project_name, question, rag_context)
         )
+        return answer + sources_footer(rag_context, answer)
 
     def handle_explain_file(self, text, params):
         file_path = params.get("file_path")

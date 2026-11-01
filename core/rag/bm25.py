@@ -60,6 +60,20 @@ class BM25:
 
         return total
 
+    def coverage(self, query: str, document: str) -> float:
+        """Qué parte de la pregunta está en document, de 0 a 1, pesando las palabras raras.
+
+        No depende del tamaño de la colección, a diferencia de la puntuación de BM25.
+        """
+        tokens = set(tokenize(query))
+        total = sum(self.idf(token) for token in tokens)
+
+        if not total:
+            return 0.0
+
+        found = tokens & set(tokenize(document))
+        return sum(self.idf(token) for token in found) / total
+
     def top(self, query: str, limit: int) -> list:
         """[(índice, puntuación)] de los documentos con alguna palabra de query, del mejor al peor."""
         tokens = list(set(tokenize(query)))
