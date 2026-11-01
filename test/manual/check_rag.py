@@ -16,7 +16,9 @@ cuántas de 8 preguntas responde, cuántas citan el archivo correcto en "Fuentes
 que sale de líneas verificadas, y a cuántas de 4 trampas responde. Las trampas pasan
 el filtro de cobertura pero no tienen respuesta en C:\\Asia: una cita verificada
 prueba que la línea existe, no que responda, así que su respuesta se imprime entera
-para leerla. Cada corrida tarda minutos en CPU.
+para leerla. Mide sobre una copia del índice sin este archivo ni los fragmentos que
+contengan una trampa: si no, el modelo podría "citar" la pregunta misma. Cada corrida
+tarda minutos en CPU.
 
     .venv\\Scripts\\python.exe test\\manual\\check_rag.py --punta-a-punta 2
 """
@@ -33,6 +35,7 @@ sys.path.insert(0, str(ROOT))
 
 from core import prompts
 from core.actions import explore
+from core.rag import vector_store
 from core.rag.indexer import ProjectIndexer, unload_chat_models
 from core.rag.retriever import relevant, search_collections
 from tools.rag_tool import DEFAULT_MIN_COVERAGE
@@ -167,6 +170,23 @@ def answer_row(brain, question, expected=None):
     return "respondió", bool(expected) and Path(expected).name.lower() in sources, seconds, shown
 
 
+def clean_copy(folder):
+    """Copia data/chroma en folder sin los fragmentos que traen las preguntas, y busca ahí."""
+    shutil.copytree(vector_store.CHROMA_DIR, folder)
+    store = vector_store.VectorStore(persist_dir=folder, collection_name=COLLECTION)
+    indexed = store.all_documents()
+    questions = [question.lower() for question in TRAPS]
+    this_file = relative(__file__)
+    ids = [
+        doc_id
+        for doc_id, document, metadata in zip(indexed["ids"], indexed["documents"], indexed["metadatas"])
+        if metadata.get("relative_path") == this_file or any(q in document.lower() for q in questions)
+    ]
+    store.collection.delete(ids=ids)
+    vector_store.CHROMA_DIR = folder
+    print(f"Índice de la medición: {store.collection.count()} fragmentos, {len(ids)} fuera.", flush=True)
+
+
 def end_to_end(runs):
     from core import paths
     from core.brain import Brain
@@ -222,7 +242,13 @@ def main():
         explore.RAG_FRAGMENTS = args.fragmentos
 
     if args.punta_a_punta:
-        return end_to_end(args.punta_a_punta)
+        scratch = Path(tempfile.mkdtemp(prefix="asia_rag_"))
+
+        try:
+            clean_copy(scratch / "chroma")
+            return end_to_end(args.punta_a_punta)
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
 
     folder = Path(args.indice) if args.indice else Path(tempfile.mkdtemp(prefix="asia_rag_"))
 
