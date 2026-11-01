@@ -114,14 +114,14 @@ def is_thin(answer: str) -> bool:
 
 
 def unverified_tags(answer: str, quotes: list) -> list:
-    """Las etiquetas [archivo:líneas] de la redacción que no están entre las verificadas."""
+    """Las etiquetas [archivo:líneas] de la redacción cuyo rango no toca ninguna línea verificada."""
     verified = {(quote.path, quote.line) for quote in quotes}
     unverified = []
 
     for match in CITED_LINES.finditer(answer):
         path, first, last = match.group(1), int(match.group(2)), int(match.group(3) or match.group(2))
 
-        if any((path, line) not in verified for line in range(first, last + 1)):
+        if not any((path, line) in verified for line in range(first, last + 1)):
             unverified.append(match.group(0))
 
     return unverified

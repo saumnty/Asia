@@ -277,7 +277,7 @@ def test_una_redaccion_con_nombres_reales_vale(answer):
     "answer, problem",
     [
         ("La ganancia es 2 [control/pid.py:50].", "[control/pid.py:50]"),
-        ("La ganancia es 2 [control/pid.py:41-43].", "[control/pid.py:41-43]"),
+        ("La ganancia es 2 [control/pid.py:43-50].", "[control/pid.py:43-50]"),
         ("La ganancia es 2 [otro.py:41].", "[otro.py:41]"),
         ("Está en [otro.py].", "otro.py"),
         ("Se calcula con `calcula_pid()`.", "calcula_pid()"),
@@ -289,6 +289,18 @@ def test_una_redaccion_con_nombres_reales_vale(answer):
 )
 def test_una_redaccion_con_nombres_inventados_no_vale(answer, problem):
     assert problem in draft_problems(answer, VERIFIED, CONTEXT)
+
+
+def test_un_rango_vale_si_toca_una_linea_verificada():
+    # Medido con el 7B: [ollama_models.py:135-141] con líneas sueltas verificadas dentro.
+    assert draft_problems("La ganancia es 2 [control/pid.py:30-41].", VERIFIED, CONTEXT) == []
+    assert draft_problems("La ganancia es 2 [control/pid.py:42-55].", VERIFIED, CONTEXT) == []
+
+
+def test_un_rango_que_solapa_no_salva_un_nombre_inventado():
+    problems = draft_problems("Lo hace `calcula_pid()` [control/pid.py:41-50].", VERIFIED, CONTEXT)
+
+    assert problems == ["calcula_pid()"]
 
 
 def test_una_cita_de_un_fragmento_que_no_se_verifico_no_vale():
