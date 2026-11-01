@@ -90,8 +90,8 @@ class ExploreActions:
         )
 
         # Sin nada relevante, ni se llama al modelo: no hay de dónde responder.
-        if rag_context == prompts.NOT_FOUND:
-            return prompts.NOT_FOUND
+        if rag_context == prompts.NOT_FOUND or rag_context.startswith(prompts.NO_DIRECT_ANSWER):
+            return rag_context
 
         extracted = self.provider_router.ask(prompts.extract_quotes(question, rag_context))
         quotes = verify_quotes(extracted, rag_context)

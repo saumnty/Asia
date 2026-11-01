@@ -2,6 +2,7 @@ from config.settings_manager import SettingsManager
 from core.prompts import NOT_FOUND
 from core.rag.indexer import ProjectIndexer, unload_chat_models
 from core.rag.library import DEFAULT_KIND, ORIGIN_PREFIX, Library, fragment_header, named_in_question, without_source
+from core.rag.quotes import best_fragments
 from core.rag.retriever import relevant, search_collections
 
 # Los mismos que rag en config/defaults.json, por si falta la clave.
@@ -28,10 +29,6 @@ class RagTool:
         limits = SettingsManager().get("rag") or {}
 
         coverage = limits.get("min_coverage", DEFAULT_MIN_COVERAGE)
-
-        if not relevant(hits, coverage, limits.get("max_distance", DEFAULT_MAX_DISTANCE)):
-            return NOT_FOUND
-
         response = ""
 
         for hit in hits:
@@ -46,7 +43,12 @@ class RagTool:
 
             response += f"Contenido:\n{hit.document.strip()[:1200]}\n"
 
-        return response
+        if relevant(hits, coverage, limits.get("max_distance", DEFAULT_MAX_DISTANCE)):
+            return response
+
+        # Quien nombra la fuente sabe que el tema está ahí: la distancia mide mal el
+        # español contra el inglés. Se enseña lo encontrado, sin pasar por el modelo.
+        return best_fragments(response) if named and hits else NOT_FOUND
 
     def index_project(
         self,

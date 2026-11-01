@@ -4,7 +4,7 @@ import pytest
 from core import prompts
 from core.commands import COMMANDS, options_text
 from core.prompts import NOT_FOUND
-from core.rag.library import is_refusal
+from core.rag.library import Library, is_refusal
 from core.rag.quotes import Quote, best_fragments, draft_problems, is_thin, verified_lines, verify_quotes
 from core.rag.retriever import Hit, relevant
 from test_confidencial import make_brain
@@ -461,3 +461,39 @@ def test_el_umbral_viene_de_config(monkeypatch):
     monkeypatch.setattr("tools.rag_tool.SettingsManager", lambda: {"rag": {"min_coverage": 0.05}})
 
     assert RagTool().search_project("receta de mole", "asia") != NOT_FOUND
+
+
+FAR = Hit("a.rst\nTexto lejano.", {"relative_path": "a.rst", "source": "ros2"}, coverage=0.0, distance=500.0)
+
+
+def filter_rejects(monkeypatch, hits):
+    Library().save("ros2", "documentacion", "C:/docs", 10)
+    monkeypatch.setattr("tools.rag_tool.search_collections", lambda *a, **k: hits)
+
+
+def test_si_se_nombra_la_fuente_y_el_filtro_rechaza_muestra_los_fragmentos(monkeypatch):
+    filter_rejects(monkeypatch, [FAR])
+
+    shown = RagTool().search_project("qué políticas hay en ros2", "asia")
+
+    assert shown.startswith(prompts.NO_DIRECT_ANSWER) and "Texto lejano." in shown
+
+
+def test_sin_fuente_nombrada_el_filtro_sigue_negando(monkeypatch):
+    filter_rejects(monkeypatch, [FAR])
+
+    assert RagTool().search_project("qué políticas hay", "asia") == NOT_FOUND
+
+
+def test_con_la_fuente_nombrada_y_sin_nada_encontrado_niega(monkeypatch):
+    filter_rejects(monkeypatch, [])
+
+    assert RagTool().search_project("qué políticas hay en ros2", "asia") == NOT_FOUND
+
+
+def test_los_fragmentos_de_una_fuente_nombrada_no_pasan_por_el_modelo():
+    rejected = f"{prompts.NO_DIRECT_ANSWER}\n\n[a.rst] Texto lejano."
+    brain = brain_with(context=rejected)
+
+    assert brain.process("/buscar qué políticas hay en ros2") == rejected
+    assert brain.provider_router.prompts == []
