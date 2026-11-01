@@ -30,7 +30,9 @@ def test_una_pregunta_no_pesa_por_sus_interrogativos():
     # Medido en Bolitabot: "cuánto" y "cada", ausentes, dejaban la cobertura en 0,20.
     words = BM25(["T_v tramo trebol tiempos", "otra cosa", "una mas"])
 
-    assert words.coverage("cuánto dura cada tramo del trébol", "T_v tramo trebol tiempos") > 0.5
+    document = "T_v tramo trebol tiempos"
+
+    assert words.coverage("cuánto dura cada tramo del trébol", document) == words.coverage("dura tramo trébol", document)
 
 
 def test_todo_sigue_siendo_buscable():
