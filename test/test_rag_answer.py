@@ -4,7 +4,7 @@ import pytest
 from core import prompts
 from core.commands import COMMANDS, options_text
 from core.prompts import NOT_FOUND
-from core.rag.library import sources_footer
+from core.rag.library import is_refusal, sources_footer
 from core.rag.retriever import Hit, relevant
 from test_confidencial import make_brain
 from tools.rag_tool import RagTool
@@ -131,6 +131,35 @@ def test_sin_nada_relevante_no_llama_al_modelo():
 @pytest.mark.parametrize("answer", ["No lo encontré en tus proyectos.", "no lo encontré en tus proyectos"])
 def test_si_el_modelo_no_lo_encuentra_no_hay_fuentes(answer):
     assert sources_footer(CONTEXT, answer) == ""
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "No lo encontré en tus proyectos.",
+        "no lo encontre.",
+        "Lo siento, no encontré esa información.",
+        "No hay información sobre eso en los fragmentos.",
+        "Los fragmentos proporcionados no responden la pregunta.",
+        "No puedo responder con estos fragmentos.",
+    ],
+)
+def test_negativas(answer):
+    assert is_refusal(answer)
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "La ganancia es 2 [control/pid.py:40-55].",
+        "No encontré el valor de ki [control/pid.py:40-55].",
+        "Está kp, pero no se dice cuánto vale ki.",
+        "Sin Ctrl+C no se corta nada; el hilo sigue. " * 10,
+        "Se guarda si no hay información nueva, cada 3 s, en data/reflexion. " * 6,
+    ],
+)
+def test_no_son_negativas(answer):
+    assert not is_refusal(answer)
 
 
 def test_buscar_sin_pregunta():

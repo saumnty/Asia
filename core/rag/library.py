@@ -12,12 +12,21 @@ from pathlib import Path
 
 from core import paths, prompts
 from core.atomic_write import write_json_atomic
+from core.rag.bm25 import without_accents
 from core.rag.vector_store import safe_collection_name
 
 KINDS = ("proyecto", "reporte", "notas")
 DEFAULT_KIND = "proyecto"
 FRAGMENT_HEADER = re.compile(r"^--- \[(.+?)\](?: (.+))? ---$", re.MULTILINE)
 LINES = re.compile(r":[\d-]+$")
+REFUSAL = re.compile(
+    r"\bno (lo |la |se )?(encontr|encuentr|hay informacion|tengo informacion|dispongo|puedo (responder|determinar))"
+    r"|fragmentos( \w+)? no (responden|contienen|mencionan|incluyen|dicen|hablan|tienen)"
+)
+# Con esto ya hay algo de contenido: es una respuesta parcial.
+PARTIAL = re.compile(r"\[[^\]]+:\d|\bpero\b|\bsin embargo\b")
+REFUSAL_MAX_CHARS = 300
+REFUSAL_OPENING = 150
 
 
 @dataclass
@@ -71,6 +80,16 @@ def named_in_question(question: str, sources: list):
 def without_source(question: str, source) -> str:
     """La pregunta sin "en <fuente>": el nombre de la fuente no es lo que se busca."""
     return " ".join(re.sub(source_pattern(source), " ", question, flags=re.IGNORECASE).split())
+
+
+def is_refusal(answer: str) -> bool:
+    """True si la respuesta entera es una negativa, no si le falta una parte."""
+    text = without_accents(answer.strip().lower())
+
+    if len(text) > REFUSAL_MAX_CHARS or PARTIAL.search(text):
+        return False
+
+    return bool(REFUSAL.search(text[:REFUSAL_OPENING]))
 
 
 def sources_footer(context: str, answer: str) -> str:

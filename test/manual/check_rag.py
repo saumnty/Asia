@@ -10,6 +10,13 @@ nombre exacto. Usa nomic-embed-text; descarga antes los demás modelos.
 
 También mira las preguntas que no tienen respuesta en C:\\Asia: lo que ayuda a
 decidir cuándo decir "no lo encontré".
+
+Punta a punta, con el modelo real y el índice real (data/chroma, solo lectura):
+cuántas de 8 preguntas responde sin negarse y cuántas citan el archivo correcto.
+Se mide sobre el texto del modelo, no sobre lo que se muestra: "Fuentes:" y lo que
+ponga el código no cuentan. Cada corrida tarda minutos en CPU.
+
+    .venv\\Scripts\\python.exe test\\manual\\check_rag.py --punta-a-punta 2
 """
 import argparse
 import shutil
@@ -23,6 +30,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from core.rag.indexer import ProjectIndexer, unload_chat_models
+from core.rag.library import is_refusal
 from core.rag.retriever import relevant, search_collections
 from tools.rag_tool import DEFAULT_MIN_COVERAGE
 
@@ -61,6 +69,20 @@ UNANSWERABLE = [
     "qué dice el contrato de arrendamiento del departamento",
     "receta de mole poblano",
     "cuántos goles metió Maradona en el mundial de 1986",
+]
+
+
+# (pregunta, archivo correcto). Salen en el top 5 de la búsqueda: lo que se mide
+# aquí es al modelo, no a la búsqueda.
+END_TO_END = [
+    ("cómo se escribe un archivo sin dejarlo a medias", "core/atomic_write.py"),
+    ("qué pasa si Ctrl+C llega mientras se espera al modelo", "core/interruptible.py"),
+    ("cómo se filtran secretos antes de enviar a un proveedor externo", "core/secrets_filter.py"),
+    ("cómo se resume la sesión en segundo plano", "core/reflection.py"),
+    ("cómo se guardan los pendientes del usuario", "core/tasks.py"),
+    ("cómo vuelvo a jarvis.bat si quito el ejecutable", "README.md"),
+    ("drop_client", "providers/ollama_models.py"),
+    ("SentenceSplitter", "core/voice/reading.py"),
 ]
 
 
@@ -117,10 +139,66 @@ def table(rows) -> str:
     return "\n".join(lines)
 
 
+def answer_row(brain, spoken, question, expected):
+    """(estado, citó el archivo, segundos) de una pregunta con el modelo real."""
+    spoken.clear()
+    start = time.perf_counter()
+    brain.process(f"/buscar {question}")
+    seconds = time.perf_counter() - start
+
+    if not spoken:
+        return "el código negó", False, seconds, ""
+
+    answer = spoken[-1]
+    state = "negó" if is_refusal(answer) else "respondió"
+    return state, Path(expected).name.lower() in answer.lower(), seconds, answer
+
+
+def end_to_end(runs):
+    from core import paths
+    from core.brain import Brain
+    from core.session import Session
+
+    Session.set_paths(project_root=paths.PROJECT_ROOT, user_cwd=ROOT)
+    brain = Brain()
+    spoken = []
+    ask = brain.provider_router.ask
+
+    def recording(prompt, **options):
+        spoken.append(ask(prompt, **options))
+        return spoken[-1]
+
+    brain.provider_router.ask = recording
+    summary = ["| Corrida | Responde | Cita el archivo | Segundos por pregunta |", "|---|---|---|---|"]
+
+    for run in range(1, runs + 1):
+        rows = []
+
+        for question, expected in END_TO_END:
+            row = answer_row(brain, spoken, question, expected)
+            rows.append(row)
+            state, cited, seconds, answer = row
+            opening = " ".join(answer.split())[:90]
+            print(f"[{run}] {state}, {'cita' if cited else 'no cita'}, {seconds:.0f} s: {question[:45]} -> {opening}", flush=True)
+
+        answered = sum(1 for r in rows if r[0] == "respondió")
+        cited = sum(1 for r in rows if r[1])
+        seconds = sum(r[2] for r in rows) / len(rows)
+        summary.append(f"| {run} | {answered}/{len(rows)} | {cited}/{len(rows)} | {seconds:.0f} |")
+
+    print("\n" + "\n".join(summary))
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--indice", help="carpeta del índice: se conserva y solo se reindexa lo que cambió")
+    parser.add_argument("--punta-a-punta", type=int, metavar="CORRIDAS", help="mide las respuestas del modelo real")
     args = parser.parse_args()
+
+    if args.punta_a_punta:
+        return end_to_end(args.punta_a_punta)
+
     folder = Path(args.indice) if args.indice else Path(tempfile.mkdtemp(prefix="asia_rag_"))
 
     try:
