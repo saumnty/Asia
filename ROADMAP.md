@@ -313,7 +313,7 @@ Aciertos con `test/manual/check_rag.py` (20 preguntas sobre C:\Asia, archivo cor
 
 Se quedan 5 fragmentos: con 3 el archivo correcto queda fuera en 4 de las 20 preguntas de la búsqueda, y con 5 en 1.
 
-Ese prompt inventaba: en 4 preguntas trampa (pasan el filtro, sin respuesta en C:\Asia), 5 de 8 respuestas afirmaban algo falso con cita real. Por eso la respuesta va en dos pasos (`core/rag/quotes.py`): el modelo copia las líneas que responden o escribe NINGUNA; el código comprueba que existan con `locate_quote`, el de la revisión de código; el modelo responde solo con ellas y "Fuentes:" sale de ellas, con la línea real. Sin líneas verificadas: "No encontré una respuesta directa. Esto es lo más relevante:" con los 3 mejores fragmentos. La cobertura sigue decidiendo "No lo encontré".
+Ese prompt inventaba: en 4 preguntas trampa (pasan el filtro, sin respuesta en C:\Asia), 5 de 8 respuestas afirmaban algo falso con cita real. Por eso la respuesta va en dos pasos (`core/rag/quotes.py`): el modelo copia las líneas que responden o escribe NINGUNA; el código comprueba que existan con `locate_quote`, el de la revisión de código; el modelo responde solo con ellas y debajo van siempre las líneas verificadas, por archivo y juntando las seguidas, con el texto del archivo. Sin líneas verificadas: "No encontré una respuesta directa. Esto es lo más relevante:" con los 3 mejores fragmentos. La cobertura sigue decidiendo "No lo encontré".
 
 | Citas verificadas | Corrida | Responde | Cita el archivo | Trampas respondidas | s/pregunta |
 |---|---|---|---|---|---|
@@ -324,13 +324,24 @@ Ese prompt inventaba: en 4 preguntas trampa (pasan el filtro, sin respuesta en C
 
 Sobre una copia del índice sin `check_rag.py` ni los fragmentos con las trampas: si no, el modelo podría "citar" la pregunta misma.
 
+La redacción también se comprueba: una etiqueta que no esté entre las verificadas, o un nombre de código que no aparezca en los fragmentos (entre comillas invertidas, en un bloque, snake_case o camelCase), la invalida y solo se muestran las líneas, con un aviso. Si no llega a una frase o es solo una línea de código, se trata como NINGUNA.
+
+| Redacción comprobada | Corrida | Responde | Inválidas | Cita el archivo | Trampas respondidas | s/pregunta |
+|---|---|---|---|---|---|---|
+| Primera regla | 1 | 4/8 | 2 | 4/8 | 0/4 | 76 |
+| | 2 | 6/8 | 0 | 6/8 | 0/4 | 31 |
+| Sin falsas alarmas | 1 | 8/8 | 0 | 8/8 | 0/4 | 50 |
+| | 2 | 6/8 | 0 | 5/8 | 0/4 | 39 |
+
+Las 2 inválidas de la primera regla eran falsas alarmas (`os.replace()` y PowerShell). Ninguna corrida con el 7B ha cazado aún un nombre inventado: eso solo está probado en pytest.
+
 Tiempos en CPU, solo como referencia (repetir con la GPU; no se ajustó nada por ellos): índice completo de 994 fragmentos, 423 s; incremental de 6 archivos, 29 s; consulta, 2,5 s, y `/buscar` entero, 45–110 s.
 
 Pendientes:
 - Medir con la GPU si `nomic-embed-text` junto al 7B le quita VRAM (389 MB en CPU); hoy conviven para no recargar en cada pregunta.
-- La respuesta final no se verifica: las citas sí, pero el segundo paso del modelo puede añadir de su cuenta. Con líneas reales de `core/atomic_write.py`, inventó una función y citó líneas que no le dieron.
-- "Responde" no es "responde bien": a veces copia una línea inútil (`import tempfile`) y esa es la respuesta.
-- "Fuentes:" lista una entrada por línea citada; con muchas citas son 13 renglones. Juntar las seguidas.
+- La redacción no se comprueba frase a frase, solo sus nombres y citas: con nombres reales puede decir algo falso (dijo que `drop_client` llama a `cancel`, y es al revés).
+- "Responde" no es "responde bien": una frase real copiada ("Llamadas al modelo que Ctrl+C corta al momento") pasa como respuesta.
+- NINGUNA sale a veces con preguntas válidas, al azar: 2 de 16 en la última medición.
 - "Cómo se cifra la contraseña" y las otras trampas dependen de que el 7B escriba NINGUNA: la cobertura no las separa. Una línea real que no responde pasaría la verificación.
 - Un archivo sin fragmentos (`__init__.py` vacío) no guarda hash y `/indexar` lo cuenta como reindexado cada vez. No embebe nada; solo infla la cifra.
 - El troceado solo no ayuda: sin el tope por archivo, las secciones del ROADMAP acapararon los resultados.
