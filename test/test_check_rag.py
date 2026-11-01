@@ -144,3 +144,41 @@ def test_sus_temporales_llevan_el_prefijo_que_se_barre(tmp_path, monkeypatch):
     folder = check_rag.temp_folder()
 
     assert folder.parent == tmp_path and folder.name.startswith(check_rag.TEMP_PREFIX)
+
+
+SUMMARY = f"{check_rag.prompts.VERIFIED_LINES}\n\na.py:1\n  x\n\n{check_rag.prompts.UNVERIFIED_SUMMARY}\n\n"
+
+
+@pytest.mark.parametrize(
+    "question, sentence",
+    [
+        ("cómo se escribe un archivo sin dejarlo a medias", 'Debes abrirlo con el modo "w" [a.py:1].'),
+        ("drop_client", "La función se define en `providers/ollama_provider.py` [a.py:1]."),
+        ("cómo se resume la sesión en segundo plano", "Se actualiza cada 3 segundos [a.py:1]."),
+    ],
+)
+def test_las_tres_frases_falsas_se_detectan(question, sentence):
+    assert check_rag.forbidden_said(question, SUMMARY + sentence)
+
+
+def test_una_frase_prohibida_en_las_lineas_no_cuenta():
+    shown = f"{check_rag.prompts.VERIFIED_LINES}\n\na.py:1\n  cada 3 segundos"
+
+    assert not check_rag.forbidden_said("cómo se resume la sesión en segundo plano", shown)
+
+
+@pytest.mark.parametrize(
+    "shown, state",
+    [
+        (SUMMARY + "Una frase [a.py:1].", "respondió"),
+        (f"{check_rag.prompts.VERIFIED_LINES}\n\na.py:1\n  x", "solo líneas"),
+        (f"{check_rag.prompts.INVALID_DRAFT}\n\n{check_rag.prompts.VERIFIED_LINES}\n\na.py:1\n  x", "redacción inválida"),
+    ],
+)
+def test_estado_de_una_respuesta(shown, state):
+    class Brain:
+        def process(self, text):
+            return shown
+
+    assert check_rag.answer_row(Brain(), "q", "a.py")[0] == state
+    assert check_rag.answer_row(Brain(), "q", "a.py")[1]

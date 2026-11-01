@@ -13,7 +13,8 @@ decidir cuándo decir "no lo encontré".
 
 Punta a punta, con el modelo real y el índice real (data/chroma, solo lectura):
 cuántas de 20 preguntas responde (8 de C:\\Asia, 3 de Bolitabot y 9 de documentación), cuántas citan el archivo correcto en las líneas
-verificadas, cuántas redacciones se invalidan por nombres o citas que no existen, y a cuántas de 4 trampas responde. Las trampas pasan
+verificadas, cuántas frases de la redacción se eliminan y por qué, si dice una de las tres frases falsas conocidas
+(sale con código 1) y a cuántas de 8 trampas responde. "Con resumen" es que quedó alguna frase. Las trampas pasan
 el filtro de cobertura pero no tienen respuesta en C:\\Asia: una cita verificada
 prueba que la línea existe, no que responda, así que su respuesta se imprime entera
 para leerla. Mide sobre una copia del índice sin este archivo ni los fragmentos que
@@ -33,6 +34,7 @@ Para calibrar el filtro, la cobertura y la distancia de cada pregunta, sin el mo
 import argparse
 import gc
 import json
+import re
 import shutil
 import sys
 import tempfile
@@ -48,6 +50,7 @@ from core.actions import explore
 from core.rag import vector_store
 from core.rag.indexer import ProjectIndexer, unload_chat_models
 from core.rag.library import Library, named_in_question, without_source
+from core.rag.quotes import BAD_TAG, NOT_DEFINED, UNKNOWN_FIGURE, UNKNOWN_NAME
 from core.rag.retriever import relevant, search_collections
 from tools import rag_tool
 from tools.rag_tool import DEFAULT_MAX_DISTANCE, DEFAULT_MIN_COVERAGE
@@ -154,6 +157,13 @@ TRAPS = [
 # Las frases falsas que el ROADMAP recoge: citarlas no prueba nada, como con las trampas.
 INDEXED_FALSE_CLAIMS = ['debes abrirlo con el modo "w"', 'el resumen "cada 3 segundos"']
 
+# Tres respuestas falsas que pasaron todas las comprobaciones: el resumen no puede decirlas.
+FORBIDDEN = {
+    "cómo se escribe un archivo sin dejarlo a medias": r'modo\s+\W?w\b',
+    "drop_client": r'(?:defin|se encuentra)[^.\n]*ollama_provider',
+    "cómo se resume la sesión en segundo plano": r'cada\s+3\s*(?:s\b|seg)',
+}
+
 
 def release_chroma():
     """Suelta los archivos de Chroma: en Windows los tiene abiertos hasta que se para su sistema."""
@@ -247,7 +257,7 @@ def table(rows) -> str:
     return "\n".join(lines)
 
 
-ANSWERED = ("respondió", "redacción inválida")
+ANSWERED = ("respondió", "solo líneas", "redacción inválida")
 PROJECT_QUESTIONS = len(END_TO_END) - len(BOLITABOT) - len(DOCS)
 
 
@@ -259,6 +269,12 @@ def by_source(rows) -> tuple:
 
 def count_answered(rows) -> str:
     return f"{sum(1 for row in rows if row[0] == 'respondió')}/{len(rows)}"
+
+
+def forbidden_said(question, shown) -> bool:
+    """True si el resumen dice la frase falsa conocida de esa pregunta."""
+    summary = shown.partition(prompts.UNVERIFIED_SUMMARY)[2]
+    return question in FORBIDDEN and bool(re.search(FORBIDDEN[question], summary, re.IGNORECASE))
 
 
 def answer_row(brain, question, expected=None):
@@ -273,9 +289,9 @@ def answer_row(brain, question, expected=None):
     if shown.startswith(prompts.NO_DIRECT_ANSWER):
         return "sin respuesta directa", False, seconds, shown
 
-    state = "redacción inválida" if shown.startswith(prompts.INVALID_DRAFT) else "respondió"
-    sources = shown.rpartition(prompts.VERIFIED_LINES)[2].lower()
-    return state, bool(expected) and Path(expected).name.lower() in sources, seconds, shown
+    lines, _, summary = shown.partition(prompts.VERIFIED_LINES)[2].partition(prompts.UNVERIFIED_SUMMARY)
+    state = "respondió" if summary else "redacción inválida" if shown.startswith(prompts.INVALID_DRAFT) else "solo líneas"
+    return state, bool(expected) and Path(expected).name.lower() in lines.lower(), seconds, shown
 
 
 def clean_copy(folder):
@@ -350,8 +366,10 @@ def end_to_end(runs, glossary_dir):
         (glossary_dir / "glosario_bolitabot.json").write_text(json.dumps(GLOSSARY), encoding="utf-8")
 
     brain = Brain()
-    check = explore.draft_problems
+    check = explore.check_draft
+    verify = explore.verify_quotes
     clean = explore.clean_translation
+    sentences = []
 
     def showing_translation(answer):
         translated = clean(answer)
@@ -360,30 +378,49 @@ def end_to_end(runs, glossary_dir):
 
     explore.clean_translation = showing_translation
 
-    def showing_problems(answer, quotes, context):
-        problems = check(answer, quotes, context)
+    def showing_extraction(extracted, context):
+        quotes = verify(extracted, context)
 
-        if problems:
-            print(f"    invalidada por {problems} en: {' '.join(answer.split())[:300]}", flush=True)
+        if not quotes:
+            print(f"    extracción sin líneas: {' '.join(extracted.split())[:150]}", flush=True)
 
-        return problems
+        return quotes
 
-    explore.draft_problems = showing_problems
+    explore.verify_quotes = showing_extraction
+
+    def showing_removed(answer, quotes):
+        kept, removed = check(answer, quotes)
+        sentences.extend(["queda"] * len(kept))
+
+        for sentence, problems in removed:
+            sentences.append(problems[0][0])
+            print(f"    frase eliminada, {problems}: {' '.join(sentence.split())[:200]}", flush=True)
+
+        return kept, removed
+
+    explore.check_draft = showing_removed
     summary = [
-        "| Corrida | Responde | Asia | Bolitabot | Docs | NINGUNA en docs | Redacciones inválidas | Cita el archivo "
+        "| Corrida | Con resumen | Asia | Bolitabot | Docs | Solo líneas | Sin respuesta directa en docs | Frases eliminadas "
+        "| Por etiqueta | Por nombre | Por dato | Por definición | Frases prohibidas | Cita el archivo "
         "| Trampas respondidas | Ajenas respondidas | Segundos por pregunta |",
-        "|---|---|---|---|---|---|---|---|---|---|---|",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
+    said = 0
 
     for run in range(1, runs + 1):
         rows = []
+        sentences.clear()
 
         for question, expected in END_TO_END:
             row = answer_row(brain, question, expected)
             rows.append(row)
             state, cited, seconds, shown = row
-            opening = " ".join(shown.split())[:90]
+            opening = " ".join((shown.partition(prompts.UNVERIFIED_SUMMARY)[2] or shown).split())[:500]
             print(f"[{run}] {state}, {'cita' if cited else 'no cita'}, {seconds:.0f} s: {question[:45]} -> {opening}", flush=True)
+
+            if forbidden_said(question, shown):
+                said += 1
+                print(f"    FRASE PROHIBIDA: {question}", flush=True)
 
         traps = []
 
@@ -402,21 +439,25 @@ def end_to_end(runs, glossary_dir):
                     print(shown, flush=True)
 
         answered = sum(1 for r in rows if r[0] == "respondió")
-        invalid = sum(1 for r in rows + traps + strangers if r[0] == "redacción inválida")
+        only_lines = sum(1 for r in rows + traps + strangers if r[0] in ANSWERED[1:])
+        tally = Counter(sentences)
+        reasons = " | ".join(str(tally[kind]) for kind in (BAD_TAG, UNKNOWN_NAME, UNKNOWN_FIGURE, NOT_DEFINED))
         cited = sum(1 for r in rows if r[1])
+        forbidden = sum(forbidden_said(question, row[3]) for (question, _), row in zip(END_TO_END, rows))
         fell = sum(1 for r in traps if r[0] in ANSWERED)
         strayed = sum(1 for r in strangers if r[0] in ANSWERED)
         seconds = sum(r[2] for r in rows + traps + strangers) / len(rows + traps + strangers)
         groups = "".join(f"{count_answered(group)} | " for group in by_source(rows))
         refused = sum(1 for r in by_source(rows)[2] if r[0] == "sin respuesta directa")
         summary.append(
-            f"| {run} | {answered}/{len(rows)} | {groups}{refused} | {invalid} | {cited}/{len(rows)} | {fell}/{len(traps)} "
-            f"| {strayed}/{len(strangers)} | {seconds:.0f} |"
+            f"| {run} | {answered}/{len(rows)} | {groups}{only_lines} | {refused} "
+            f"| {len(sentences) - tally['queda']}/{len(sentences)} | {reasons} | {forbidden} | {cited}/{len(rows)} "
+            f"| {fell}/{len(traps)} | {strayed}/{len(strangers)} | {seconds:.0f} |"
         )
         print()
 
     print("\n".join(summary))
-    return 0
+    return 1 if said else 0
 
 
 def main():
