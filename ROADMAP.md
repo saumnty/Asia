@@ -285,7 +285,7 @@ Antes "Wikipedia offline". Va por capas, y cada fuente lleva su etiqueta para po
 - Fuentes: cada una es una colección con nombre y tipo (proyecto, reporte, notas), en `data/biblioteca/fuentes.json`. `/indexar <nombre> [ruta] [tipo]`, `/fuentes` y `/buscar <pregunta>`. Busca en todas, salvo "en <fuente>".
 - Nunca entran `data/`, `memory/`, `logs/` ni `config/settings.json` de Asia, secretos (`.env`, `*.key`, `*.pem`, `id_rsa`...), binarios, archivos de más de 1 MB ni lo que ignore el `.gitignore` de la fuente (`core/rag/exclusions.py`). Antes entraban los modelos de Whisper (83 % de los fragmentos) y `memory/`.
 - Troceado: Python por funciones y métodos con `ast`, `.md` y `.tex` por secciones, el resto por bloques; cada fragmento lleva delante dónde vive. Un hash por archivo reindexa solo lo que cambió.
-- Búsqueda: embeddings con los prefijos de nomic y BM25 propio, fusionados por posición (RRF), con 2 fragmentos por archivo como mucho.
+- Búsqueda: embeddings con los prefijos de nomic y BM25 propio con raíces del español (`snowballstemmer`), fusionados por posición (RRF), con 2 fragmentos por archivo como mucho.
 - Respuesta: solo con los fragmentos y citándolos. "Fuentes:" la pone el código, no el modelo. Si la cobertura de la pregunta en los fragmentos no llega a `rag.min_coverage` (0,3), dice "No lo encontré en tus proyectos." sin llamar al modelo. La distancia de los embeddings no sirve para esto (se solapan) y la puntuación de BM25 tampoco (depende del tamaño de la colección).
 
 Aciertos con `test/manual/check_rag.py` (20 preguntas sobre C:\Asia, archivo correcto en 1.º / top 3 / top 5):
@@ -296,6 +296,7 @@ Aciertos con `test/manual/check_rag.py` (20 preguntas sobre C:\Asia, archivo cor
 | Fuentes y prefijos | 10 / 15 / 16 | 4 / 7 / 8 | 1 / 2 / 2 | 5 / 6 / 6 |
 | Troceado | 10 / 12 / 14 | 3 / 4 / 6 | 1 / 2 / 2 | 6 / 6 / 6 |
 | Híbrida y tope por archivo | 13 / 16 / 19 | 5 / 8 / 11 | 2 / 2 / 2 | 6 / 6 / 6 |
+| Raíces del español | 12 / 15 / 20 | 4 / 7 / 12 | 2 / 2 / 2 | 6 / 6 / 6 |
 
 "No lo encontré": 5 de 5 preguntas sin respuesta y 0 de 20 falsos rechazos, con una muestra pequeña: cobertura hasta 0,16 sin respuesta y desde 0,41 con ella. Vigilar en uso real. Eso mide el filtro por cobertura, no al modelo.
 
@@ -312,12 +313,25 @@ Aciertos con `test/manual/check_rag.py` (20 preguntas sobre C:\Asia, archivo cor
 
 Se quedan 5 fragmentos: con 3 el archivo correcto queda fuera en 4 de las 20 preguntas de la búsqueda, y con 5 en 1.
 
+Ese prompt inventaba: en 4 preguntas trampa (pasan el filtro, sin respuesta en C:\Asia), 5 de 8 respuestas afirmaban algo falso con cita real. Por eso la respuesta va en dos pasos (`core/rag/quotes.py`): el modelo copia las líneas que responden o escribe NINGUNA; el código comprueba que existan con `locate_quote`, el de la revisión de código; el modelo responde solo con ellas y "Fuentes:" sale de ellas, con la línea real. Sin líneas verificadas: "No encontré una respuesta directa. Esto es lo más relevante:" con los 3 mejores fragmentos. La cobertura sigue decidiendo "No lo encontré".
+
+| Citas verificadas | Corrida | Responde | Cita el archivo | Trampas respondidas | s/pregunta |
+|---|---|---|---|---|---|
+| Primer prompt | 1 | 6/8 | 5/8 | 0/4 | 68 |
+| | 2 | 4/8 | 3/8 | 0/4 | 20 |
+| Con regla para nombres | 1 | 7/8 | 4/8 | 0/4 | 29 |
+| | 2 | 8/8 | 8/8 | 0/4 | 35 |
+
+Sobre una copia del índice sin `check_rag.py` ni los fragmentos con las trampas: si no, el modelo podría "citar" la pregunta misma.
+
 Tiempos en CPU, solo como referencia (repetir con la GPU; no se ajustó nada por ellos): índice completo de 994 fragmentos, 423 s; incremental de 6 archivos, 29 s; consulta, 2,5 s, y `/buscar` entero, 45–110 s.
 
 Pendientes:
 - Medir con la GPU si `nomic-embed-text` junto al 7B le quita VRAM (389 MB en CPU); hoy conviven para no recargar en cada pregunta.
-- Respuestas inventadas con cita real: si la pregunta no tiene respuesta pero pasa el filtro, el 7B ya no puede negarse y responde con lo que haya ("cómo se configura el firewall", cobertura 0,46, señala `settings.json`). La cobertura no lo separa: hay preguntas con respuesta en 0,41 y 0,42. Tampoco "la palabra más rara no está", porque sin raíces en español "detectan" no encuentra "detectar". Falta un criterio mejor.
-- Cada fragmento lleva `[archivo:líneas]` y "Fuentes:" prefiere esa etiqueta, pero el 7B no siempre cita; entonces "Fuentes:" lista todos los consultados, no solo los usados.
+- La respuesta final no se verifica: las citas sí, pero el segundo paso del modelo puede añadir de su cuenta. Con líneas reales de `core/atomic_write.py`, inventó una función y citó líneas que no le dieron.
+- "Responde" no es "responde bien": a veces copia una línea inútil (`import tempfile`) y esa es la respuesta.
+- "Fuentes:" lista una entrada por línea citada; con muchas citas son 13 renglones. Juntar las seguidas.
+- "Cómo se cifra la contraseña" y las otras trampas dependen de que el 7B escriba NINGUNA: la cobertura no las separa. Una línea real que no responde pasaría la verificación.
 - Un archivo sin fragmentos (`__init__.py` vacío) no guarda hash y `/indexar` lo cuenta como reindexado cada vez. No embebe nada; solo infla la cifra.
 - El troceado solo no ayuda: sin el tope por archivo, las secciones del ROADMAP acapararon los resultados.
 - BM25 se reconstruye en cada búsqueda con todos los documentos: revisar con fuentes grandes.
