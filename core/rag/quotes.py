@@ -20,14 +20,33 @@ FIRST_LINE = re.compile(r":(\d+)(?:-\d+)?$")
 CITED_LINES = re.compile(r"[\[`]([\w./\\-]+\.\w+):(\d+)(?:[-–](\d+))?[\]`]")
 CITED_FILE = re.compile(r"\[([\w./\\-]+\.\w+)\]")
 FENCE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)
+FENCE_BLOCK = re.compile(r"(```[^\n]*\n.*?```)", re.DOTALL)
 BACKTICKED = re.compile(r"`([^`\n]+)`")
+DOUBLE_QUOTED = re.compile(r'["“]([^"”\n]+)["”]')
 WORD = re.compile(r"\w+")
+FILE_PATH = re.compile(r"[\w./\\-]+\.\w+")
+NUMBER = re.compile(r"(?<![\w.])\d+(?:\.\d+)?(?!\w)")
+TIME_UNITS = r"segundos?|seg|s|minutos?|min|horas?|h|milisegundos?|ms"
+# "3 segundos": el número puede estar en la línea sin que la línea diga segundos.
+TIMED = re.compile(rf"(?<![\w.])(\d+(?:\.\d+)?)\s*({TIME_UNITS})\b", re.IGNORECASE)
+TIME_UNIT = re.compile(rf"\b(?:{TIME_UNITS})\b|_(?:s|ms)\b", re.IGNORECASE)
+# "drop_client se define en...": decirlo exige citar su definición, no una llamada.
+DEFINES = re.compile(r"\bdefin\w*|\bse encuentra\b|\bdeclar\w*|\bimplementad\w*", re.IGNORECASE)
+# "Frase. [a.py:4] Otra.": la etiqueta es de la frase de antes.
+TAG_AFTER_END = re.compile(rf"([.!?])((?:\s*{CITED_LINES.pattern})+)")
+SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+LIST_MARKER = re.compile(r"\s*(?:\d+[.)]\s+|[-*]\s+)?")
 CAMEL_CASE = re.compile(r"[a-z][a-z0-9]*[A-Z]")
 # Una línea de código suelta, no una frase.
 CODE_LINE = re.compile(r"\s*(?:import|from|def|class|return|if|for|while)\b|\s*[\w.]+\s*=[^=]")
 MIN_DRAFT_WORDS = 4
 FALLBACK_FRAGMENTS = 3
 FALLBACK_CHARS = 600
+# Por qué se elimina una frase.
+BAD_TAG = "etiqueta"
+UNKNOWN_NAME = "nombre"
+UNKNOWN_FIGURE = "dato"
+NOT_DEFINED = "definición"
 
 
 @dataclass
@@ -116,18 +135,58 @@ def is_thin(answer: str) -> bool:
     return len(lines) == 1 and bool(CODE_LINE.match(lines[0]))
 
 
-def unverified_tags(answer: str, quotes: list) -> list:
-    """Las etiquetas [archivo:líneas] de la redacción cuyo rango no toca ninguna línea verificada."""
-    verified = {(quote.path, quote.line) for quote in quotes}
-    unverified = []
+def without_tags(text: str) -> str:
+    return CITED_FILE.sub(" ", CITED_LINES.sub(" ", text))
 
-    for match in CITED_LINES.finditer(answer):
+
+def prose_sentences(text: str):
+    """Las frases de un tramo sin bloques de código; el número de una lista no acaba una frase."""
+    for line in TAG_AFTER_END.sub(r"\2\1", text).splitlines():
+        if line.strip():
+            marker = LIST_MARKER.match(line).group()
+            first, *rest = SENTENCE_END.split(line[len(marker):])
+            yield marker + first
+            yield from rest
+
+
+def draft_sentences(answer: str) -> list:
+    """Las frases de la redacción. Un bloque de código o una etiqueta suelta son de la frase de antes."""
+    sentences = []
+
+    def attach(text):
+        if sentences:
+            sentences[-1] += f"\n{text}"
+        else:
+            sentences.append(text)
+
+    for i, part in enumerate(FENCE_BLOCK.split(answer)):
+        if i % 2:
+            attach(part)
+            continue
+
+        for sentence in prose_sentences(part):
+            if WORD.search(without_tags(sentence)):
+                sentences.append(sentence)
+            else:
+                attach(sentence)
+
+    return sentences
+
+
+def cited_lines(sentence: str, quotes: list) -> tuple:
+    """(las líneas verificadas que cita la frase, sus etiquetas que no tocan ninguna)."""
+    own, unverified = [], []
+
+    for match in CITED_LINES.finditer(sentence):
         path, first, last = match.group(1), int(match.group(2)), int(match.group(3) or match.group(2))
+        found = [quote for quote in quotes if quote.path == path and quote.line and first <= quote.line <= last]
+        own += found
 
-        if not any((path, line) in verified for line in range(first, last + 1)):
+        if not found:
             unverified.append(match.group(0))
 
-    return unverified
+    own += [quote for quote in quotes if not quote.line and quote.path in CITED_FILE.findall(sentence)]
+    return own, unverified
 
 
 def is_identifier(word: str) -> bool:
@@ -147,12 +206,77 @@ def unknown_names(answer: str, context: str) -> list:
     # "os.replace()" nombra lo que el código llama con argumentos.
     unknown = [item.strip() for item in code if squash(item.strip(" .,:;").removesuffix("()")) not in known]
     unknown += [word for word in WORD.findall(BACKTICKED.sub(" ", text)) if is_identifier(word) and word not in words]
+    # Palabra entera: "w" no está en "write".
+    unknown += [item for item in DOUBLE_QUOTED.findall(text) if not re.search(rf"(?<!\w){re.escape(item)}(?!\w)", context)]
     return list(dict.fromkeys(unknown))
 
 
-def draft_problems(answer: str, quotes: list, context: str) -> list:
-    """Por qué no se puede mostrar la redacción del modelo. Vacío si se puede."""
-    return unverified_tags(answer, quotes) + unknown_names(answer, context)
+def prose_of(sentence: str) -> str:
+    """La frase sin etiquetas, sin número de lista y sin código, que se comprueba como nombre."""
+    text = BACKTICKED.sub(" ", FENCE.sub(" ", without_tags(sentence)))
+    return LIST_MARKER.sub("", text, count=1)
+
+
+def unknown_figures(sentence: str, own: list) -> list:
+    """Los números que no están en las líneas citadas y las unidades de tiempo que esas líneas no dicen."""
+    prose = prose_of(sentence)
+    lines = "\n".join(quote.text for quote in own)
+    known = set(NUMBER.findall(lines)) | {str(quote.line) for quote in own}
+    unknown = [number for number in NUMBER.findall(prose) if number not in known]
+
+    if not TIME_UNIT.search(lines):
+        unknown += [f"{number} {unit}" for number, unit in TIMED.findall(prose)]
+
+    return unknown
+
+
+def is_defined(name: str, own: list) -> bool:
+    name = re.escape(name)
+    definition = rf"\b(?:def|class)\s+{name}\b|\b{name}[\"']?\s*[:=]"
+    return any(re.search(definition, quote.text) for quote in own)
+
+
+def undefined_names(sentence: str, own: list) -> list:
+    """Los nombres que la frase dice definidos sin que ninguna línea citada los defina."""
+    prose = prose_of(sentence)
+
+    if not DEFINES.search(prose):
+        return []
+
+    names = [item.removesuffix("()") for item in BACKTICKED.findall(without_tags(sentence))]
+    names = [name for name in names if WORD.fullmatch(name)]
+    names += [word for word in WORD.findall(FILE_PATH.sub(" ", prose)) if is_identifier(word)]
+    return [name for name in dict.fromkeys(names) if not is_defined(name, own)]
+
+
+def sentence_problems(sentence: str, quotes: list) -> list:
+    """[(motivo, detalle)] por los que la frase no se muestra. Se comprueba solo contra sus líneas citadas."""
+    own, unverified = cited_lines(sentence, quotes)
+    problems = [(BAD_TAG, tag) for tag in unverified]
+
+    if not own:
+        return problems or [(BAD_TAG, "sin etiqueta")]
+
+    known = "\n".join(f"{quote.path} {quote.label} {quote.text}" for quote in own)
+    problems += [(UNKNOWN_NAME, name) for name in unknown_names(sentence, known)]
+    problems += [(UNKNOWN_FIGURE, figure) for figure in unknown_figures(sentence, own)]
+    problems += [(NOT_DEFINED, name) for name in undefined_names(sentence, own)]
+    return problems
+
+
+def check_draft(answer: str, quotes: list) -> tuple:
+    """(frases que se muestran, [(frase eliminada, sus problemas)])."""
+    kept, removed = [], []
+
+    for sentence in draft_sentences(answer):
+        problems = sentence_problems(sentence, quotes)
+
+        if problems:
+            removed.append((sentence, problems))
+        else:
+            kept.append(sentence)
+
+    return kept, removed
 
 
 def block_of(run: list) -> str:

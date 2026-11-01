@@ -16,8 +16,10 @@ INVALID_DRAFT = (
     "Estas son las líneas que responden; no incluyo explicación porque mencionaba "
     "nombres que no aparecen en tu código."
 )
-# Lo que encabeza, debajo de cada respuesta de /buscar, las líneas que comprobó el código.
+# Lo que encabeza, al principio de cada respuesta de /buscar, las líneas que comprobó el código.
 VERIFIED_LINES = "Líneas verificadas:"
+# Lo que encabeza, debajo de esas líneas, las frases que quedan de la redacción del modelo.
+UNVERIFIED_SUMMARY = "Resumen del modelo (no verificado)"
 
 
 # --- Reflexión (fase R) ---------------------------------------------------------
@@ -181,7 +183,8 @@ Líneas:
 
 Instrucciones:
 - No agregues nada que no digan las líneas, ni de tu conocimiento general.
-- Di de dónde sale cada dato, con su etiqueta entre corchetes.
+- Después de cada frase, pon entre corchetes la etiqueta de la línea en que se basa, como [archivo:línea]. Se eliminan las frases sin etiqueta.
+- Cada frase solo puede usar los nombres y los números de la línea que cita.
 - Si las líneas responden solo una parte, di qué parte falta.
 - Responde claro y breve.
 """

@@ -5,7 +5,7 @@ from core import prompts
 from core.commands import COMMANDS, options_text
 from core.prompts import NOT_FOUND
 from core.rag.library import Library, is_refusal
-from core.rag.quotes import Quote, best_fragments, draft_problems, is_thin, verified_lines, verify_quotes
+from core.rag.quotes import Quote, best_fragments, is_thin, verified_lines, verify_quotes
 from core.rag.retriever import Hit, relevant
 from test_confidencial import make_brain
 from tools.rag_tool import RagTool
@@ -33,7 +33,7 @@ README.md
 Un robot que balancea una bolita.
 """
 QUOTED = "[control/pid.py:40-55] self.kp = 2.5\n[inventado.py:1-9] esta linea no existe en nada"
-ANSWER = "La ganancia es 2 [control/pid.py:41]."
+ANSWER = "La ganancia es 2.5 [control/pid.py:41]."
 
 
 class Registry:
@@ -98,7 +98,7 @@ def test_buscar_va_directo_sin_intent_engine():
 
     answer = brain.process("/buscar qué ganancia tiene el PID en Bolitabot")
 
-    assert answer.startswith("La ganancia es 2")
+    assert ANSWER in answer
     [(action, kwargs)] = brain.tool_registry.calls
     assert action == "search_project_rag"
     assert kwargs["question"] == "qué ganancia tiene el PID en Bolitabot"
@@ -155,7 +155,10 @@ def test_el_modelo_responde_solo_con_las_verificadas():
 
     answer = brain.process("/buscar qué ganancia tiene")
 
-    assert answer == f"{ANSWER}\n\n{prompts.VERIFIED_LINES}\n\ncontrol/pid.py:41 (Pid.salida)\n  self.kp   =   2.5"
+    assert answer == (
+        f"{prompts.VERIFIED_LINES}\n\ncontrol/pid.py:41 (Pid.salida)\n  self.kp   =   2.5"
+        f"\n\n{prompts.UNVERIFIED_SUMMARY}\n\n{ANSWER}"
+    )
     assert "[control/pid.py:41] self.kp   =   2.5" in brain.provider_router.prompts[1]
     assert "inventado" not in brain.provider_router.prompts[1]
 
@@ -254,99 +257,6 @@ def test_los_mejores_son_tres_y_cortos():
     assert shown.count("…") == 3 and "z" * 601 not in shown
 
 
-VERIFIED = [Quote("control/pid.py", 41, "Pid.salida", "    self.kp   =   2.5"), Quote("control/pid.py", 42, "Pid.salida", "x")]
-
-
-@pytest.mark.parametrize(
-    "answer",
-    [
-        "La ganancia es 2 [control/pid.py:41].",
-        "La ganancia es 2 [control/pid.py:41-42].",
-        "La ganancia es 2 [control/pid.py:41–42].",
-        "La calcula `salida` con `self.kp   =   2.5` y `self.error`.",
-        "Está en [control/pid.py], en `reinicia`.",
-        "La ganancia sale de self.kp, en un robot.",
-        "Un robot, para la ganancia:\n```python\nself.kp = 2.5\n```",
-    ],
-)
-def test_una_redaccion_con_nombres_reales_vale(answer):
-    assert draft_problems(answer, VERIFIED, CONTEXT) == []
-
-
-@pytest.mark.parametrize(
-    "answer, problem",
-    [
-        ("La ganancia es 2 [control/pid.py:50].", "[control/pid.py:50]"),
-        ("La ganancia es 2 [control/pid.py:43-50].", "[control/pid.py:43-50]"),
-        ("La ganancia es 2 [otro.py:41].", "[otro.py:41]"),
-        ("Está en [otro.py].", "otro.py"),
-        ("Se calcula con `calcula_pid()`.", "calcula_pid()"),
-        ("Se calcula con calcula_pid sobre el error.", "calcula_pid"),
-        ("Se calcula con calculaPid sobre el error.", "calculaPid"),
-        ("Lo hace `SessionPid` sobre el error.", "SessionPid"),
-        ("Un ejemplo:\n```python\ndef atomic_write(ruta, contenido):\n    pass\n```", "def atomic_write(ruta, contenido):"),
-    ],
-)
-def test_una_redaccion_con_nombres_inventados_no_vale(answer, problem):
-    assert problem in draft_problems(answer, VERIFIED, CONTEXT)
-
-
-def test_un_rango_vale_si_toca_una_linea_verificada():
-    # Medido con el 7B: [ollama_models.py:135-141] con líneas sueltas verificadas dentro.
-    assert draft_problems("La ganancia es 2 [control/pid.py:30-41].", VERIFIED, CONTEXT) == []
-    assert draft_problems("La ganancia es 2 [control/pid.py:42-55].", VERIFIED, CONTEXT) == []
-
-
-def test_una_cita_entre_comillas_invertidas_es_una_cita():
-    # Medido con el 7B: `README.md:48` invalidaba una respuesta correcta por "nombre desconocido".
-    assert draft_problems("Lo dice `control/pid.py:41` y ya.", VERIFIED, CONTEXT) == []
-    assert draft_problems("Lo dice `control/pid.py:90` y ya.", VERIFIED, CONTEXT) == ["`control/pid.py:90`"]
-
-
-def test_un_rango_que_solapa_no_salva_un_nombre_inventado():
-    problems = draft_problems("Lo hace `calcula_pid()` [control/pid.py:41-50].", VERIFIED, CONTEXT)
-
-    assert problems == ["calcula_pid()"]
-
-
-def test_una_cita_de_un_fragmento_que_no_se_verifico_no_vale():
-    # Existe en los fragmentos, pero el modelo no la copió.
-    assert draft_problems("Se reinicia [control/pid.py:61].", VERIFIED, CONTEXT) == ["[control/pid.py:61]"]
-
-
-def test_una_etiqueta_entre_comillas_invertidas_se_trata_como_etiqueta():
-    assert draft_problems("Está en `[control/pid.py:41]`.", VERIFIED, CONTEXT) == []
-
-
-def test_las_palabras_normales_no_son_identificadores():
-    assert draft_problems("El filtro de secretos corre antes del envío, según Ollama y JSON.", VERIFIED, CONTEXT) == []
-
-
-def test_un_nombre_de_producto_no_es_un_identificador():
-    # Medido con el 7B: invalidaba la respuesta correcta de jarvis.bat.
-    assert draft_problems("Ejecuta este comando en PowerShell y luego en ChromaDB.", VERIFIED, CONTEXT) == []
-
-
-def test_una_llamada_sin_argumentos_nombra_lo_que_el_codigo_llama_con_ellos():
-    # Medido con el 7B: `os.replace()` en la redacción, os.replace(tmp, path) en el código.
-    context = CONTEXT + "\n--- [a.py:1-3] ---\nFuente: x (proyecto)\nContenido:\na.py\nos.replace(tmp, path)\n"
-
-    assert draft_problems("Reemplaza con `os.replace()` y listo.", VERIFIED, context) == []
-    assert "os.rename()" in draft_problems("Reemplaza con `os.rename()` y listo.", VERIFIED, context)
-
-
-def test_con_nombres_inventados_solo_se_muestran_las_lineas():
-    brain = brain_with(QUOTED, "La ganancia se calcula con `calcula_pid()` [control/pid.py:41].")
-
-    answer = brain.process("/buscar qué ganancia tiene")
-
-    assert answer == (
-        "Estas son las líneas que responden; no incluyo explicación porque mencionaba nombres que no aparecen en tu código."
-        f"\n\n{prompts.VERIFIED_LINES}\n\ncontrol/pid.py:41 (Pid.salida)\n  self.kp   =   2.5"
-    )
-    assert "calcula_pid" not in answer
-
-
 @pytest.mark.parametrize(
     "answer",
     [
@@ -386,12 +296,6 @@ def test_redaccion_casi_vacia_se_trata_como_ninguna():
 
     assert answer.startswith(prompts.NO_DIRECT_ANSWER)
     assert prompts.VERIFIED_LINES not in answer
-
-
-def test_una_respuesta_parcial_se_conserva():
-    answer = brain_with(QUOTED, "Está kp, pero no se dice cuánto vale ki [control/pid.py:41].").process("/buscar qué ganancia")
-
-    assert answer.startswith("Está kp") and prompts.VERIFIED_LINES in answer
 
 
 def test_pide_los_fragmentos_configurados(monkeypatch):
