@@ -395,7 +395,8 @@ Respuestas falsas que pasaron todas las comprobaciones, leídas contra el códig
 
 Pendientes de la capa 2:
 - Python 3.12: sin descargar. Es `.txt`, hay que decidir cómo trocearlo.
-- Averiguar por qué la extracción se queda sin líneas con el documento correcto delante: traducir la pregunta no lo resuelve (abajo). Queda el tamaño del fragmento o que la respuesta no esté en él.
+- Averiguar por qué la extracción se queda sin líneas con el documento correcto delante: traducir la pregunta no lo resuelve (abajo). Casi siempre es NINGUNA. Con QoS, el primer fragmento es la sección "QoS events", no la lista de políticas: a mirar si la respuesta llega a los fragmentos.
+- Etiquetas que el 7B escribe y no se reconocen: `[README.md:289, 290, 291]`, `[69]`. Eliminan frases buenas.
 - "No lo encontré en tus proyectos" suena raro con documentación.
 
 Una pregunta con "en <fuente>" que el filtro rechaza enseña los fragmentos en lugar de negar, sin pasar por el modelo. Sin fuente nombrada, sigue negando.
@@ -407,7 +408,20 @@ Idioma por fuente: `ros2`, `gazebo` y `ros_gz_bridge` son `en` (`/indexar <nombr
 | 1 | 7/8 | 3/3 | 6/9 | 3 | 0 | 14/20 | 0/8 | 0/5 | 74 |
 | 2 | 5/8 | 2/3 | 3/9 | 5 | 3 | 10/20 | 0/8 | 0/5 | 49 |
 
-No reduce los casos medidos de forma clara: QoS sigue sin líneas 2 de 2 (antes, 2 de 2) y el puente con YAML 1 de 2 (antes, 3 de 4). Docs da 6/9 y 3/9 frente a 3/9 y 4/9: dentro del azar del 7B, y la misma corrida con los mismos fragmentos va de 6 a 3. Con las traducciones de la corrida y solo la búsqueda, las seis que se quedaron sin líneas pasan el filtro con el documento correcto en el top 5. Las preguntas sin fuente nombrada no empeoran. Cuesta tiempo: frente a 54 y 20 s por pregunta, porque toda búsqueda general también traduce, y la traducción a veces falla ("pendientes" salió "preferences").
+No reduce los casos medidos de forma clara: QoS sigue sin líneas 2 de 2 (antes, 2 de 2) y el puente con YAML 1 de 2 (antes, 3 de 4). Docs da 6/9 y 3/9 frente a 3/9 y 4/9: dentro del azar del 7B, y la misma corrida con los mismos fragmentos va de 6 a 3. Con las traducciones de la corrida y solo la búsqueda, las seis que se quedaron sin líneas pasan el filtro con el documento correcto en el top 5. Las preguntas sin fuente nombrada no empeoran. Cuesta tiempo: frente a 54 y 20 s por pregunta, porque toda búsqueda general también traduce, y la traducción a veces falla ("pendientes" salió "preferences", "pendents" y "bookmarks").
+
+Frases sin verificar: el 7B pone la etiqueta después de cada frase y las que no la llevan se eliminan. Cada frase se comprueba solo contra las líneas que cita: nombres, cadenas entre comillas y números; una unidad de tiempo tiene que estar en la línea, y decir que algo se define exige citar su definición. La respuesta muestra primero las líneas verificadas y debajo "Resumen del modelo (no verificado)". Sin frases que queden, solo las líneas; con el aviso de siempre si cayó alguna por un nombre. Medición con 392, dos corridas ("Con resumen" no es el "Responde" de antes: pide que quede alguna frase):
+
+| Corrida | Con resumen | Asia | Bolitabot | Docs | Solo líneas | Sin respuesta directa en docs | Eliminadas | Etiqueta | Nombre | Dato | Definición | Prohibidas | Cita | Trampas | Ajenas | s/pregunta |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 9/20 | 4/8 | 1/3 | 4/9 | 5 | 2 | 23/46 | 19 | 3 | 1 | 0 | 0 | 12/20 | 0/8 | 0/5 | 75 |
+| 2 | 10/20 | 5/8 | 2/3 | 3/9 | 3 | 5 | 22/41 | 16 | 4 | 2 | 0 | 0 | 11/20 | 0/8 | 0/5 | 42 |
+
+Se elimina la mitad de las frases (45 de 87), y 35 de esas 45 por no llevar etiqueta. Lo que cuesta:
+- Las 0 prohibidas no prueban las comprobaciones: el 7B no volvió a escribir esas frases. La pregunta del modo "w" acabó en NINGUNA las dos veces y ninguna frase cayó por definición. Lo que las prueba son las pruebas de `test/test_rag_sentences.py`, con el texto y las líneas reales.
+- Límite: el código comprueba nombres, no significado. `Debes abrirlo con el modo "w" [core/atomic_write.py:3]` pasa, porque esa línea contiene `"w"` aunque diga lo contrario. Solo queda rebajada a "no verificado".
+- Cayeron frases verdaderas: "dura 6 segundos" (la línea es `T_v = [6.0,...]`, sin unidad), los comandos de `ros2 pkg create` (etiqueta en otra línea) y frases que quedan cojas ("Este comando [...]" sin el comando). Las líneas verificadas siguen encima.
+- Siguen pasando frases vacías o inventadas con etiqueta real: "fórmula de desplazamiento circular", o "las líneas no contienen información" sobre líneas que sí responden.
 
 `test/` nunca entró en `asia`: el indexador ignora `test_dirs`. Va aparte, en `asia-pruebas`, que solo se consulta con "en asia-pruebas": `/indexar asia-pruebas C:\Asia\test solo-nombrada`. `/indexar <nombre>` sin ruta ni tipo conserva los de la fuente; antes indexaba la carpeta actual en ella.
 
