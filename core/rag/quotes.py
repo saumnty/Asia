@@ -17,7 +17,7 @@ from tools.review_findings import clean_quote, locate_quote, squash
 QUOTE = re.compile(r"^[\s*>-]*(?:\[([^\]\n]+)\]\s*:?\s*)?(.+)$", re.MULTILINE)
 FIRST_LINE = re.compile(r":(\d+)(?:-\d+)?$")
 # Lo que la redacción del modelo puede citar o nombrar, para comprobarlo.
-CITED_LINES = re.compile(r"\[([\w./\\-]+\.\w+):(\d+)(?:[-–](\d+))?\]")
+CITED_LINES = re.compile(r"[\[`]([\w./\\-]+\.\w+):(\d+)(?:[-–](\d+))?[\]`]")
 CITED_FILE = re.compile(r"\[([\w./\\-]+\.\w+)\]")
 FENCE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)
 BACKTICKED = re.compile(r"`([^`\n]+)`")

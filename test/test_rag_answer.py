@@ -297,6 +297,12 @@ def test_un_rango_vale_si_toca_una_linea_verificada():
     assert draft_problems("La ganancia es 2 [control/pid.py:42-55].", VERIFIED, CONTEXT) == []
 
 
+def test_una_cita_entre_comillas_invertidas_es_una_cita():
+    # Medido con el 7B: `README.md:48` invalidaba una respuesta correcta por "nombre desconocido".
+    assert draft_problems("Lo dice `control/pid.py:41` y ya.", VERIFIED, CONTEXT) == []
+    assert draft_problems("Lo dice `control/pid.py:90` y ya.", VERIFIED, CONTEXT) == ["`control/pid.py:90`"]
+
+
 def test_un_rango_que_solapa_no_salva_un_nombre_inventado():
     problems = draft_problems("Lo hace `calcula_pid()` [control/pid.py:41-50].", VERIFIED, CONTEXT)
 
