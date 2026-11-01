@@ -142,9 +142,10 @@ Fragmentos encontrados:
 {rag_context}
 
 Instrucciones:
+- Estos fragmentos ya se revisaron y hay material: responde siempre con lo que dicen.
 - Responde solo con lo que dicen los fragmentos. No agregues nada de tu conocimiento general.
 - Di de dónde sale cada dato, con la etiqueta [archivo:líneas] del fragmento, tal como aparece. No escribas "fragmento 1".
-- Si los fragmentos no responden la pregunta, responde exactamente: {NOT_FOUND}
+- Si la información es parcial, di qué parte está en los fragmentos y qué parte no.
 - Responde claro y breve.
 """
 

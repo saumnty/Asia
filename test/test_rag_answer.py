@@ -54,12 +54,16 @@ def brain_with(answer="La ganancia es 2 [control/pid.py:40-55].", context=CONTEX
     return brain
 
 
-def test_el_prompt_exige_fragmentos_citas_y_no_lo_encontre():
+def test_el_prompt_exige_fragmentos_citas_y_parciales():
     prompt = prompts.search_project_rag("asia", "qué ganancia", CONTEXT)
 
     assert "Responde solo con lo que dicen los fragmentos" in prompt
-    assert "la etiqueta [archivo:líneas]" in prompt
-    assert NOT_FOUND in prompt and "[control/pid.py:40-55]" in prompt
+    assert "la etiqueta [archivo:líneas]" in prompt and "[control/pid.py:40-55]" in prompt
+    assert "Si la información es parcial, di qué parte está" in prompt
+
+
+def test_no_lo_encontre_no_es_decision_del_modelo():
+    assert NOT_FOUND not in prompts.search_project_rag("asia", "qué ganancia", CONTEXT)
 
 
 def test_buscar_va_directo_sin_intent_engine():
