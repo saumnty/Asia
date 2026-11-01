@@ -4,6 +4,7 @@ import pytest
 from core.actions.library import USAGE, parse_source
 from core.commands import COMMANDS, options_text
 from core.provenance import RAG, TOOL_LABELS
+from core.rag.chunking import chunk_text
 from core.rag.indexer import ProjectIndexer
 from core.rag.library import Library, Source, citation, named_in_question
 from core.rag.retriever import search_collections
@@ -27,21 +28,20 @@ def test_cada_fragmento_guarda_fuente_archivo_y_lineas(tmp_path, embeddings):  #
     [metadata] = indexer.store.collection.get(include=["metadatas"])["metadatas"]
     assert metadata["source"] == "Bolitabot" and metadata["kind"] == "reporte"
     assert metadata["relative_path"] == "control/pid.py"
-    assert (metadata["start_line"], metadata["end_line"]) == (1, 5)
+    assert (metadata["start_line"], metadata["end_line"]) == (4, 5)
 
 
-def test_lineas_de_cada_fragmento(tmp_path, embeddings):  # noqa: F811
-    indexer = ProjectIndexer(str(tmp_path), "prueba", persist_dir=tmp_path / "i")
+def test_lineas_de_cada_fragmento():
     text = "".join(f"linea{i}\n" for i in range(1, 400))
 
-    chunks = indexer.chunk_text(text)
+    chunks = chunk_text(text, ".txt")
 
     assert len(chunks) > 1
     lines = text.split("\n")
 
-    for chunk, first, last in chunks:
+    for chunk in chunks:
         # Cada fragmento está dentro de las líneas que dice ocupar.
-        assert chunk.strip("\n") in "\n".join(lines[first - 1:last])
+        assert chunk.text == "\n".join(lines[chunk.start_line - 1:chunk.end_line])
 
 
 @pytest.mark.parametrize(
@@ -112,7 +112,7 @@ def test_indexar_y_fuentes(tmp_path, embeddings, monkeypatch):  # noqa: F811
 
     answer = brain.process(f'/indexar Bolitabot "{project}" proyecto')
 
-    assert "Bolitabot" in answer and "1" in answer
+    assert "Fuente 'Bolitabot' al día: 1 fragmentos" in answer
     listed = brain.process("/fuentes")
     assert "Bolitabot (proyecto): 1 fragmentos" in listed
 

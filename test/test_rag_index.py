@@ -64,7 +64,7 @@ def test_indexa_y_busca_en_una_carpeta_propia(tmp_path, embeddings):
     count = ProjectIndexer(str(project), "prueba", persist_dir=tmp_path / "indice").index_project()
 
     hits = search_collections("x", ["prueba"], n_results=1, persist_dir=tmp_path / "indice")
-    assert count == 1 and hits[0].document == "x = 1\n"
+    assert count == 1 and hits[0].document == "a.py\nx = 1"
 
 
 def test_prefijos_de_nomic_solo_con_nomic(embeddings):

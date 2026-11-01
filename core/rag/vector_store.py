@@ -71,6 +71,16 @@ class VectorStore:
 
         return len(ids)
 
+    def file_hashes(self) -> dict:
+        """{ruta: hash} de lo indexado. Los índices viejos no guardan hash."""
+        existing = self.collection.get(include=["metadatas"])
+
+        return {
+            metadata["file_path"]: metadata["file_hash"]
+            for metadata in existing["metadatas"]
+            if metadata and metadata.get("file_hash")
+        }
+
     def query(
         self,
         query_embedding,

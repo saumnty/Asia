@@ -50,4 +50,7 @@ class RagTool:
         count = indexer.index_project()
         Library().save(project_name, kind, indexer.project_path.as_posix(), count)
 
-        return f"Proyecto '{project_name}' indexado correctamente. Fragmentos guardados: {count}"
+        return (
+            f"Fuente '{project_name}' al día: {count} fragmentos "
+            f"({indexer.changed} archivos reindexados, {indexer.unchanged} sin cambios)."
+        )

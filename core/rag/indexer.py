@@ -1,9 +1,15 @@
+import hashlib
+import sys
 from pathlib import Path
 
 from config.settings_manager import SettingsManager
+from core.rag.chunking import chunk_text
 from core.rag.embedder import OllamaEmbedder
 from core.rag.exclusions import SourceFilter
 from core.rag.vector_store import VectorStore
+
+# Cambiar el troceado invalida lo indexado: el hash incluye esta versión.
+CHUNKER_VERSION = "1"
 
 
 def unload_chat_models():
@@ -20,6 +26,16 @@ def unload_chat_models():
         pass
 
 
+def content_hash(text: str) -> str:
+    return hashlib.sha256(f"{CHUNKER_VERSION}\n{text}".encode("utf-8", "surrogatepass")).hexdigest()
+
+
+def indexable_text(chunk, relative_path: str) -> str:
+    """Lo que se embebe y se busca: dónde está el fragmento y su contenido."""
+    where = f"{relative_path} · {chunk.label}" if chunk.label else relative_path
+    return f"{where}\n{chunk.text}"
+
+
 class ProjectIndexer:
     def __init__(self, project_path: str, project_name: str, persist_dir=None, kind="proyecto"):
         # Ruta absoluta: los fragmentos se identifican igual sin importar
@@ -28,6 +44,8 @@ class ProjectIndexer:
         self.project_name = project_name
         self.kind = kind
         self.embedder = OllamaEmbedder()
+        self.changed = 0
+        self.unchanged = 0
 
         settings = SettingsManager()
         self.filter = SourceFilter(
@@ -39,59 +57,78 @@ class ProjectIndexer:
             collection_name=project_name
         )
 
-    def chunk_text(self, text: str, chunk_size=1200, overlap=200):
-        """(texto, primera línea, última línea) de cada fragmento."""
-        chunks = []
-        start = 0
-
-        while start < len(text):
-            end = start + chunk_size
-            chunk = text[start:end]
-            first = text.count("\n", 0, start) + 1
-            chunks.append((chunk, first, first + chunk.rstrip("\n").count("\n")))
-            start += chunk_size - overlap
-
-        return chunks
-
-    def index_project(self):
-        ids = []
-        documents = []
-        metadatas = []
+    def read_files(self) -> dict:
+        """{ruta absoluta: texto} de los archivos indexables."""
+        files = {}
 
         for file_path in self.filter.files():
             try:
-                text = file_path.read_text(encoding="utf-8", errors="ignore")
+                files[file_path] = file_path.read_text(encoding="utf-8", errors="ignore")
             except Exception:
                 continue
 
-            chunks = self.chunk_text(text)
+        return files
 
-            for i, (chunk, first, last) in enumerate(chunks):
-                doc_id = f"{file_path.as_posix()}::chunk_{i}"
+    def fragments_of(self, file_path: Path, text: str) -> list:
+        """(id, documento, metadatos) de cada fragmento de un archivo."""
+        relative = file_path.relative_to(self.project_path).as_posix()
+        file_hash = content_hash(text)
 
-                ids.append(doc_id)
-                documents.append(chunk)
-                metadatas.append({
+        return [
+            (
+                f"{file_path.as_posix()}::{chunk.start_line}-{chunk.end_line}::{i}",
+                indexable_text(chunk, relative),
+                {
                     "file_path": file_path.as_posix(),
-                    "relative_path": file_path.relative_to(self.project_path).as_posix(),
+                    "relative_path": relative,
                     "source": self.project_name,
                     "kind": self.kind,
                     "chunk": i,
-                    "start_line": first,
-                    "end_line": last,
-                })
+                    "start_line": chunk.start_line,
+                    "end_line": chunk.end_line,
+                    "label": chunk.label,
+                    "file_hash": file_hash,
+                },
+            )
+            for i, chunk in enumerate(chunk_text(text, file_path.suffix))
+        ]
+
+    def index_project(self) -> int:
+        """Reindexa solo lo que cambió. Devuelve cuántos fragmentos hay en total."""
+        files = self.read_files()
+        stored = self.store.file_hashes()
+        current = {path.as_posix(): content_hash(text) for path, text in files.items()}
+
+        changed = [path for path in files if stored.get(path.as_posix()) != current[path.as_posix()]]
+        fragments = [fragment for path in changed for fragment in self.fragments_of(path, files[path])]
+
+        ids = [fragment[0] for fragment in fragments]
+        documents = [fragment[1] for fragment in fragments]
+        metadatas = [fragment[2] for fragment in fragments]
+
+        if documents:
+            print(f"[Indexando {len(documents)} fragmentos de {len(changed)} archivos]", file=sys.stderr, flush=True)
 
         embeddings = self.embedder.embed_documents(documents)
 
-        # Se borran los fragmentos previos de esta carpeta (incluidos los de
-        # archivos que ya no existen) solo después de generar todos los
-        # embeddings, para no dejar el índice vacío si Ollama falla a medias.
-        self.store.delete_where_file_path(self.is_inside_project)
+        # Se borran los fragmentos previos solo después de generar todos los
+        # embeddings, para no dejar el índice vacío si Ollama falla a medias:
+        # los de archivos que cambiaron, los de archivos que ya no están y los
+        # de índices creados antes de la fase 2 (rutas relativas, sin hash).
+        self.store.delete_where_file_path(lambda path: self.is_outdated(path, current, stored))
 
         if ids:
             self.store.add_documents(ids, documents, embeddings, metadatas)
 
-        return len(ids)
+        self.changed = len(changed)
+        self.unchanged = len(files) - len(changed)
+        return self.store.collection.count()
+
+    def is_outdated(self, file_path: str, current: dict, stored: dict) -> bool:
+        if not self.is_inside_project(file_path):
+            return False
+
+        return file_path not in current or current[file_path] != stored.get(file_path)
 
     def is_inside_project(self, file_path: str) -> bool:
         # Los índices creados antes de la fase 2 guardaban rutas relativas

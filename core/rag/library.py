@@ -72,4 +72,5 @@ def citation(metadata: dict) -> str:
         return file_path
 
     lines = f"línea {start}" if start == end else f"líneas {start}–{end}"
-    return f"{file_path}, {lines}"
+    label = f" ({metadata['label']})" if metadata.get("label") else ""
+    return f"{file_path}, {lines}{label}"
