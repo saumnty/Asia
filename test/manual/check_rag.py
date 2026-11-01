@@ -151,6 +151,10 @@ TRAPS = [
 ]
 
 
+# Las frases falsas que el ROADMAP recoge: citarlas no prueba nada, como con las trampas.
+INDEXED_FALSE_CLAIMS = ['debes abrirlo con el modo "w"', 'el resumen "cada 3 segundos"']
+
+
 def release_chroma():
     """Suelta los archivos de Chroma: en Windows los tiene abiertos hasta que se para su sistema."""
     from chromadb.api.shared_system_client import SharedSystemClient
@@ -244,6 +248,17 @@ def table(rows) -> str:
 
 
 ANSWERED = ("respondió", "redacción inválida")
+PROJECT_QUESTIONS = len(END_TO_END) - len(BOLITABOT) - len(DOCS)
+
+
+def by_source(rows) -> tuple:
+    """Las filas de END_TO_END de Asia, de Bolitabot y de la documentación."""
+    bolitabot = PROJECT_QUESTIONS + len(BOLITABOT)
+    return rows[:PROJECT_QUESTIONS], rows[PROJECT_QUESTIONS:bolitabot], rows[bolitabot:]
+
+
+def count_answered(rows) -> str:
+    return f"{sum(1 for row in rows if row[0] == 'respondió')}/{len(rows)}"
 
 
 def answer_row(brain, question, expected=None):
@@ -268,7 +283,7 @@ def clean_copy(folder):
     shutil.copytree(vector_store.CHROMA_DIR, folder)
     store = vector_store.VectorStore(persist_dir=folder, collection_name=COLLECTION)
     indexed = store.all_documents()
-    questions = [question.lower() for question in TRAPS]
+    questions = [question.lower() for question in TRAPS + INDEXED_FALSE_CLAIMS]
     this_file = relative(__file__)
     ids = [
         doc_id
@@ -336,6 +351,14 @@ def end_to_end(runs, glossary_dir):
 
     brain = Brain()
     check = explore.draft_problems
+    clean = explore.clean_translation
+
+    def showing_translation(answer):
+        translated = clean(answer)
+        print(f"    traducción: {translated}", flush=True)
+        return translated
+
+    explore.clean_translation = showing_translation
 
     def showing_problems(answer, quotes, context):
         problems = check(answer, quotes, context)
@@ -347,8 +370,9 @@ def end_to_end(runs, glossary_dir):
 
     explore.draft_problems = showing_problems
     summary = [
-        "| Corrida | Responde | Redacciones inválidas | Cita el archivo | Trampas respondidas | Ajenas respondidas | Segundos por pregunta |",
-        "|---|---|---|---|---|---|---|",
+        "| Corrida | Responde | Asia | Bolitabot | Docs | NINGUNA en docs | Redacciones inválidas | Cita el archivo "
+        "| Trampas respondidas | Ajenas respondidas | Segundos por pregunta |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
 
     for run in range(1, runs + 1):
@@ -383,8 +407,10 @@ def end_to_end(runs, glossary_dir):
         fell = sum(1 for r in traps if r[0] in ANSWERED)
         strayed = sum(1 for r in strangers if r[0] in ANSWERED)
         seconds = sum(r[2] for r in rows + traps + strangers) / len(rows + traps + strangers)
+        groups = "".join(f"{count_answered(group)} | " for group in by_source(rows))
+        refused = sum(1 for r in by_source(rows)[2] if r[0] == "sin respuesta directa")
         summary.append(
-            f"| {run} | {answered}/{len(rows)} | {invalid} | {cited}/{len(rows)} | {fell}/{len(traps)} "
+            f"| {run} | {answered}/{len(rows)} | {groups}{refused} | {invalid} | {cited}/{len(rows)} | {fell}/{len(traps)} "
             f"| {strayed}/{len(strangers)} | {seconds:.0f} |"
         )
         print()
