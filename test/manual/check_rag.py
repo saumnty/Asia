@@ -22,12 +22,17 @@ tarda minutos en CPU.
 
     .venv\\Scripts\\python.exe test\\manual\\check_rag.py --punta-a-punta 2
 
+Las ajenas (nada que ver con ninguna fuente) también pasan por la cadena: la distancia
+de embeddings deja llegar algunas al modelo. El glosario de Bolitabot es de la
+medición, en una carpeta temporal; --sin-glosario mide sin él.
+
 Para calibrar el filtro, la cobertura y la distancia de cada pregunta, sin el modelo:
 
     .venv\\Scripts\\python.exe test\\manual\\check_rag.py --calibrar
 """
 import argparse
 import gc
+import json
 import shutil
 import sys
 import tempfile
@@ -86,6 +91,9 @@ UNANSWERABLE = [
     "cuántos goles metió Maradona en el mundial de 1986",
 ]
 
+
+# El de la medición: el real lo mantiene el usuario en data/biblioteca/.
+GLOSSARY = {"punto desplazado": ["x_front", "y_front"]}
 
 # Casos reales, de la prueba con el repo de Bolitabot. La respuesta está en el código
 # de un bloque de Simulink, con pocas palabras en común con la pregunta.
@@ -212,6 +220,9 @@ def table(rows) -> str:
     return "\n".join(lines)
 
 
+ANSWERED = ("respondió", "redacción inválida")
+
+
 def answer_row(brain, question, expected=None):
     """(estado, cita el archivo, segundos, lo que se muestra) de una pregunta con el modelo real."""
     start = time.perf_counter()
@@ -282,12 +293,18 @@ def calibrate():
     return 0
 
 
-def end_to_end(runs):
+def end_to_end(runs, glossary_dir):
     from core import paths
     from core.brain import Brain
     from core.session import Session
 
     Session.set_paths(project_root=paths.PROJECT_ROOT, user_cwd=ROOT)
+    # Sin glosario, una carpeta sin archivos; nunca el del usuario.
+    paths.GLOSSARY_DIR = glossary_dir or Path(tempfile.gettempdir()) / f"{TEMP_PREFIX}sin_glosario"
+
+    if glossary_dir:
+        (glossary_dir / "glosario_bolitabot.json").write_text(json.dumps(GLOSSARY), encoding="utf-8")
+
     brain = Brain()
     check = explore.draft_problems
 
@@ -301,8 +318,8 @@ def end_to_end(runs):
 
     explore.draft_problems = showing_problems
     summary = [
-        "| Corrida | Responde | Redacciones inválidas | Cita el archivo | Trampas respondidas | Segundos por pregunta |",
-        "|---|---|---|---|---|---|",
+        "| Corrida | Responde | Redacciones inválidas | Cita el archivo | Trampas respondidas | Ajenas respondidas | Segundos por pregunta |",
+        "|---|---|---|---|---|---|---|",
     ]
 
     for run in range(1, runs + 1):
@@ -317,22 +334,27 @@ def end_to_end(runs):
 
         traps = []
 
-        for question in TRAPS:
-            row = answer_row(brain, f"{question} en asia")
-            traps.append(row)
-            state, _, seconds, shown = row
-            print(f"\n[{run}] TRAMPA {state}, {seconds:.0f} s: {question}", flush=True)
+        strangers = []
 
-            if state != "sin respuesta directa":
-                print(shown, flush=True)
+        for group, name, questions in ((traps, "TRAMPA", [f"{q} en asia" for q in TRAPS]), (strangers, "AJENA", UNANSWERABLE)):
+            for question in questions:
+                row = answer_row(brain, question)
+                group.append(row)
+                state, _, seconds, shown = row
+                print(f"\n[{run}] {name} {state}, {seconds:.0f} s: {question}", flush=True)
+
+                if state in ANSWERED:
+                    print(shown, flush=True)
 
         answered = sum(1 for r in rows if r[0] == "respondió")
-        invalid = sum(1 for r in rows + traps if r[0] == "redacción inválida")
+        invalid = sum(1 for r in rows + traps + strangers if r[0] == "redacción inválida")
         cited = sum(1 for r in rows if r[1])
-        fell = sum(1 for r in traps if r[0] != "sin respuesta directa")
-        seconds = sum(r[2] for r in rows + traps) / len(rows + traps)
+        fell = sum(1 for r in traps if r[0] in ANSWERED)
+        strayed = sum(1 for r in strangers if r[0] in ANSWERED)
+        seconds = sum(r[2] for r in rows + traps + strangers) / len(rows + traps + strangers)
         summary.append(
-            f"| {run} | {answered}/{len(rows)} | {invalid} | {cited}/{len(rows)} | {fell}/{len(traps)} | {seconds:.0f} |"
+            f"| {run} | {answered}/{len(rows)} | {invalid} | {cited}/{len(rows)} | {fell}/{len(traps)} "
+            f"| {strayed}/{len(strangers)} | {seconds:.0f} |"
         )
         print()
 
@@ -344,6 +366,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--indice", help="carpeta del índice: se conserva y solo se reindexa lo que cambió")
     parser.add_argument("--punta-a-punta", type=int, metavar="CORRIDAS", help="mide las respuestas del modelo real")
+    parser.add_argument("--sin-glosario", action="store_true", help="punta a punta sin el glosario de la medición")
     parser.add_argument("--calibrar", action="store_true", help="cobertura y distancia de cada pregunta")
     parser.add_argument("--fragmentos", type=int, help="fragmentos que recibe el modelo, en vez del valor del código")
     args = parser.parse_args()
@@ -357,7 +380,11 @@ def main():
 
         try:
             clean_copy(scratch / "chroma")
-            return calibrate() if args.calibrar else end_to_end(args.punta_a_punta)
+
+            if args.calibrar:
+                return calibrate()
+
+            return end_to_end(args.punta_a_punta, None if args.sin_glosario else scratch)
         finally:
             remove_tree(scratch)
 
