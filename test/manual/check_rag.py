@@ -13,7 +13,7 @@ decidir cuándo decir "no lo encontré".
 
 Punta a punta, con el modelo real y el índice real (data/chroma, solo lectura):
 cuántas de 8 preguntas responde, cuántas citan el archivo correcto en las líneas
-verificadas, y a cuántas de 4 trampas responde. Las trampas pasan
+verificadas, cuántas redacciones se invalidan por nombres o citas que no existen, y a cuántas de 4 trampas responde. Las trampas pasan
 el filtro de cobertura pero no tienen respuesta en C:\\Asia: una cita verificada
 prueba que la línea existe, no que responda, así que su respuesta se imprime entera
 para leerla. Mide sobre una copia del índice sin este archivo ni los fragmentos que
@@ -166,8 +166,9 @@ def answer_row(brain, question, expected=None):
     if shown.startswith(prompts.NO_DIRECT_ANSWER):
         return "sin respuesta directa", False, seconds, shown
 
+    state = "redacción inválida" if shown.startswith(prompts.INVALID_DRAFT) else "respondió"
     sources = shown.rpartition(prompts.VERIFIED_LINES)[2].lower()
-    return "respondió", bool(expected) and Path(expected).name.lower() in sources, seconds, shown
+    return state, bool(expected) and Path(expected).name.lower() in sources, seconds, shown
 
 
 def clean_copy(folder):
@@ -194,9 +195,20 @@ def end_to_end(runs):
 
     Session.set_paths(project_root=paths.PROJECT_ROOT, user_cwd=ROOT)
     brain = Brain()
+    check = explore.draft_problems
+
+    def showing_problems(answer, quotes, context):
+        problems = check(answer, quotes, context)
+
+        if problems:
+            print(f"    invalidada por {problems} en: {' '.join(answer.split())[:300]}", flush=True)
+
+        return problems
+
+    explore.draft_problems = showing_problems
     summary = [
-        "| Corrida | Responde | Cita el archivo | Trampas respondidas | Segundos por pregunta |",
-        "|---|---|---|---|---|",
+        "| Corrida | Responde | Redacciones inválidas | Cita el archivo | Trampas respondidas | Segundos por pregunta |",
+        "|---|---|---|---|---|---|",
     ]
 
     for run in range(1, runs + 1):
@@ -217,14 +229,17 @@ def end_to_end(runs):
             state, _, seconds, shown = row
             print(f"\n[{run}] TRAMPA {state}, {seconds:.0f} s: {question}", flush=True)
 
-            if state == "respondió":
+            if state != "sin respuesta directa":
                 print(shown, flush=True)
 
         answered = sum(1 for r in rows if r[0] == "respondió")
+        invalid = sum(1 for r in rows + traps if r[0] == "redacción inválida")
         cited = sum(1 for r in rows if r[1])
-        fell = sum(1 for r in traps if r[0] == "respondió")
+        fell = sum(1 for r in traps if r[0] != "sin respuesta directa")
         seconds = sum(r[2] for r in rows + traps) / len(rows + traps)
-        summary.append(f"| {run} | {answered}/{len(rows)} | {cited}/{len(rows)} | {fell}/{len(traps)} | {seconds:.0f} |")
+        summary.append(
+            f"| {run} | {answered}/{len(rows)} | {invalid} | {cited}/{len(rows)} | {fell}/{len(traps)} | {seconds:.0f} |"
+        )
         print()
 
     print("\n".join(summary))
