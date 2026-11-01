@@ -9,6 +9,8 @@ antes: cambiar uno es un cambio de comportamiento.
 
 # Lo que responde Asia cuando la biblioteca no tiene la respuesta (fase H).
 NOT_FOUND = "No lo encontré en tus proyectos."
+# Lo que encabeza los fragmentos si el modelo se niega y había material.
+MOST_RELEVANT = "Esto es lo más relevante que encontré:"
 
 
 # --- Reflexión (fase R) ---------------------------------------------------------

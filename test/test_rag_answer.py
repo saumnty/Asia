@@ -4,7 +4,7 @@ import pytest
 from core import prompts
 from core.commands import COMMANDS, options_text
 from core.prompts import NOT_FOUND
-from core.rag.library import is_refusal, sources_footer
+from core.rag.library import best_fragments, is_refusal, sources_footer
 from core.rag.retriever import Hit, relevant
 from test_confidencial import make_brain
 from tools.rag_tool import RagTool
@@ -164,6 +164,33 @@ def test_negativas(answer):
 )
 def test_no_son_negativas(answer):
     assert not is_refusal(answer)
+
+
+@pytest.mark.parametrize("refusal", [NOT_FOUND, "Los fragmentos no responden la pregunta."])
+def test_si_el_modelo_se_niega_muestra_los_fragmentos(refusal):
+    brain = brain_with(refusal)
+
+    answer = brain.process("/buscar qué ganancia tiene")
+
+    assert answer.startswith(prompts.MOST_RELEVANT)
+    assert "[control/pid.py:40-55] Pid.salida\nkp = 2" in answer and "[README.md:1-8]\nRobot." in answer
+    assert NOT_FOUND not in answer and "Fuentes:" not in answer
+    assert len(brain.provider_router.prompts) == 1
+
+
+def test_los_mejores_son_tres_y_cortos():
+    context = "".join(f"\n--- [a{i}.py:1-9] ---\nFuente: x (proyecto)\nContenido:\n{'z' * 700}\n" for i in range(5))
+
+    shown = best_fragments(context)
+
+    assert "[a2.py:1-9]" in shown and "[a3.py:1-9]" not in shown
+    assert shown.count("…") == 3 and "z" * 601 not in shown
+
+
+def test_una_respuesta_parcial_no_activa_la_red():
+    answer = brain_with("Está kp, pero no se dice cuánto vale ki [control/pid.py:40-55].").process("/buscar qué ganancia")
+
+    assert answer.startswith("Está kp") and "Fuentes:" in answer
 
 
 def test_buscar_sin_pregunta():

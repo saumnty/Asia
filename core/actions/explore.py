@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from core import prompts
-from core.rag.library import sources_footer
+from core.rag.library import best_fragments, is_refusal, sources_footer
 
 # Los mismos que config/defaults.json, por si falta la clave.
 DEFAULT_ANSWER_LIMITS = {
@@ -89,6 +89,11 @@ class ExploreActions:
         answer = self.provider_router.ask(
             prompts.search_project_rag(project_name, question, rag_context)
         )
+
+        # Había material: "no lo encontré" solo lo dice el código.
+        if is_refusal(answer):
+            return best_fragments(rag_context)
+
         return answer + sources_footer(rag_context, answer)
 
     def handle_explain_file(self, text, params):
