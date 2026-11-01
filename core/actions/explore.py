@@ -2,7 +2,8 @@
 from pathlib import Path
 
 from core import prompts
-from core.rag.library import best_fragments, is_refusal, sources_footer
+from core.rag.library import is_refusal
+from core.rag.quotes import best_fragments, quotes_footer, quotes_text, verify_quotes
 
 # Los mismos que config/defaults.json, por si falta la clave.
 DEFAULT_ANSWER_LIMITS = {
@@ -88,15 +89,19 @@ class ExploreActions:
         if rag_context == prompts.NOT_FOUND:
             return prompts.NOT_FOUND
 
-        answer = self.provider_router.ask(
-            prompts.search_project_rag(project_name, question, rag_context)
-        )
+        extracted = self.provider_router.ask(prompts.extract_quotes(question, rag_context))
+        quotes = verify_quotes(extracted, rag_context)
 
-        # Había material: "no lo encontré" solo lo dice el código.
+        # Sin líneas verificadas no hay respuesta del modelo: no hay con qué comprobarla.
+        if not quotes:
+            return best_fragments(rag_context)
+
+        answer = self.provider_router.ask(prompts.answer_from_quotes(question, quotes_text(quotes)))
+
         if is_refusal(answer):
             return best_fragments(rag_context)
 
-        return answer + sources_footer(rag_context, answer)
+        return answer + quotes_footer(quotes)
 
     def handle_explain_file(self, text, params):
         file_path = params.get("file_path")

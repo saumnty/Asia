@@ -301,7 +301,7 @@
  },
  "search_project_rag": {
   "results": [
-   "respuesta-llm"
+   "No encontré una respuesta directa. Esto es lo más relevante:\n\n"
   ],
   "events": [
    [
@@ -328,7 +328,7 @@
    ],
    [
     "ask",
-    "\nResponde la pregunta del usuario usando únicamente estos fragmentos de sus proyectos.\n\nProyecto activo:\nasia\n\nPregunta:\ndónde se usa ollama\n\nFragmentos encontrados:\n<search_project_rag>\n\nInstrucciones:\n- Estos fragmentos ya se revisaron y hay material: responde siempre con lo que dicen.\n- Responde solo con lo que dicen los fragmentos. No agregues nada de tu conocimiento general.\n- Di de dónde sale cada dato, con la etiqueta [archivo:líneas] del fragmento, tal como aparece. No escribas \"fragmento 1\".\n- Si la información es parcial, di qué parte está en los fragmentos y qué parte no.\n- Responde claro y breve.\n",
+    "\nCopia de estos fragmentos las líneas que responden la pregunta. No respondas la pregunta.\n\nPregunta:\ndónde se usa ollama\n\nFragmentos encontrados:\n<search_project_rag>\n\nInstrucciones:\n- Copia cada línea textualmente, sin cambiar ni una palabra, con la etiqueta de su fragmento.\n- Una línea por renglón, con este formato:\n[archivo:líneas] línea copiada\n- Si ninguna línea responde la pregunta directamente, escribe solo: NINGUNA\n- Una línea que habla de otra cosa parecida no responde la pregunta.\n- No expliques nada.\n",
     false
    ]
   ]

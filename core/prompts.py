@@ -9,8 +9,8 @@ antes: cambiar uno es un cambio de comportamiento.
 
 # Lo que responde Asia cuando la biblioteca no tiene la respuesta (fase H).
 NOT_FOUND = "No lo encontré en tus proyectos."
-# Lo que encabeza los fragmentos si el modelo se niega y había material.
-MOST_RELEVANT = "Esto es lo más relevante que encontré:"
+# Lo que encabeza los fragmentos si había material, pero ninguna línea lo responde.
+NO_DIRECT_ANSWER = "No encontré una respuesta directa. Esto es lo más relevante:"
 
 
 # --- Reflexión (fase R) ---------------------------------------------------------
@@ -130,12 +130,9 @@ Contenido:
 """
 
 
-def search_project_rag(project_name, question, rag_context):
+def extract_quotes(question, rag_context):
     return f"""
-Responde la pregunta del usuario usando únicamente estos fragmentos de sus proyectos.
-
-Proyecto activo:
-{project_name}
+Copia de estos fragmentos las líneas que responden la pregunta. No respondas la pregunta.
 
 Pregunta:
 {question}
@@ -144,10 +141,29 @@ Fragmentos encontrados:
 {rag_context}
 
 Instrucciones:
-- Estos fragmentos ya se revisaron y hay material: responde siempre con lo que dicen.
-- Responde solo con lo que dicen los fragmentos. No agregues nada de tu conocimiento general.
-- Di de dónde sale cada dato, con la etiqueta [archivo:líneas] del fragmento, tal como aparece. No escribas "fragmento 1".
-- Si la información es parcial, di qué parte está en los fragmentos y qué parte no.
+- Copia cada línea textualmente, sin cambiar ni una palabra, con la etiqueta de su fragmento.
+- Una línea por renglón, con este formato:
+[archivo:líneas] línea copiada
+- Si ninguna línea responde la pregunta directamente, escribe solo: NINGUNA
+- Una línea que habla de otra cosa parecida no responde la pregunta.
+- No expliques nada.
+"""
+
+
+def answer_from_quotes(question, quotes):
+    return f"""
+Responde la pregunta usando únicamente estas líneas. Ya se comprobó que existen en los proyectos del usuario.
+
+Pregunta:
+{question}
+
+Líneas:
+{quotes}
+
+Instrucciones:
+- No agregues nada que no digan las líneas, ni de tu conocimiento general.
+- Di de dónde sale cada dato, con su etiqueta entre corchetes.
+- Si las líneas responden solo una parte, di qué parte falta.
 - Responde claro y breve.
 """
 

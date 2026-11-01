@@ -8,9 +8,8 @@ import json
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from pathlib import Path
 
-from core import paths, prompts
+from core import paths
 from core.atomic_write import write_json_atomic
 from core.rag.bm25 import without_accents
 from core.rag.vector_store import safe_collection_name
@@ -18,7 +17,6 @@ from core.rag.vector_store import safe_collection_name
 KINDS = ("proyecto", "reporte", "notas")
 DEFAULT_KIND = "proyecto"
 FRAGMENT_HEADER = re.compile(r"^--- \[(.+?)\](?: (.+))? ---$", re.MULTILINE)
-LINES = re.compile(r":[\d-]+$")
 REFUSAL = re.compile(
     r"\bno (lo |la |se )?(encontr|encuentr|hay informacion|tengo informacion|dispongo|puedo (responder|determinar))"
     r"|fragmentos( \w+)? no (responden|contienen|mencionan|incluyen|dicen|hablan|tienen)"
@@ -27,8 +25,6 @@ REFUSAL = re.compile(
 PARTIAL = re.compile(r"\[[^\]]+:\d|\bpero\b|\bsin embargo\b")
 REFUSAL_MAX_CHARS = 300
 REFUSAL_OPENING = 150
-FALLBACK_FRAGMENTS = 3
-FALLBACK_CHARS = 600
 
 
 @dataclass
@@ -92,46 +88,6 @@ def is_refusal(answer: str) -> bool:
         return False
 
     return bool(REFUSAL.search(text[:REFUSAL_OPENING]))
-
-
-def best_fragments(context: str) -> str:
-    """Los mejores fragmentos tal cual: lo que se muestra si el modelo se niega habiendo material."""
-    headers = list(FRAGMENT_HEADER.finditer(context))
-    blocks = []
-
-    for i, header in enumerate(headers[:FALLBACK_FRAGMENTS]):
-        end = headers[i + 1].start() if i + 1 < len(headers) else len(context)
-        text = context[header.end():end].partition("Contenido:\n")[2].strip()
-        cut = "…" if len(text) > FALLBACK_CHARS else ""
-        tag, label = header.groups()
-        blocks.append(f"[{tag}] {label or ''}".strip() + f"\n{text[:FALLBACK_CHARS]}{cut}")
-
-    return f"{prompts.MOST_RELEVANT}\n\n" + "\n\n".join(blocks)
-
-
-def sources_footer(context: str, answer: str) -> str:
-    """La lista "Fuentes:" de una respuesta, sacada de los fragmentos y no del modelo.
-
-    Los fragmentos que la respuesta cita con su etiqueta. Si no cita ninguna, los
-    archivos que menciona, y si tampoco, todos los consultados. Así una cita nunca es
-    inventada. "" si la respuesta no usa fragmentos.
-    """
-    fragments = list(dict.fromkeys(FRAGMENT_HEADER.findall(context)))
-    said = answer.lower().replace("–", "-")
-
-    if not fragments or is_refusal(answer):
-        return ""
-
-    def cited(fragment):
-        return fragment[0].lower() in said
-
-    def mentioned(fragment):
-        return Path(LINES.sub("", fragment[0])).name.lower() in said
-
-    used = [f for f in fragments if cited(f)] or [f for f in fragments if mentioned(f)] or fragments
-    return "\n\nFuentes:\n" + "\n".join(
-        f"- {cite} ({label})" if label else f"- {cite}" for cite, label in used
-    )
 
 
 def citation(metadata: dict) -> str:
