@@ -297,14 +297,27 @@ Aciertos con `test/manual/check_rag.py` (20 preguntas sobre C:\Asia, archivo cor
 | Troceado | 10 / 12 / 14 | 3 / 4 / 6 | 1 / 2 / 2 | 6 / 6 / 6 |
 | Híbrida y tope por archivo | 13 / 16 / 19 | 5 / 8 / 11 | 2 / 2 / 2 | 6 / 6 / 6 |
 
-"No lo encontré": 5 de 5 preguntas sin respuesta y 0 de 20 falsos rechazos, con una muestra pequeña: cobertura hasta 0,16 sin respuesta y desde 0,41 con ella. Vigilar en uso real. Eso mide el filtro por cobertura, no al modelo (ver pendientes).
+"No lo encontré": 5 de 5 preguntas sin respuesta y 0 de 20 falsos rechazos, con una muestra pequeña: cobertura hasta 0,16 sin respuesta y desde 0,41 con ella. Vigilar en uso real. Eso mide el filtro por cobertura, no al modelo.
+
+"No lo encontré" solo lo decide el código: el prompt ya no lo ofrece y, si el modelo se niega con material, se muestran los 3 mejores fragmentos sin volver a llamarlo. Punta a punta con el 7B real (`check_rag.py --punta-a-punta 2`, 8 preguntas, sobre el texto del modelo; no mide si lo que dice es correcto):
+
+| Configuración | Corrida | Responde | Cita el archivo | s/pregunta |
+|---|---|---|---|---|
+| Antes, 5 fragmentos | 1 | 8/8 | 7/8 | 63 |
+| | 2 | 6/8 | 4/8 | 22 |
+| Después, 5 fragmentos | 1 | 8/8 | 7/8 | 79 |
+| | 2 | 8/8 | 7/8 | 29 |
+| Después, 3 fragmentos | 1 | 8/8 | 8/8 | 36 |
+| | 2 | 8/8 | 8/8 | 26 |
+
+Se quedan 5 fragmentos: con 3 el archivo correcto queda fuera en 4 de las 20 preguntas de la búsqueda, y con 5 en 1.
 
 Tiempos en CPU, solo como referencia (repetir con la GPU; no se ajustó nada por ellos): índice completo de 994 fragmentos, 423 s; incremental de 6 archivos, 29 s; consulta, 2,5 s, y `/buscar` entero, 45–110 s.
 
 Pendientes:
 - Medir con la GPU si `nomic-embed-text` junto al 7B le quita VRAM (389 MB en CPU); hoy conviven para no recargar en cada pregunta.
-- El 7B rechaza a veces con los fragmentos correctos delante: con 3 preguntas repetidas 2 veces, dijo "No lo encontré" en 2 de 6, y no en la misma pregunta. La búsqueda acertó en todas; el rechazo no pasa por `rag.min_coverage`.
-- Cada fragmento lleva `[archivo:líneas]` y "Fuentes:" prefiere esa etiqueta, pero el 7B no siempre cita (1 de 2 respuestas); entonces "Fuentes:" lista todos los consultados, no solo los usados.
+- Respuestas inventadas con cita real: si la pregunta no tiene respuesta pero pasa el filtro, el 7B ya no puede negarse y responde con lo que haya ("cómo se configura el firewall", cobertura 0,46, señala `settings.json`). La cobertura no lo separa: hay preguntas con respuesta en 0,41 y 0,42. Tampoco "la palabra más rara no está", porque sin raíces en español "detectan" no encuentra "detectar". Falta un criterio mejor.
+- Cada fragmento lleva `[archivo:líneas]` y "Fuentes:" prefiere esa etiqueta, pero el 7B no siempre cita; entonces "Fuentes:" lista todos los consultados, no solo los usados.
 - Un archivo sin fragmentos (`__init__.py` vacío) no guarda hash y `/indexar` lo cuenta como reindexado cada vez. No embebe nada; solo infla la cifra.
 - El troceado solo no ayuda: sin el tope por archivo, las secciones del ROADMAP acapararon los resultados.
 - BM25 se reconstruye en cada búsqueda con todos los documentos: revisar con fuentes grandes.
