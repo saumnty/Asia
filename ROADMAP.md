@@ -334,7 +334,23 @@ La redacción también se comprueba: una etiqueta que no esté entre las verific
 | Sin falsas alarmas | 1 | 8/8 | 0 | 8/8 | 0/4 | 50 |
 | | 2 | 6/8 | 0 | 5/8 | 0/4 | 39 |
 
-Las 2 inválidas de la primera regla eran falsas alarmas (`os.replace()` y PowerShell). Ninguna corrida con el 7B ha cazado aún un nombre inventado: eso solo está probado en pytest.
+Las 2 inválidas de la primera regla eran falsas alarmas (`os.replace()` y PowerShell).
+
+El filtro pasa si la cobertura llega a `rag.min_coverage` (0,3) o si un fragmento queda a `rag.max_distance` (392, para nomic-embed-text; otro modelo tiene otra escala). Interrogativos y cuantificadores son palabras vacías. Un glosario opcional por fuente, `data/biblioteca/glosario_<fuente>.json`, amplía la pregunta antes de buscar y para el modelo; lo mantiene el usuario y `/glosario <fuente>` lo muestra.
+
+| Filtro y glosario | Corrida | Responde | Inválidas | Cita el archivo | Trampas | Ajenas | s/pregunta |
+|---|---|---|---|---|---|---|---|
+| Antes | 1 | 8/11 | 0 | 7/11 | 1/4 (*) | — | 68 |
+| | 2 | 7/11 | 0 | 6/11 | 1/4 (*) | — | 26 |
+| Después, con glosario | 1 | 8/11 | 0 | 7/11 | 0/4 | 0/5 | 53 |
+| | 2 | 8/11 | 2 | 9/11 | 0/4 | 0/5 | 26 |
+| Después, sin glosario | 1 | 7/11 | 0 | 6/11 | 0/4 | 0/5 | 18 |
+
+(*) "Qué puerto usa el servidor web", que con Bolitabot como fuente tiene una línea real (9090). Desde entonces las trampas se preguntan "en asia". Las inválidas no cuentan en "Responde": muestran las líneas sin explicación.
+
+Primera invención cazada con el 7B: en la corrida 2 escribió una función `write_atomic` que no existe, y la redacción se invalidó. La otra invalidación fue estricta de más: citó `[providers/ollama_models.py:135-141]` con líneas sueltas verificadas dentro de ese rango.
+
+La distancia aporta poco: solo deja pasar a "punto desplazado" sin glosario, y ahí el 7B escribe NINGUNA. Separa mal: la ajena más cercana está en 386,3 y esa pregunta en 391,5, así que con 392 también llega al modelo una ajena (Maradona), que la extracción frena con NINGUNA.
 
 Tiempos en CPU, solo como referencia (repetir con la GPU; no se ajustó nada por ellos): índice completo de 994 fragmentos, 423 s; incremental de 6 archivos, 29 s; consulta, 2,5 s, y `/buscar` entero, 45–110 s.
 
@@ -344,7 +360,8 @@ Pendientes:
 - "Responde" no es "responde bien": una frase real copiada ("Llamadas al modelo que Ctrl+C corta al momento") pasa como respuesta.
 - NINGUNA sale a veces con preguntas válidas, al azar: 2 de 16 en la última medición.
 - "Cómo se cifra la contraseña" y las otras trampas dependen de que el 7B escriba NINGUNA: la cobertura no las separa. Una línea real que no responde pasaría la verificación.
-- El filtro de cobertura rechaza preguntas con respuesta en fuentes pequeñas de código. En Bolitabot (99 fragmentos), "cuánto dura cada tramo del trébol" da "No lo encontré" con el fragmento correcto en 2.º lugar: "cuánto" y "cada" no están en las palabras vacías y, ausentes, pesan mucho (cobertura 0,20). "Punto desplazado" tampoco pasa: el código dice `x_front`, sin esas palabras. Sin tocar `rag.min_coverage`: también sostiene las trampas.
+- En código con poco texto, una pregunta con otras palabras depende del glosario: sin él, "punto desplazado" no se responde. Con él, 1 de 2 corridas.
+- Una etiqueta con un rango de líneas invalida la redacción si alguna línea del rango no se verificó, aunque los nombres sean reales. Decidir si un rango basta con que sus extremos estén verificados.
 - Un archivo sin fragmentos (`__init__.py` vacío) no guarda hash y `/indexar` lo cuenta como reindexado cada vez. No embebe nada; solo infla la cifra.
 - El troceado solo no ayuda: sin el tope por archivo, las secciones del ROADMAP acapararon los resultados.
 - BM25 se reconstruye en cada búsqueda con todos los documentos: se resuelve con SQLite FTS5 en la capa 2.
