@@ -328,7 +328,7 @@
    ],
    [
     "ask",
-    "\nCopia de estos fragmentos las líneas que responden la pregunta. No respondas la pregunta.\n\nPregunta:\ndónde se usa ollama\n\nFragmentos encontrados:\n<search_project_rag>\n\nInstrucciones:\n- Copia cada línea textualmente, sin cambiar ni una palabra, con la etiqueta de su fragmento.\n- Una línea por renglón, con este formato:\n[archivo:líneas] línea copiada\n- Si ninguna línea responde la pregunta directamente, escribe solo: NINGUNA\n- Una línea que habla de otra cosa parecida no responde la pregunta.\n- No expliques nada.\n",
+    "\nCopia de estos fragmentos las líneas que responden la pregunta. No respondas la pregunta.\n\nPregunta:\ndónde se usa ollama\n\nFragmentos encontrados:\n<search_project_rag>\n\nInstrucciones:\n- Copia cada línea textualmente, sin cambiar ni una palabra, con la etiqueta de su fragmento.\n- Una línea por renglón, con este formato:\n[archivo:líneas] línea copiada\n- Si la pregunta es solo un nombre de función, clase o variable, copia las líneas donde se define y las que explican qué hace.\n- Si lo que se pregunta no aparece en los fragmentos, escribe solo: NINGUNA\n- No expliques nada.\n",
     false
    ]
   ]

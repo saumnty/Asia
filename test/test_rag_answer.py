@@ -72,6 +72,10 @@ def test_la_extraccion_pide_copiar_o_ninguna():
     assert "qué ganancia" in prompt
 
 
+def test_la_extraccion_sabe_que_hacer_con_un_nombre_suelto():
+    assert "solo un nombre de función, clase o variable" in prompts.extract_quotes("SentenceSplitter", CONTEXT)
+
+
 def test_la_respuesta_solo_ve_las_lineas():
     prompt = prompts.answer_from_quotes("qué ganancia", "[a.py:1] kp = 2")
 

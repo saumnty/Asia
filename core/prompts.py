@@ -144,8 +144,8 @@ Instrucciones:
 - Copia cada línea textualmente, sin cambiar ni una palabra, con la etiqueta de su fragmento.
 - Una línea por renglón, con este formato:
 [archivo:líneas] línea copiada
-- Si ninguna línea responde la pregunta directamente, escribe solo: NINGUNA
-- Una línea que habla de otra cosa parecida no responde la pregunta.
+- Si la pregunta es solo un nombre de función, clase o variable, copia las líneas donde se define y las que explican qué hace.
+- Si lo que se pregunta no aparece en los fragmentos, escribe solo: NINGUNA
 - No expliques nada.
 """
 
