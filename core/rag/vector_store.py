@@ -81,13 +81,21 @@ class VectorStore:
             if metadata and metadata.get("file_hash")
         }
 
+    def all_documents(self) -> dict:
+        return self.collection.get(include=["documents", "metadatas"])
+
     def query(
         self,
         query_embedding,
         n_results=5
     ):
 
+        count = self.collection.count()
+
+        if not count:
+            return {}
+
         return self.collection.query(
             query_embeddings=[query_embedding],
-            n_results=n_results
+            n_results=min(n_results, count)
         )
