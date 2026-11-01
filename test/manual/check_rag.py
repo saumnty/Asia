@@ -12,7 +12,7 @@ También mira las preguntas que no tienen respuesta en C:\\Asia: lo que ayuda a
 decidir cuándo decir "no lo encontré".
 
 Punta a punta, con el modelo real y el índice real (data/chroma, solo lectura):
-cuántas de 11 preguntas responde (8 de C:\\Asia y 3 de Bolitabot), cuántas citan el archivo correcto en las líneas
+cuántas de 20 preguntas responde (8 de C:\\Asia, 3 de Bolitabot y 9 de documentación), cuántas citan el archivo correcto en las líneas
 verificadas, cuántas redacciones se invalidan por nombres o citas que no existen, y a cuántas de 4 trampas responde. Las trampas pasan
 el filtro de cobertura pero no tienen respuesta en C:\\Asia: una cita verificada
 prueba que la línea existe, no que responda, así que su respuesta se imprime entera
@@ -92,6 +92,27 @@ UNANSWERABLE = [
 ]
 
 
+# En español, sobre documentación en inglés. El segundo dato es parte de su ruta.
+DOCS = [
+    ("cómo se publica un mensaje en un tópico desde la terminal en ros2", "Understanding-ROS2-Topics"),
+    ("qué políticas de calidad de servicio QoS existen en ros2", "About-Quality-of-Service-Settings"),
+    ("cómo se crea un paquete con ros2 pkg create en ros2", "Creating-Your-First-ROS2-Package"),
+    ("cómo se escribe un archivo launch en Python en ros2", "Creating-Launch-Files"),
+    ("cómo se conecta ROS 2 con Gazebo usando parameter_bridge en gazebo", "ros2_integration"),
+    ("cómo se mueve un robot con el plugin de tracción diferencial en gazebo", "moving_robot"),
+    ("cómo se crea un mundo en SDF en gazebo", "sdf_worlds"),
+    ("a qué tipo de Gazebo corresponde geometry_msgs/msg/Twist en ros_gz_bridge", "README"),
+    ("cómo se configura el puente con un archivo YAML en ros_gz_bridge", "README"),
+]
+
+# Sobre esas fuentes, sin respuesta en ellas.
+DOC_TRAPS = [
+    "cuánto cuesta una licencia comercial en ros2",
+    "cómo se entrena una red neuronal en gazebo",
+    "cómo se programa una Raspberry Pi Pico en ros2",
+    "cuál es el precio del robot Spot en gazebo",
+]
+
 # El de la medición: el real lo mantiene el usuario en data/biblioteca/.
 GLOSSARY = {"punto desplazado": ["x_front", "y_front"]}
 
@@ -115,6 +136,7 @@ END_TO_END = [
     ("drop_client", "providers/ollama_models.py"),
     ("SentenceSplitter", "core/voice/reading.py"),
     *BOLITABOT,
+    *DOCS,
 ]
 
 
@@ -258,7 +280,7 @@ def clean_copy(folder):
     print(f"Índice de la medición: {store.collection.count()} fragmentos, {len(ids)} fuera.", flush=True)
 
 
-def calibration_row(group, question, sources):
+def calibration_row(group, question, sources, expected=""):
     """Lo que ve el filtro: la mejor cobertura y la menor distancia de los fragmentos."""
     named = named_in_question(question, sources)
     collections = [named.collection] if named else [source.collection for source in sources]
@@ -267,7 +289,9 @@ def calibration_row(group, question, sources):
     distances = [hit.distance for hit in hits if hit.distance is not None]
     coverage = max((hit.coverage for hit in hits), default=0.0)
     distance = min(distances, default=float("inf"))
-    print(f"{group:<10} cobertura {coverage:.2f}  distancia {distance:7.1f}  {question[:60]}", flush=True)
+    files = [hit.metadata.get("relative_path", "") for hit in hits]
+    place = next((i for i, name in enumerate(files, 1) if expected in name), "-") if expected else ""
+    print(f"{group:<10} cobertura {coverage:.2f}  distancia {distance:7.1f}  {place!s:>2} {question[:60]}", flush=True)
 
 
 def calibrate():
@@ -279,8 +303,14 @@ def calibrate():
     for question, _ in BOLITABOT:
         calibration_row("bolitabot", question, sources)
 
+    for question, expected in DOCS:
+        calibration_row("docs", question, sources, expected)
+
     for question in TRAPS:
         calibration_row("trampa", f"{question} en asia", sources)
+
+    for question in DOC_TRAPS:
+        calibration_row("trampa doc", question, sources)
 
     for question in UNANSWERABLE:
         calibration_row("ajena", f"{question} en asia", sources)
@@ -334,7 +364,9 @@ def end_to_end(runs, glossary_dir):
 
         strangers = []
 
-        for group, name, questions in ((traps, "TRAMPA", [f"{q} en asia" for q in TRAPS]), (strangers, "AJENA", UNANSWERABLE)):
+        trap_questions = [f"{q} en asia" for q in TRAPS] + DOC_TRAPS
+
+        for group, name, questions in ((traps, "TRAMPA", trap_questions), (strangers, "AJENA", UNANSWERABLE)):
             for question in questions:
                 row = answer_row(brain, question)
                 group.append(row)
