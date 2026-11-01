@@ -395,10 +395,19 @@ Respuestas falsas que pasaron todas las comprobaciones, leídas contra el códig
 
 Pendientes de la capa 2:
 - Python 3.12: sin descargar. Es `.txt`, hay que decidir cómo trocearlo.
-- Averiguar por qué la extracción escribe NINGUNA con el documento correcto delante: si es el inglés, el tamaño del fragmento o que la respuesta no está en él.
+- Averiguar por qué la extracción se queda sin líneas con el documento correcto delante: traducir la pregunta no lo resuelve (abajo). Queda el tamaño del fragmento o que la respuesta no esté en él.
 - "No lo encontré en tus proyectos" suena raro con documentación.
 
 Una pregunta con "en <fuente>" que el filtro rechaza enseña los fragmentos en lugar de negar, sin pasar por el modelo. Sin fuente nombrada, sigue negando.
+
+Idioma por fuente: `ros2`, `gazebo` y `ros_gz_bridge` son `en` (`/indexar <nombre> idioma=en`). Con una fuente en inglés en la búsqueda, el 7B traduce la pregunta en una llamada corta; las colecciones en inglés se buscan con la original y la traducida, con raíces del inglés para la traducida, y la extracción recibe las dos. Medición con 392, dos corridas:
+
+| Corrida | Asia | Bolitabot | Docs | Sin líneas en docs | Inválidas | Cita | Trampas | Ajenas | s/pregunta |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 7/8 | 3/3 | 6/9 | 3 | 0 | 14/20 | 0/8 | 0/5 | 74 |
+| 2 | 5/8 | 2/3 | 3/9 | 5 | 3 | 10/20 | 0/8 | 0/5 | 49 |
+
+No reduce los casos medidos de forma clara: QoS sigue sin líneas 2 de 2 (antes, 2 de 2) y el puente con YAML 1 de 2 (antes, 3 de 4). Docs da 6/9 y 3/9 frente a 3/9 y 4/9: dentro del azar del 7B, y la misma corrida con los mismos fragmentos va de 6 a 3. Con las traducciones de la corrida y solo la búsqueda, las seis que se quedaron sin líneas pasan el filtro con el documento correcto en el top 5. Las preguntas sin fuente nombrada no empeoran. Cuesta tiempo: frente a 54 y 20 s por pregunta, porque toda búsqueda general también traduce, y la traducción a veces falla ("pendientes" salió "preferences").
 
 `test/` nunca entró en `asia`: el indexador ignora `test_dirs`. Va aparte, en `asia-pruebas`, que solo se consulta con "en asia-pruebas": `/indexar asia-pruebas C:\Asia\test solo-nombrada`. `/indexar <nombre>` sin ruta ni tipo conserva los de la fuente; antes indexaba la carpeta actual en ella.
 
