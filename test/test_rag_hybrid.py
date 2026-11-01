@@ -1,4 +1,6 @@
 """Búsqueda híbrida: BM25 propio y fusión con los embeddings."""
+import pytest
+
 from core.rag.bm25 import BM25, stem, tokenize
 from core.rag.indexer import ProjectIndexer
 from core.rag.retriever import MAX_PER_FILE, Hit, merge, search_collections
@@ -14,6 +16,25 @@ def test_parte_los_nombres_como_en_el_codigo():
 
 def test_sin_acentos_ni_palabras_vacias():
     assert set(tokenize("la sesión de pruebas")) == {stem("sesion"), stem("pruebas")}
+
+
+@pytest.mark.parametrize(
+    "word",
+    ["cuánto", "cuánta", "cuántos", "cuántas", "cada", "cuál", "cuáles", "cómo", "dónde", "cuándo", "qué", "quién", "quiénes"],
+)
+def test_interrogativos_y_cuantificadores_no_cuentan(word):
+    assert tokenize(word) == []
+
+
+def test_una_pregunta_no_pesa_por_sus_interrogativos():
+    # Medido en Bolitabot: "cuánto" y "cada", ausentes, dejaban la cobertura en 0,20.
+    words = BM25(["T_v tramo trebol tiempos", "otra cosa", "una mas"])
+
+    assert words.coverage("cuánto dura cada tramo del trébol", "T_v tramo trebol tiempos") > 0.5
+
+
+def test_todo_sigue_siendo_buscable():
+    assert tokenize("TODO") == [stem("todo")]
 
 
 def test_el_mismo_verbo_cuenta_como_la_misma_palabra():

@@ -20,6 +20,11 @@ STOPWORDS = {
     "a", "al", "algo", "como", "con", "cual", "de", "del", "donde", "el", "en", "es", "esta", "este", "la", "las",
     "lo", "los", "me", "mi", "para", "pero", "por", "que", "se", "si", "sin", "su", "un", "una", "uno", "y", "o",
     "the", "of", "to", "and", "in", "is",
+    # Interrogativos y cuantificadores: dicen cómo se pregunta, no de qué. Ausentes de una
+    # fuente pequeña pesaban más que las palabras con contenido. "todo" no: es TODO en el código.
+    "cuando", "cuanto", "cuanta", "cuantos", "cuantas", "cuales", "quien", "quienes", "cada",
+    "todos", "todas", "toda", "mucho", "mucha", "muchos", "muchas", "poco", "poca", "pocos", "pocas",
+    "varios", "varias", "algun", "alguna", "algunos", "algunas", "ningun", "ninguna",
 }
 
 
