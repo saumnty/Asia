@@ -22,7 +22,7 @@ CITED_FILE = re.compile(r"\[([\w./\\-]+\.\w+)\]")
 FENCE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)
 BACKTICKED = re.compile(r"`([^`\n]+)`")
 WORD = re.compile(r"\w+")
-CAMEL_CASE = re.compile(r"[a-z0-9][A-Z]")
+CAMEL_CASE = re.compile(r"[a-z][a-z0-9]*[A-Z]")
 # Una línea de código suelta, no una frase.
 CODE_LINE = re.compile(r"\s*(?:import|from|def|class|return|if|for|while)\b|\s*[\w.]+\s*=[^=]")
 MIN_DRAFT_WORDS = 4
@@ -128,7 +128,8 @@ def unverified_tags(answer: str, quotes: list) -> list:
 
 
 def is_identifier(word: str) -> bool:
-    return "_" in word or bool(CAMEL_CASE.search(word))
+    # Solo camelCase: "PowerShell" o "ChromaDB" son nombres, no código.
+    return "_" in word or bool(CAMEL_CASE.match(word))
 
 
 def unknown_names(answer: str, context: str) -> list:
@@ -140,7 +141,8 @@ def unknown_names(answer: str, context: str) -> list:
     known = squash(context)
     words = set(WORD.findall(context))
 
-    unknown = [item.strip() for item in code if squash(item.strip(" .,:;")) not in known]
+    # "os.replace()" nombra lo que el código llama con argumentos.
+    unknown = [item.strip() for item in code if squash(item.strip(" .,:;").removesuffix("()")) not in known]
     unknown += [word for word in WORD.findall(BACKTICKED.sub(" ", text)) if is_identifier(word) and word not in words]
     return list(dict.fromkeys(unknown))
 

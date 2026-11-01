@@ -283,7 +283,7 @@ def test_una_redaccion_con_nombres_reales_vale(answer):
         ("Se calcula con `calcula_pid()`.", "calcula_pid()"),
         ("Se calcula con calcula_pid sobre el error.", "calcula_pid"),
         ("Se calcula con calculaPid sobre el error.", "calculaPid"),
-        ("Lo hace SessionPid sobre el error.", "SessionPid"),
+        ("Lo hace `SessionPid` sobre el error.", "SessionPid"),
         ("Un ejemplo:\n```python\ndef atomic_write(ruta, contenido):\n    pass\n```", "def atomic_write(ruta, contenido):"),
     ],
 )
@@ -302,6 +302,19 @@ def test_una_etiqueta_entre_comillas_invertidas_se_trata_como_etiqueta():
 
 def test_las_palabras_normales_no_son_identificadores():
     assert draft_problems("El filtro de secretos corre antes del envío, según Ollama y JSON.", VERIFIED, CONTEXT) == []
+
+
+def test_un_nombre_de_producto_no_es_un_identificador():
+    # Medido con el 7B: invalidaba la respuesta correcta de jarvis.bat.
+    assert draft_problems("Ejecuta este comando en PowerShell y luego en ChromaDB.", VERIFIED, CONTEXT) == []
+
+
+def test_una_llamada_sin_argumentos_nombra_lo_que_el_codigo_llama_con_ellos():
+    # Medido con el 7B: `os.replace()` en la redacción, os.replace(tmp, path) en el código.
+    context = CONTEXT + "\n--- [a.py:1-3] ---\nFuente: x (proyecto)\nContenido:\na.py\nos.replace(tmp, path)\n"
+
+    assert draft_problems("Reemplaza con `os.replace()` y listo.", VERIFIED, context) == []
+    assert "os.rename()" in draft_problems("Reemplaza con `os.rename()` y listo.", VERIFIED, context)
 
 
 def test_con_nombres_inventados_solo_se_muestran_las_lineas():
