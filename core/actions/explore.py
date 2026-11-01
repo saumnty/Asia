@@ -3,7 +3,7 @@ from pathlib import Path
 
 from core import prompts
 from core.rag.library import is_refusal
-from core.rag.quotes import best_fragments, draft_problems, quotes_text, verified_lines, verify_quotes
+from core.rag.quotes import best_fragments, draft_problems, is_thin, quotes_text, verified_lines, verify_quotes
 
 # Los mismos que config/defaults.json, por si falta la clave.
 DEFAULT_ANSWER_LIMITS = {
@@ -98,7 +98,7 @@ class ExploreActions:
 
         answer = self.provider_router.ask(prompts.answer_from_quotes(question, quotes_text(quotes)))
 
-        if is_refusal(answer):
+        if is_refusal(answer) or is_thin(answer):
             return best_fragments(rag_context)
 
         # La redacción no se comprueba frase a frase, pero los nombres y las citas sí.

@@ -23,6 +23,9 @@ FENCE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)
 BACKTICKED = re.compile(r"`([^`\n]+)`")
 WORD = re.compile(r"\w+")
 CAMEL_CASE = re.compile(r"[a-z0-9][A-Z]")
+# Una línea de código suelta, no una frase.
+CODE_LINE = re.compile(r"\s*(?:import|from|def|class|return|if|for|while)\b|\s*[\w.]+\s*=[^=]")
+MIN_DRAFT_WORDS = 4
 FALLBACK_FRAGMENTS = 3
 FALLBACK_CHARS = 600
 
@@ -97,6 +100,17 @@ def verify_quotes(response: str, context: str) -> list:
 
 def quotes_text(quotes: list) -> str:
     return "\n".join(f"[{quote.cite}] {quote.text.strip()}" for quote in quotes)
+
+
+def is_thin(answer: str) -> bool:
+    """True si la redacción no llega a una frase: es solo una etiqueta o una línea de código."""
+    text = BACKTICKED.sub(" ", FENCE.sub(" ", CITED_FILE.sub(" ", CITED_LINES.sub(" ", answer))))
+    lines = [line for line in text.splitlines() if line.strip()]
+
+    if len(WORD.findall(text)) < MIN_DRAFT_WORDS:
+        return True
+
+    return len(lines) == 1 and bool(CODE_LINE.match(lines[0]))
 
 
 def unverified_tags(answer: str, quotes: list) -> list:

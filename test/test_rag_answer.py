@@ -5,7 +5,7 @@ from core import prompts
 from core.commands import COMMANDS, options_text
 from core.prompts import NOT_FOUND
 from core.rag.library import is_refusal
-from core.rag.quotes import Quote, best_fragments, draft_problems, verified_lines, verify_quotes
+from core.rag.quotes import Quote, best_fragments, draft_problems, is_thin, verified_lines, verify_quotes
 from core.rag.retriever import Hit, relevant
 from test_confidencial import make_brain
 from tools.rag_tool import RagTool
@@ -305,7 +305,7 @@ def test_las_palabras_normales_no_son_identificadores():
 
 
 def test_con_nombres_inventados_solo_se_muestran_las_lineas():
-    brain = brain_with(QUOTED, "Lo hace con `calcula_pid()` [control/pid.py:41].")
+    brain = brain_with(QUOTED, "La ganancia se calcula con `calcula_pid()` [control/pid.py:41].")
 
     answer = brain.process("/buscar qué ganancia tiene")
 
@@ -314,6 +314,47 @@ def test_con_nombres_inventados_solo_se_muestran_las_lineas():
         f"\n\n{prompts.VERIFIED_LINES}\n\ncontrol/pid.py:41 (Pid.salida)\n  self.kp   =   2.5"
     )
     assert "calcula_pid" not in answer
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "",
+        "drop_client",
+        "[providers/ollama_provider.py:83] drop_client",
+        "[core/atomic_write.py:11] import tempfile",
+        "[a.py:1] def drop_client(owner):",
+        "[a.py:1] self.kp = 2.5",
+        "[a.py:1] return self.kp * self.error + self.ki",
+        "`self.kp = 2.5`",
+        "```python\nimport os\n```",
+    ],
+)
+def test_redaccion_casi_vacia(answer):
+    assert is_thin(answer)
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "La ganancia es 2 [control/pid.py:41].",
+        "La función `drop_client` se define en [a.py:130].",
+        "[core/interruptible.py:1] Llamadas al modelo que Ctrl+C corta al momento.",
+        "Los pasos son estos:\n1. Abre el archivo.\n2. Guarda.",
+        "Si no hay conexión, reintenta tres veces.",
+    ],
+)
+def test_una_frase_no_es_casi_vacia(answer):
+    assert not is_thin(answer)
+
+
+def test_redaccion_casi_vacia_se_trata_como_ninguna():
+    brain = brain_with(QUOTED, "[control/pid.py:41] self.kp = 2.5")
+
+    answer = brain.process("/buscar qué ganancia tiene")
+
+    assert answer.startswith(prompts.NO_DIRECT_ANSWER)
+    assert prompts.VERIFIED_LINES not in answer
 
 
 def test_una_respuesta_parcial_se_conserva():
