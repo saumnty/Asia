@@ -186,6 +186,10 @@ def test_lo_dudoso_se_muestra_marcado(sentence):
     assert check_draft(sentence, VERIFIED)[0] == [f"{sentence} (sin cita)"]
 
 
+def test_un_espacio_al_final_de_la_linea_no_separa_la_marca():
+    assert check_draft("- Una frase sin cita. \n- Otra.", VERIFIED)[0] == ["- Una frase sin cita. (sin cita)", "- Otra. (sin cita)"]
+
+
 def test_la_marca_de_un_bloque_de_codigo_va_debajo():
     assert check_draft("Usa esto:\n```\nself.kp = 2.5\n```", VERIFIED)[0] == ["Usa esto:\n```\nself.kp = 2.5\n```\n(sin cita)"]
 

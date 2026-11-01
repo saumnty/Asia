@@ -24,8 +24,8 @@ tarda minutos en CPU.
     .venv\\Scripts\\python.exe test\\manual\\check_rag.py --punta-a-punta 2
 
 Las ajenas (nada que ver con ninguna fuente) también pasan por la cadena: la distancia
-de embeddings deja llegar algunas al modelo. El glosario de Bolitabot es de la
-medición, en una carpeta temporal; --sin-glosario mide sin él.
+de embeddings deja llegar algunas al modelo. Los glosarios son de la medición, en una
+carpeta temporal; --sin-glosario mide sin ellos.
 
 Para calibrar el filtro, la cobertura y la distancia de cada pregunta, sin el modelo:
 
@@ -118,7 +118,10 @@ DOC_TRAPS = [
 ]
 
 # El de la medición: el real lo mantiene el usuario en data/biblioteca/.
-GLOSSARY = {"punto desplazado": ["x_front", "y_front"]}
+GLOSSARIES = {
+    "bolitabot": {"punto desplazado": ["x_front", "y_front"]},
+    "ros2": {"calidad de servicio": ["QoS policies", "History", "Reliability", "Durability"]},
+}
 
 # Casos reales, de la prueba con el repo de Bolitabot. La respuesta está en el código
 # de un bloque de Simulink, con pocas palabras en común con la pregunta.
@@ -364,7 +367,8 @@ def end_to_end(runs, glossary_dir):
     paths.GLOSSARY_DIR = glossary_dir or Path(tempfile.gettempdir()) / f"{TEMP_PREFIX}sin_glosario"
 
     if glossary_dir:
-        (glossary_dir / "glosario_bolitabot.json").write_text(json.dumps(GLOSSARY), encoding="utf-8")
+        for name, glossary in GLOSSARIES.items():
+            (glossary_dir / f"glosario_{name}.json").write_text(json.dumps(glossary), encoding="utf-8")
 
     brain = Brain()
     check = explore.check_draft

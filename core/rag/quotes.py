@@ -146,7 +146,7 @@ def prose_sentences(text: str):
     for line in TAG_AFTER_END.sub(r"\2\1", text).splitlines():
         if line.strip():
             marker = LIST_MARKER.match(line).group()
-            first, *rest = SENTENCE_END.split(line[len(marker):])
+            first, *rest = SENTENCE_END.split(line[len(marker):].rstrip())
             yield marker + first
             yield from rest
 
