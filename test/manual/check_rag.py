@@ -12,7 +12,7 @@ También mira las preguntas que no tienen respuesta en C:\\Asia: lo que ayuda a
 decidir cuándo decir "no lo encontré".
 
 Punta a punta, con el modelo real y el índice real (data/chroma, solo lectura):
-cuántas de 8 preguntas responde, cuántas citan el archivo correcto en las líneas
+cuántas de 11 preguntas responde (8 de C:\\Asia y 3 de Bolitabot), cuántas citan el archivo correcto en las líneas
 verificadas, cuántas redacciones se invalidan por nombres o citas que no existen, y a cuántas de 4 trampas responde. Las trampas pasan
 el filtro de cobertura pero no tienen respuesta en C:\\Asia: una cita verificada
 prueba que la línea existe, no que responda, así que su respuesta se imprime entera
@@ -21,6 +21,10 @@ contengan una trampa: si no, el modelo podría "citar" la pregunta misma. Cada c
 tarda minutos en CPU.
 
     .venv\\Scripts\\python.exe test\\manual\\check_rag.py --punta-a-punta 2
+
+Para calibrar el filtro, la cobertura y la distancia de cada pregunta, sin el modelo:
+
+    .venv\\Scripts\\python.exe test\\manual\\check_rag.py --calibrar
 """
 import argparse
 import gc
@@ -38,6 +42,7 @@ from core import prompts
 from core.actions import explore
 from core.rag import vector_store
 from core.rag.indexer import ProjectIndexer, unload_chat_models
+from core.rag.library import Library, named_in_question, without_source
 from core.rag.retriever import relevant, search_collections
 from tools.rag_tool import DEFAULT_MIN_COVERAGE
 
@@ -82,6 +87,14 @@ UNANSWERABLE = [
 ]
 
 
+# Casos reales, de la prueba con el repo de Bolitabot. La respuesta está en el código
+# de un bloque de Simulink, con pocas palabras en común con la pregunta.
+BOLITABOT = [
+    ("qué límite de velocidad tiene el controlador en bolitabot", "controlador_trebol.slx"),
+    ("cuánto dura cada tramo del trébol en bolitabot", "controlador_trebol.slx"),
+    ("cómo se calcula el punto desplazado en bolitabot", "controlador_trebol.slx"),
+]
+
 # (pregunta, archivo correcto). Salen en el top 5 de la búsqueda: lo que se mide
 # aquí es al modelo, no a la búsqueda.
 END_TO_END = [
@@ -93,6 +106,7 @@ END_TO_END = [
     ("cómo vuelvo a jarvis.bat si quito el ejecutable", "README.md"),
     ("drop_client", "providers/ollama_models.py"),
     ("SentenceSplitter", "core/voice/reading.py"),
+    *BOLITABOT,
 ]
 
 
@@ -234,6 +248,36 @@ def clean_copy(folder):
     print(f"Índice de la medición: {store.collection.count()} fragmentos, {len(ids)} fuera.", flush=True)
 
 
+def calibration_row(group, question, sources):
+    """Lo que ve el filtro: la mejor cobertura y la menor distancia de los fragmentos."""
+    named = named_in_question(question, sources)
+    collections = [named.collection] if named else [source.collection for source in sources]
+    query = without_source(question, named) if named else question
+    hits = search_collections(query, collections, n_results=5)
+    distances = [hit.distance for hit in hits if hit.distance is not None]
+    coverage = max((hit.coverage for hit in hits), default=0.0)
+    distance = min(distances, default=float("inf"))
+    print(f"{group:<10} cobertura {coverage:.2f}  distancia {distance:7.1f}  {question[:60]}", flush=True)
+
+
+def calibrate():
+    sources = Library().all()
+
+    for question, _, _ in QUESTIONS:
+        calibration_row("con", question, sources)
+
+    for question, _ in BOLITABOT:
+        calibration_row("bolitabot", question, sources)
+
+    for question in TRAPS:
+        calibration_row("trampa", question, sources)
+
+    for question in UNANSWERABLE:
+        calibration_row("ajena", question, sources)
+
+    return 0
+
+
 def end_to_end(runs):
     from core import paths
     from core.brain import Brain
@@ -296,6 +340,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--indice", help="carpeta del índice: se conserva y solo se reindexa lo que cambió")
     parser.add_argument("--punta-a-punta", type=int, metavar="CORRIDAS", help="mide las respuestas del modelo real")
+    parser.add_argument("--calibrar", action="store_true", help="cobertura y distancia de cada pregunta")
     parser.add_argument("--fragmentos", type=int, help="fragmentos que recibe el modelo, en vez del valor del código")
     args = parser.parse_args()
     sweep_leftovers()
@@ -303,12 +348,12 @@ def main():
     if args.fragmentos:
         explore.RAG_FRAGMENTS = args.fragmentos
 
-    if args.punta_a_punta:
+    if args.punta_a_punta or args.calibrar:
         scratch = temp_folder()
 
         try:
             clean_copy(scratch / "chroma")
-            return end_to_end(args.punta_a_punta)
+            return calibrate() if args.calibrar else end_to_end(args.punta_a_punta)
         finally:
             remove_tree(scratch)
 
