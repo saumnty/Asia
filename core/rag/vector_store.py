@@ -5,6 +5,9 @@ from core.rag.word_index import WordIndex
 
 
 BATCH_SIZE = 1000
+# Chroma 1.5: tras escribir dos colecciones nuevas en un proceso, en ~1 % de los casos
+# la primera ya no se lee. El disco está bien: se cura reabriendo, no reintentando.
+STALE_SEGMENT = "Nothing found on disk"
 
 
 def safe_collection_name(name: str) -> str:
@@ -28,17 +31,18 @@ class VectorStore:
         persist_dir=None,
         collection_name="default"
     ):
+        self.folder = persist_dir or CHROMA_DIR
+        self.name = safe_collection_name(collection_name)
+        self.words = WordIndex(self.folder)
+        self.open()
+
+    def open(self):
         # Aquí y no arriba: chromadb tarda ~3 s en cargar y solo hace falta con RAG.
         import chromadb
 
-        folder = persist_dir or CHROMA_DIR
-
         self.client = chromadb.PersistentClient(
-            path=str(folder)
+            path=str(self.folder)
         )
-
-        self.name = safe_collection_name(collection_name)
-        self.words = WordIndex(folder)
 
         self.collection = self.client.get_or_create_collection(
             name=self.name
@@ -113,7 +117,21 @@ class VectorStore:
         if not count:
             return {}
 
-        return self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=min(n_results, count)
-        )
+        from chromadb.errors import InternalError
+
+        def search():
+            return self.collection.query(
+                query_embeddings=[query_embedding],
+                n_results=min(n_results, count)
+            )
+
+        try:
+            return search()
+        except InternalError as error:
+            if STALE_SEGMENT not in str(error):
+                raise
+
+        # Sin parar el sistema: las demás colecciones abiertas lo siguen usando.
+        self.client.clear_system_cache()
+        self.open()
+        return search()

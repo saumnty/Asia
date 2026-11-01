@@ -1,5 +1,6 @@
 """Búsqueda híbrida: BM25 propio y fusión con los embeddings."""
 import pytest
+from chromadb.errors import InternalError
 
 from core.rag.tokens import stem, tokenize
 from core.rag.indexer import ProjectIndexer
@@ -262,3 +263,49 @@ def test_varias_colecciones(tmp_path, embeddings):  # noqa: F811
     hits = search_collections("beta_unica", ["uno", "dos"], n_results=1, persist_dir=tmp_path / "i")
 
     assert hits[0].metadata["source"] == "dos"
+
+
+class StaleCollection:
+    """Falla como Chroma con la lectura estropeada en memoria."""
+
+    def __init__(self, error):
+        self.error = error
+        self.calls = 0
+
+    def count(self):
+        return 1
+
+    def query(self, **options):
+        self.calls += 1
+        raise self.error
+
+
+def test_una_coleccion_que_chroma_ya_no_lee_se_reabre(tmp_path):
+    store = VectorStore(persist_dir=tmp_path / "i", collection_name="uno")
+    store.add_documents(["a"], ["doc"], [[1.0, 2.0, 1.0]], [{"relative_path": "a.py"}])
+    stale = StaleCollection(InternalError("Error creating hnsw segment reader: Nothing found on disk"))
+    store.collection = stale
+
+    found = store.query([1.0, 2.0, 1.0])
+
+    assert found["ids"] == [["a"]] and stale.calls == 1
+
+
+def test_otro_error_de_chroma_no_se_esconde(tmp_path):
+    store = VectorStore(persist_dir=tmp_path / "i", collection_name="uno")
+    store.collection = StaleCollection(InternalError("otro fallo"))
+
+    with pytest.raises(InternalError):
+        store.query([1.0, 2.0, 1.0])
+
+
+def test_si_reabrir_no_lo_cura_el_error_se_ve(tmp_path, monkeypatch):
+    store = VectorStore(persist_dir=tmp_path / "i", collection_name="uno")
+    stale = StaleCollection(InternalError("Nothing found on disk"))
+    store.collection = stale
+    monkeypatch.setattr(store, "open", lambda: None)
+
+    with pytest.raises(InternalError):
+        store.query([1.0, 2.0, 1.0])
+
+    assert stale.calls == 2
