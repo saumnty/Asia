@@ -4,8 +4,10 @@ from core.rag.indexer import ProjectIndexer, unload_chat_models
 from core.rag.library import DEFAULT_KIND, Library, fragment_header, named_in_question, without_source
 from core.rag.retriever import relevant, search_collections
 
-# El mismo que rag.min_coverage en config/defaults.json, por si falta la clave.
+# Los mismos que rag en config/defaults.json, por si falta la clave.
 DEFAULT_MIN_COVERAGE = 0.3
+# Calibrada con nomic-embed-text: otro modelo de embeddings tiene otra escala.
+DEFAULT_MAX_DISTANCE = 392.0
 
 
 class RagTool:
@@ -25,7 +27,9 @@ class RagTool:
 
         limits = SettingsManager().get("rag") or {}
 
-        if not relevant(hits, limits.get("min_coverage", DEFAULT_MIN_COVERAGE)):
+        coverage = limits.get("min_coverage", DEFAULT_MIN_COVERAGE)
+
+        if not relevant(hits, coverage, limits.get("max_distance", DEFAULT_MAX_DISTANCE)):
             return NOT_FOUND
 
         response = ""

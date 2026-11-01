@@ -394,8 +394,36 @@ def test_en_la_tabla_de_opciones():
     assert "/buscar <pregunta>" in options_text()
 
 
-def hit(coverage):
-    return Hit("doc", {}, coverage=coverage)
+def hit(coverage, distance=None):
+    return Hit("doc", {}, coverage=coverage, distance=distance)
+
+
+def test_tambien_pasa_si_un_fragmento_esta_muy_cerca():
+    # Medido en Bolitabot: el código dice x_front, la pregunta "punto desplazado".
+    assert relevant([hit(0.19, 391.5)], 0.3, 392.0)
+    assert not relevant([hit(0.19, 392.5)], 0.3, 392.0)
+
+
+def test_una_cobertura_suficiente_no_necesita_distancia():
+    assert relevant([hit(0.5, 490.0)], 0.3, 392.0)
+
+
+def test_un_fragmento_que_solo_salio_por_palabras_no_tiene_distancia():
+    assert not relevant([hit(0.1, None)], 0.3, 392.0)
+
+
+def test_sin_umbral_de_distancia_solo_cuenta_la_cobertura():
+    assert not relevant([hit(0.1, 1.0)], 0.3)
+
+
+def test_el_umbral_de_distancia_viene_de_config(monkeypatch):
+    monkeypatch.setattr("tools.rag_tool.search_collections", lambda *a, **k: [hit(0.1, 300.0)])
+
+    assert RagTool().search_project("algo", "asia") != NOT_FOUND
+
+    monkeypatch.setattr("tools.rag_tool.SettingsManager", lambda: {"rag": {"max_distance": 200.0}})
+
+    assert RagTool().search_project("algo", "asia") == NOT_FOUND
 
 
 def test_relevante_si_algun_fragmento_tiene_las_palabras():

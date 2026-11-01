@@ -28,14 +28,21 @@ class Hit:
     coverage: float = 0.0
 
 
-def relevant(hits: list, min_coverage: float) -> bool:
+def relevant(hits: list, min_coverage: float, max_distance: float = None) -> bool:
     """False si la pregunta no tiene que ver con lo encontrado.
 
-    Las distancias de los embeddings no lo distinguen: siempre hay un fragmento
-    "parecido". Lo que separa es cuánto de la pregunta está en algún fragmento
-    (en check_rag.py, hasta 0,16 sin respuesta y desde 0,41 con ella).
+    Pasa si bastante de la pregunta está en algún fragmento o, para el código con
+    pocas palabras en común con la pregunta, si un fragmento está muy cerca en los
+    embeddings. Solo evita gastar el modelo: la distancia no separa del todo lo que
+    tiene respuesta de lo que no (check_rag.py --calibrar), y lo que pasa aún tiene
+    que sobrevivir a la extracción y a la verificación de citas.
     """
-    return any(hit.coverage >= min_coverage for hit in hits)
+    if any(hit.coverage >= min_coverage for hit in hits):
+        return True
+
+    return max_distance is not None and any(
+        hit.distance is not None and hit.distance <= max_distance for hit in hits
+    )
 
 
 def vector_hits(store, query_embedding) -> list:

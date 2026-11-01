@@ -44,7 +44,7 @@ from core.rag import vector_store
 from core.rag.indexer import ProjectIndexer, unload_chat_models
 from core.rag.library import Library, named_in_question, without_source
 from core.rag.retriever import relevant, search_collections
-from tools.rag_tool import DEFAULT_MIN_COVERAGE
+from tools.rag_tool import DEFAULT_MAX_DISTANCE, DEFAULT_MIN_COVERAGE
 
 COLLECTION = "asia"
 TEMP_PREFIX = "asia_rag_"
@@ -378,11 +378,11 @@ def main():
 
         for question in UNANSWERABLE:
             hits = search_collections(question, [COLLECTION], n_results=max(TOPS), persist_dir=folder)
-            found = relevant(hits, DEFAULT_MIN_COVERAGE)
+            found = relevant(hits, DEFAULT_MIN_COVERAGE, DEFAULT_MAX_DISTANCE)
             refused += not found
             print(f"   {'responde' if found else 'no lo encontré'}: {question[:58]} ({describe(hits[0] if hits else None)})")
 
-        wrongly = [r[2] for r in rows if not relevant(r[5], DEFAULT_MIN_COVERAGE)]
+        wrongly = [r[2] for r in rows if not relevant(r[5], DEFAULT_MIN_COVERAGE, DEFAULT_MAX_DISTANCE)]
         print(f"\nDice \"no lo encontré\": {refused}/{len(UNANSWERABLE)} de las que no tienen respuesta, "
               f"{len(wrongly)}/{len(rows)} de las que sí (mal).")
 

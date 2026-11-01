@@ -83,7 +83,8 @@
     },
 
     "rag": {
-        "min_coverage": 0.3
+        "min_coverage": 0.3,
+        "max_distance": 392.0
     },
 
     "reflection": {
