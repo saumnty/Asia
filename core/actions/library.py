@@ -11,7 +11,8 @@ USAGE = (
     f"El tipo es {', '.join(KINDS)}. "
     "En la url, {} es la ruta del archivo sin extensión: https://docs.ros.org/en/jazzy/{}.html. "
     f"Con {NAMED_ONLY}, la fuente solo se consulta con \"en <fuente>\". "
-    f"El idioma es {' o '.join(LANGUAGES)}: si es en, la pregunta también se busca traducida."
+    f"El idioma es {' o '.join(LANGUAGES)}: si es en y rag.translate_question está activo, "
+    "la pregunta también se busca traducida."
 )
 GLOSSARY_EXAMPLE = '{"punto desplazado": ["x_front", "y_front"]}'
 

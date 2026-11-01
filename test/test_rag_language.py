@@ -1,6 +1,7 @@
 """Fuentes en inglés: la pregunta también se busca traducida, con raíces del inglés."""
 import pytest
 
+from config.settings_manager import SettingsManager
 from core import prompts
 from core.actions.library import USAGE, parse_source
 from core.prompts import NOT_FOUND
@@ -170,7 +171,18 @@ def brain_with(*answers):
     return brain
 
 
-def test_buscar_traduce_para_una_fuente_en_ingles_sin_decir_la_fuente():
+def test_por_defecto_no_traduce():
+    Library().save("ros2", "documentacion", "C:/docs", 10, language="en")
+    brain = brain_with(QUOTED, ANSWER)
+
+    brain.process("/buscar qué ganancia tiene en ros2")
+
+    assert brain.tool_registry.calls[0]["translated"] == ""
+    assert len(brain.provider_router.prompts) == 2
+
+
+def test_buscar_traduce_con_la_opcion_para_una_fuente_en_ingles():
+    SettingsManager.set_overrides({"rag": {"translate_question": True}})
     Library().save("ros2", "documentacion", "C:/docs", 10, language="en")
     brain = brain_with("What is the gain?", QUOTED, ANSWER)
 

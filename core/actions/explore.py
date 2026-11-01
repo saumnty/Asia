@@ -124,10 +124,13 @@ class ExploreActions:
         return lines
 
     def translated_question(self, question):
-        """La pregunta en inglés si consulta una fuente en ese idioma; si no, vacía."""
+        """La pregunta en inglés si consulta una fuente en ese idioma; si no, vacía.
+
+        Solo con rag.translate_question: medida, no redujo los NINGUNA y sube el tiempo.
+        """
         sources = Library().all()
 
-        if not needs_translation(question, sources):
+        if not (self.settings.get("rag") or {}).get("translate_question") or not needs_translation(question, sources):
             return ""
 
         named = named_in_question(question, sources)
