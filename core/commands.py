@@ -120,6 +120,10 @@ COMMANDS = [
             "/indexar Bolitabot C:\\Robots\\bolitabot proyecto", action=("add_source", "spec")),
     Command("biblioteca", "/fuentes", "muestra las fuentes de la biblioteca",
             "/fuentes", action=("list_sources", "text")),
+    Command("biblioteca", "/publica <fuente> sí|no",
+            "marca la fuente como pública: una búsqueda solo en fuentes públicas puede salir a un proveedor externo "
+            "en modo normal; si consulta también una privada, sigue siendo local",
+            "/publica ros2 sí", action=("set_public", "spec")),
     Command("biblioteca", "/glosario <fuente>",
             "muestra las equivalencias de esa fuente (\"punto desplazado\" = x_front); el archivo lo mantienes tú",
             "/glosario Bolitabot", action=("show_glossary", "source")),

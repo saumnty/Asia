@@ -94,5 +94,5 @@ class ConfidentialActions:
         set_session(confidential_mode=NORMAL_MODE)
         return (
             "Modo normal: lo que escribes puede ir a un proveedor externo si lo usas; "
-            "archivos, adjuntos, RAG, proyecto y memoria siguen sin salir sin tu autorización."
+            "archivos, adjuntos, RAG (salvo fuentes públicas), proyecto y memoria siguen sin salir sin tu autorización."
         )

@@ -20,6 +20,7 @@ from core.provenance import (
     Fragment,
     chars_by_label,
     current_fragments,
+    PUBLICA,
     exportable_labels,
     labels_of,
     local_labels,
@@ -43,8 +44,8 @@ class Settings:
 # --- Reglas -------------------------------------------------------------------
 
 def test_solo_usuario_es_siempre_exportable():
-    assert exportable_labels(Settings()) == {USUARIO}
-    assert exportable_labels(Settings(external_allow_memory=True)) == {USUARIO, MEMORIA}
+    assert exportable_labels(Settings()) == {USUARIO, PUBLICA}
+    assert exportable_labels(Settings(external_allow_memory=True)) == {USUARIO, PUBLICA, MEMORIA}
     assert local_labels({USUARIO, ARCHIVO, ADJUNTO, RAG, PROYECTO, MEMORIA}, Settings()) == {
         ARCHIVO, ADJUNTO, RAG, PROYECTO, MEMORIA,
     }

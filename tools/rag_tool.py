@@ -14,6 +14,7 @@ from core.rag.library import (
 )
 from core.rag.quotes import best_fragments
 from core.rag.retriever import relevant, search_collections
+from core.provenance import PUBLICA, RAG, LabeledResult
 
 # Los mismos que rag en config/defaults.json, por si falta la clave.
 DEFAULT_MIN_COVERAGE = 0.3
@@ -59,12 +60,15 @@ class RagTool:
 
             response += f"Contenido:\n{hit.document.strip()[:1200]}\n"
 
+        # Pública solo si lo son todas las consultadas, aunque los fragmentos sean de una.
+        label = PUBLICA if searched and all(source.publica for source in searched) else RAG
+
         if relevant(hits, coverage, limits.get("max_distance", DEFAULT_MAX_DISTANCE)):
-            return response
+            return LabeledResult(response, label)
 
         # Quien nombra la fuente sabe que el tema está ahí: la distancia mide mal el
         # español contra el inglés. Se enseña lo encontrado, sin pasar por el modelo.
-        return best_fragments(response) if named and hits else NOT_FOUND
+        return LabeledResult(best_fragments(response), label) if named and hits else NOT_FOUND
 
     def index_project(
         self,
@@ -96,7 +100,9 @@ class RagTool:
         )
 
         count = indexer.index_project()
-        Library().save(project_name, kind, indexer.project_path.as_posix(), count, url, license, named_only, language)
+        Library().save(
+            project_name, kind, indexer.project_path.as_posix(), count, url, license, named_only, language, known.publica
+        )
 
         return (
             f"Fuente '{project_name}' al día: {count} fragmentos "

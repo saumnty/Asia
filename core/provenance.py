@@ -5,6 +5,8 @@ Cada fragmento lleva una etiqueta:
 - "usuario": lo que el usuario tecleó. Siempre exportable.
 - "memoria": memory.json (va entero en el prompt de sistema del chat).
   Exportable solo con external_allow_memory (por defecto false).
+- "publica": fragmentos de una búsqueda que solo consultó fuentes públicas
+  (/publica). Siempre exportable.
 - "archivo", "adjunto", "rag", "proyecto": locales. Solo salen con una
   autorización de una sola vez.
 - "emocional": nunca sale, ni con autorización. Reservada para uso futuro.
@@ -20,6 +22,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 
 USUARIO = "usuario"
+PUBLICA = "publica"
 MEMORIA = "memoria"
 ARCHIVO = "archivo"
 ADJUNTO = "adjunto"
@@ -33,7 +36,7 @@ LOCAL_LABELS = {ARCHIVO, ADJUNTO, RAG, PROYECTO, DESCONOCIDO}
 NEVER_EXPORT = {EMOCIONAL}
 
 # Orden de más a menos restrictiva, para heredar la más restrictiva.
-RESTRICTIVENESS = [EMOCIONAL, DESCONOCIDO, ADJUNTO, ARCHIVO, RAG, PROYECTO, MEMORIA, USUARIO]
+RESTRICTIVENESS = [EMOCIONAL, DESCONOCIDO, ADJUNTO, ARCHIVO, RAG, PROYECTO, MEMORIA, PUBLICA, USUARIO]
 
 # Herramientas que devuelven contenido de archivos o del índice RAG.
 TOOL_LABELS = {
@@ -57,6 +60,15 @@ TOOL_LABELS = {
 class Fragment:
     label: str
     text: str
+
+
+class LabeledResult(str):
+    """El resultado de una herramienta que sabe su etiqueta mejor que TOOL_LABELS."""
+
+    def __new__(cls, text, label):
+        result = super().__new__(cls, text)
+        result.label = label
+        return result
 
 
 _current: ContextVar = ContextVar("asia_prompt_sources", default=None)
@@ -91,7 +103,7 @@ def record(*fragments: Fragment):
 
 
 def record_tool_result(action: str, result):
-    label = TOOL_LABELS.get(action)
+    label = getattr(result, "label", TOOL_LABELS.get(action))
 
     if label and isinstance(result, str):
         record(Fragment(label, result))
@@ -131,7 +143,7 @@ def most_restrictive(labels) -> str:
 
 def exportable_labels(settings) -> set[str]:
     """Etiquetas que pueden salir sin autorización."""
-    labels = {USUARIO}
+    labels = {USUARIO, PUBLICA}
 
     if settings.get("external_allow_memory", False):
         labels.add(MEMORIA)

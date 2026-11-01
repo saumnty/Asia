@@ -1,8 +1,9 @@
-"""/indexar y /fuentes: la biblioteca de conocimiento (core/rag/library.py)."""
+"""/indexar, /fuentes y /publica: la biblioteca de conocimiento (core/rag/library.py)."""
 import shlex
 
 from core.rag.glossary import glossary_path, read_glossary
 from core.rag.library import DEFAULT_LANGUAGE, KINDS, LANGUAGES, Library
+from core.rag.tokens import without_accents
 
 NAMED_ONLY = "solo-nombrada"
 LANGUAGE_OPTION = "idioma="
@@ -14,6 +15,7 @@ USAGE = (
     f"El idioma es {' o '.join(LANGUAGES)}: si es en y rag.translate_question está activo, "
     "la pregunta también se busca traducida."
 )
+PUBLIC_USAGE = "Uso: /publica <fuente> sí|no. Una búsqueda solo en fuentes públicas puede salir a un proveedor externo en modo normal."
 GLOSSARY_EXAMPLE = '{"punto desplazado": ["x_front", "y_front"]}'
 
 
@@ -69,6 +71,9 @@ def source_line(source) -> str:
     if source.named_only:
         notes.append("solo si se nombra")
 
+    if source.publica:
+        notes.append("pública")
+
     return (
         f"- {source.name} ({', '.join(notes)}): {source.fragments} fragmentos, "
         f"{source.url or source.path}, indexada {source.indexed.replace('T', ' ')[:16]}"
@@ -80,7 +85,25 @@ class LibraryActions:
         "add_source": "handle_add_source",
         "list_sources": "handle_list_sources",
         "show_glossary": "handle_show_glossary",
+        "set_public": "handle_set_public",
     }
+
+    def handle_set_public(self, text, params):
+        words = params.get("spec", "").split()
+        answer = without_accents(words[-1]).lower() if len(words) == 2 else ""
+
+        if answer not in ("si", "no"):
+            return PUBLIC_USAGE
+
+        source = Library().set_public(words[0], answer == "si")
+
+        if source is None:
+            return f"No conozco la fuente '{words[0]}'. Mira /fuentes."
+
+        if source.publica:
+            return f"'{source.name}' es pública: una búsqueda solo en fuentes públicas puede salir a un proveedor externo."
+
+        return f"'{source.name}' es privada: sus fragmentos no salen sin tu autorización."
 
     def handle_show_glossary(self, text, params):
         name = params.get("source", "").strip()

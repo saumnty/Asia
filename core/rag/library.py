@@ -46,6 +46,8 @@ class Source:
     # Solo se consulta con "en <fuente>".
     named_only: bool = False
     language: str = DEFAULT_LANGUAGE
+    # Sus fragmentos pueden salir hacia un proveedor externo (/publica).
+    publica: bool = False
 
 
 class Library:
@@ -63,17 +65,30 @@ class Library:
 
     def save(
         self, name: str, kind: str, path: str, fragments: int, url: str = "", license: str = "",
-        named_only: bool = False, language: str = DEFAULT_LANGUAGE,
+        named_only: bool = False, language: str = DEFAULT_LANGUAGE, publica: bool = False,
     ) -> Source:
         """Añade la fuente o actualiza la que ya tiene ese nombre."""
         source = Source(
             name, kind, path, safe_collection_name(name), fragments,
-            datetime.now().isoformat(timespec="seconds"), url, license, named_only, language,
+            datetime.now().isoformat(timespec="seconds"), url, license, named_only, language, publica,
         )
-        sources = [s for s in self.all() if s.name.lower() != name.lower()] + [source]
+        self.write([s for s in self.all() if s.name.lower() != name.lower()] + [source])
+        return source
+
+    def set_public(self, name: str, publica: bool):
+        """Marca la fuente como pública o privada. None si no existe."""
+        source = self.get(name)
+
+        if source is None:
+            return None
+
+        source.publica = publica
+        self.write([source if s.name == source.name else s for s in self.all()])
+        return source
+
+    def write(self, sources: list):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         write_json_atomic(self.path, [asdict(s) for s in sources])
-        return source
 
 
 def source_pattern(source) -> str:

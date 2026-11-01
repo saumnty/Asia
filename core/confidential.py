@@ -8,6 +8,8 @@ Antes de un envío externo:
 - Si lo que trae el mensaje (lo tecleado, los adjuntos y lo que leyeron
   las acciones) tiene contenido local, no sale: responde el modelo local.
   Solo sale con una autorización de una sola vez, y lo "emocional" nunca.
+  Una búsqueda que solo consultó fuentes públicas (/publica) no es local;
+  si consultó también una privada, sí.
 - La memoria, el resumen del proyecto y los turnos locales del historial
   son contexto de fondo del chat: no bloquean el envío, se quitan de lo
   que sale (la memoria se deja si external_allow_memory es true).
