@@ -3,7 +3,7 @@ from pathlib import Path
 
 from core import prompts
 from core.rag.glossary import expand
-from core.rag.library import Library, is_refusal
+from core.rag.library import Library, clean_translation, is_refusal, named_in_question, needs_translation, without_source
 from core.rag.quotes import best_fragments, draft_problems, is_thin, quotes_text, verified_lines, verify_quotes
 
 # Los mismos que config/defaults.json, por si falta la clave.
@@ -13,6 +13,8 @@ DEFAULT_ANSWER_LIMITS = {
 }
 # Los que recibe el modelo en /buscar.
 RAG_FRAGMENTS = 5
+# Una pregunta en inglés: si no cabe aquí, no es una traducción.
+TRANSLATION_TOKENS = 80
 
 
 class ExploreActions:
@@ -82,18 +84,21 @@ class ExploreActions:
         # También para el modelo: si no, no ve la relación con lo que dicen los fragmentos.
         question = expand(question, Library().all())
 
+        translated = self.translated_question(question)
+
         rag_context = self.tool_registry.execute(
             "search_project_rag",
             question=question,
             project_name=project_name,
-            n_results=RAG_FRAGMENTS
+            n_results=RAG_FRAGMENTS,
+            translated=translated
         )
 
         # Sin nada relevante, ni se llama al modelo: no hay de dónde responder.
         if rag_context == prompts.NOT_FOUND or rag_context.startswith(prompts.NO_DIRECT_ANSWER):
             return rag_context
 
-        extracted = self.provider_router.ask(prompts.extract_quotes(question, rag_context))
+        extracted = self.provider_router.ask(prompts.extract_quotes(question, rag_context, translated))
         quotes = verify_quotes(extracted, rag_context)
 
         # Sin líneas verificadas no hay respuesta del modelo: no hay con qué comprobarla.
@@ -110,6 +115,17 @@ class ExploreActions:
             return f"{prompts.INVALID_DRAFT}\n\n{verified_lines(quotes)}"
 
         return f"{answer}\n\n{verified_lines(quotes)}"
+
+    def translated_question(self, question):
+        """La pregunta en inglés si consulta una fuente en ese idioma; si no, vacía."""
+        sources = Library().all()
+
+        if not needs_translation(question, sources):
+            return ""
+
+        named = named_in_question(question, sources)
+        text = without_source(question, named) if named else question
+        return clean_translation(self.provider_router.ask(prompts.translate_question(text), max_tokens=TRANSLATION_TOKENS))
 
     def handle_explain_file(self, text, params):
         file_path = params.get("file_path")

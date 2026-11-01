@@ -2,13 +2,16 @@
 import shlex
 
 from core.rag.glossary import glossary_path, read_glossary
-from core.rag.library import KINDS, Library
+from core.rag.library import DEFAULT_LANGUAGE, KINDS, LANGUAGES, Library
 
 NAMED_ONLY = "solo-nombrada"
+LANGUAGE_OPTION = "idioma="
 USAGE = (
-    f"Uso: /indexar <nombre> [ruta] [tipo] [url] [licencia] [{NAMED_ONLY}]. El tipo es {', '.join(KINDS)}. "
+    f"Uso: /indexar <nombre> [ruta] [tipo] [url] [licencia] [{NAMED_ONLY}] [{LANGUAGE_OPTION}en]. "
+    f"El tipo es {', '.join(KINDS)}. "
     "En la url, {} es la ruta del archivo sin extensión: https://docs.ros.org/en/jazzy/{}.html. "
-    f"Con {NAMED_ONLY}, la fuente solo se consulta con \"en <fuente>\"."
+    f"Con {NAMED_ONLY}, la fuente solo se consulta con \"en <fuente>\". "
+    f"El idioma es {' o '.join(LANGUAGES)}: si es en, la pregunta también se busca traducida."
 )
 GLOSSARY_EXAMPLE = '{"punto desplazado": ["x_front", "y_front"]}'
 
@@ -25,7 +28,15 @@ def parse_source(spec: str):
 
     words = [word.strip('"') for word in words]
     options = {"named_only": True} if NAMED_ONLY in words else {}
-    words = [word for word in words if word != NAMED_ONLY]
+    languages = [word.removeprefix(LANGUAGE_OPTION) for word in words if word.startswith(LANGUAGE_OPTION)]
+
+    if languages:
+        options["language"] = languages[-1]
+
+        if languages[-1] not in LANGUAGES:
+            return None
+
+    words = [word for word in words if word != NAMED_ONLY and not word.startswith(LANGUAGE_OPTION)]
     url_at = next((i for i, word in enumerate(words) if word.lower().startswith("http")), None)
     url, license = "", ""
 
@@ -46,6 +57,21 @@ def parse_source(spec: str):
         return None
 
     return name, rest[0] if rest else None, kind, url, license, options
+
+
+def source_line(source) -> str:
+    notes = [source.kind]
+
+    if source.language != DEFAULT_LANGUAGE:
+        notes.append(f"en {source.language}")
+
+    if source.named_only:
+        notes.append("solo si se nombra")
+
+    return (
+        f"- {source.name} ({', '.join(notes)}): {source.fragments} fragmentos, "
+        f"{source.url or source.path}, indexada {source.indexed.replace('T', ' ')[:16]}"
+    )
 
 
 class LibraryActions:
@@ -99,9 +125,4 @@ class LibraryActions:
         if not sources:
             return "Aún no hay fuentes. Agrega una con /indexar <nombre> [ruta] [tipo]."
 
-        lines = [
-            f"- {s.name} ({s.kind}{', solo si se nombra' if s.named_only else ''}): {s.fragments} fragmentos, "
-            f"{s.url or s.path}, indexada {s.indexed.replace('T', ' ')[:16]}"
-            for s in sources
-        ]
-        return "Fuentes:\n" + "\n".join(lines)
+        return "Fuentes:\n" + "\n".join(source_line(source) for source in sources)

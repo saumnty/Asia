@@ -137,12 +137,24 @@ Contenido:
 """
 
 
-def extract_quotes(question, rag_context):
+def translate_question(question):
+    return f"""
+Translate this question into English. Keep code names, commands and file names exactly as written.
+Write only the translation, on one line.
+
+Question:
+{question}
+"""
+
+
+def extract_quotes(question, rag_context, translated=""):
+    in_english = f"\n\nLa misma pregunta en inglés, porque los fragmentos pueden estar en inglés:\n{translated}" if translated else ""
+
     return f"""
 Copia de estos fragmentos las líneas que responden la pregunta. No respondas la pregunta.
 
 Pregunta:
-{question}
+{question}{in_english}
 
 Fragmentos encontrados:
 {rag_context}

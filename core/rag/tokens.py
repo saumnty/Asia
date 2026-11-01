@@ -3,7 +3,8 @@
 Las palabras se parten como en el código: "drop_client" y "dropClient" dan
 "drop", "client" y el nombre entero, así que sirven tanto el nombre exacto como
 una parte. Sin acentos, sin palabras vacías del español y reducidas a su raíz
-con snowballstemmer: "detectan" encuentra "detectar".
+con snowballstemmer: "detectan" encuentra "detectar". La raíz depende del idioma:
+una pregunta traducida al inglés se busca con raíces del inglés.
 """
 import re
 import unicodedata
@@ -27,20 +28,20 @@ def without_accents(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
 
 
-@lru_cache(maxsize=1)
-def spanish_stemmer():
+@lru_cache(maxsize=2)
+def stemmer(language: str):
     # Aquí y no arriba: solo hace falta con RAG.
     import snowballstemmer
 
-    return snowballstemmer.stemmer("spanish")
+    return snowballstemmer.stemmer(language)
 
 
 @lru_cache(maxsize=None)
-def stem(token: str) -> str:
-    return spanish_stemmer().stemWord(token)
+def stem(token: str, language: str = "spanish") -> str:
+    return stemmer(language).stemWord(token)
 
 
-def tokenize(text: str) -> list:
+def tokenize(text: str, language: str = "spanish") -> list:
     tokens = []
 
     # Sin acentos antes de partir: CAMEL corta en cualquier letra que no sea a-z.
@@ -48,4 +49,4 @@ def tokenize(text: str) -> list:
         parts = [part for piece in word.split("_") for part in CAMEL.findall(piece)]
         tokens += [token.lower() for token in dict.fromkeys([word, *parts])]
 
-    return [stem(token) for token in tokens if len(token) > 1 and token not in STOPWORDS]
+    return [stem(token, language) for token in tokens if len(token) > 1 and token not in STOPWORDS]

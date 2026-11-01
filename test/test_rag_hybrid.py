@@ -220,7 +220,7 @@ def test_lo_que_sale_en_las_dos_listas_gana():
     vector = [pair("solo_vector", distance=0.1), pair("ambas", distance=0.2, file_path="b.py")]
     keyword = [pair("solo_palabras", file_path="c.py", keyword_score=5.0), pair("ambas", file_path="b.py", keyword_score=4.0)]
 
-    hits = merge(vector, keyword, 3)
+    hits = merge(vector, keyword, n_results=3)
 
     assert hits[0].document == "doc ambas"
     assert hits[0].distance == 0.2 and hits[0].keyword_score == 4.0
@@ -230,7 +230,7 @@ def test_lo_que_sale_en_las_dos_listas_gana():
 def test_un_archivo_no_acapara_los_resultados():
     vector = [pair(i, "ROADMAP.md", distance=i / 10) for i in range(6)] + [pair("otro", "b.py", distance=0.9)]
 
-    hits = merge(vector, [], 5)
+    hits = merge(vector, [], n_results=5)
 
     assert sum(h.metadata["file_path"] == "ROADMAP.md" for h in hits) == MAX_PER_FILE
     assert hits[-1].document == "doc otro"

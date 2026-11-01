@@ -1,7 +1,17 @@
 from config.settings_manager import SettingsManager
 from core.prompts import NOT_FOUND
 from core.rag.indexer import ProjectIndexer, unload_chat_models
-from core.rag.library import DEFAULT_KIND, ORIGIN_PREFIX, Library, Source, fragment_header, named_in_question, without_source
+from core.rag.library import (
+    DEFAULT_KIND,
+    ENGLISH_SOURCE,
+    ORIGIN_PREFIX,
+    Library,
+    Source,
+    fragment_header,
+    named_in_question,
+    searched_sources,
+    without_source,
+)
 from core.rag.quotes import best_fragments
 from core.rag.retriever import relevant, search_collections
 
@@ -16,15 +26,21 @@ class RagTool:
         self,
         question: str,
         project_name: str,
-        n_results: int = 5
+        n_results: int = 5,
+        translated: str = ""
     ):
-        """Busca en todas las fuentes, o en la de "en <fuente>". Sin fuentes, en el proyecto activo."""
+        """Busca en todas las fuentes, o en la de "en <fuente>". Sin fuentes, en el proyecto activo.
+
+        translated es la pregunta en inglés, para las fuentes en ese idioma.
+        """
         sources = Library().all()
         named = named_in_question(question, sources)
-        collections = [named.collection] if named else [s.collection for s in sources if not s.named_only] or [project_name]
+        searched = searched_sources(question, sources)
+        collections = [source.collection for source in searched] or [project_name]
+        english = [source.collection for source in searched if source.language == ENGLISH_SOURCE]
 
         query = without_source(question, named) if named else question
-        hits = search_collections(query, collections, n_results=n_results)
+        hits = search_collections(query, collections, n_results=n_results, translated=translated, english=english)
 
         limits = SettingsManager().get("rag") or {}
 
@@ -57,7 +73,8 @@ class RagTool:
         kind: str = None,
         url: str = "",
         license: str = "",
-        named_only: bool = None
+        named_only: bool = None,
+        language: str = None
     ):
         unload_chat_models()
 
@@ -68,6 +85,7 @@ class RagTool:
         url = url or known.url
         license = license or known.license
         named_only = known.named_only if named_only is None else named_only
+        language = language or known.language
 
         indexer = ProjectIndexer(
             project_path=project_path,
@@ -78,7 +96,7 @@ class RagTool:
         )
 
         count = indexer.index_project()
-        Library().save(project_name, kind, indexer.project_path.as_posix(), count, url, license, named_only)
+        Library().save(project_name, kind, indexer.project_path.as_posix(), count, url, license, named_only, language)
 
         return (
             f"Fuente '{project_name}' al día: {count} fragmentos "

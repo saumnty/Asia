@@ -17,6 +17,8 @@ from core.rag.vector_store import safe_collection_name
 
 KINDS = ("proyecto", "reporte", "notas", "documentacion")
 DEFAULT_KIND = "proyecto"
+LANGUAGES = ("es", "en")
+DEFAULT_LANGUAGE, ENGLISH_SOURCE = LANGUAGES
 ORIGIN_PREFIX = "Página: "
 FRAGMENT_HEADER = re.compile(r"^--- \[(.+?)\](?: (.+))? ---$", re.MULTILINE)
 REFUSAL = re.compile(
@@ -25,6 +27,7 @@ REFUSAL = re.compile(
 )
 # Con esto ya hay algo de contenido: es una respuesta parcial.
 PARTIAL = re.compile(r"\[[^\]]+:\d|\bpero\b|\bsin embargo\b")
+MAX_TRANSLATION_CHARS = 300
 REFUSAL_MAX_CHARS = 300
 REFUSAL_OPENING = 150
 
@@ -42,6 +45,7 @@ class Source:
     license: str = ""
     # Solo se consulta con "en <fuente>".
     named_only: bool = False
+    language: str = DEFAULT_LANGUAGE
 
 
 class Library:
@@ -58,12 +62,13 @@ class Library:
         return next((s for s in self.all() if s.name.lower() == name.lower()), None)
 
     def save(
-        self, name: str, kind: str, path: str, fragments: int, url: str = "", license: str = "", named_only: bool = False,
+        self, name: str, kind: str, path: str, fragments: int, url: str = "", license: str = "",
+        named_only: bool = False, language: str = DEFAULT_LANGUAGE,
     ) -> Source:
         """Añade la fuente o actualiza la que ya tiene ese nombre."""
         source = Source(
             name, kind, path, safe_collection_name(name), fragments,
-            datetime.now().isoformat(timespec="seconds"), url, license, named_only,
+            datetime.now().isoformat(timespec="seconds"), url, license, named_only, language,
         )
         sources = [s for s in self.all() if s.name.lower() != name.lower()] + [source]
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -87,6 +92,24 @@ def named_in_question(question: str, sources: list):
 def without_source(question: str, source) -> str:
     """La pregunta sin "en <fuente>": el nombre de la fuente no es lo que se busca."""
     return " ".join(re.sub(source_pattern(source), " ", question, flags=re.IGNORECASE).split())
+
+
+def searched_sources(question: str, sources: list) -> list:
+    """Las fuentes que consulta una pregunta: la de "en <fuente>" o todas las generales."""
+    named = named_in_question(question, sources)
+    return [named] if named else [source for source in sources if not source.named_only]
+
+
+def needs_translation(question: str, sources: list) -> bool:
+    """True si consulta una fuente en inglés. Un nombre suelto se dice igual en los dos idiomas."""
+    is_english = any(source.language == ENGLISH_SOURCE for source in searched_sources(question, sources))
+    return is_english and len(question.split()) > 1
+
+
+def clean_translation(answer: str) -> str:
+    """La primera línea de la traducción del modelo, sin comillas. Vacía si no parece una pregunta."""
+    lines = [line.strip(" \t\"'`*") for line in answer.splitlines() if line.strip()]
+    return lines[0] if lines and len(lines[0]) <= MAX_TRANSLATION_CHARS else ""
 
 
 def is_refusal(answer: str) -> bool:

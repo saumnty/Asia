@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from core.rag.embedder import OllamaEmbedder
 from core.rag.vector_store import VectorStore
+from core.rag.word_index import ENGLISH, SPANISH
 
 # Cuántos candidatos aporta cada lista antes de fusionar.
 CANDIDATES = 20
@@ -53,11 +54,11 @@ def vector_hits(store, query_embedding) -> list:
     return [(i, Hit(d, m or {}, distance=s)) for i, d, m, s in zip(ids, documents, metadatas, distances)]
 
 
-def merge(vector: list, keyword: list, n_results: int) -> list:
-    """Fusiona por RRF dos listas ordenadas de (id, Hit), con el tope por archivo."""
+def merge(*lists, n_results: int) -> list:
+    """Fusiona por RRF listas ordenadas de (id, Hit), con el tope por archivo."""
     hits = {}
 
-    for ranked in (vector, keyword):
+    for ranked in lists:
         for position, (key, hit) in enumerate(ranked, start=1):
             known = hits.setdefault(key, hit)
             known.score += 1 / (RRF_K + position)
@@ -76,29 +77,52 @@ def merge(vector: list, keyword: list, n_results: int) -> list:
     return selected[:n_results]
 
 
-def search_collections(question: str, collections: list, n_results=5, persist_dir=None) -> list:
-    """Los mejores fragmentos de varias colecciones."""
+def ranked_lists(stores: list, question: str, language: str) -> tuple:
+    """Lo que encuentra question en stores: por embeddings y por palabras, cada lista ordenada."""
     query_embedding = OllamaEmbedder().embed_query(question)
-    vector, names, words = [], [], None
-
-    for collection in collections:
-        store = VectorStore(persist_dir=persist_dir, collection_name=collection)
-        store.sync_words()
-        vector += vector_hits(store, query_embedding)
-        names.append(store.name)
-        words = store.words
-
-    if words is None:
-        return []
-
-    vector = sorted(vector, key=lambda pair: pair[1].distance)[:CANDIDATES]
+    vector = sorted(
+        (pair for store in stores for pair in vector_hits(store, query_embedding)),
+        key=lambda pair: pair[1].distance,
+    )[:CANDIDATES]
     keyword = [
         (chunk_id, Hit(document, metadata, keyword_score=score))
-        for chunk_id, document, metadata, score in words.top(question, names, CANDIDATES)
+        for chunk_id, document, metadata, score in stores[0].words.top(
+            question, [store.name for store in stores], CANDIDATES, language,
+        )
     ]
-    hits = merge(vector, keyword, n_results)
+    return vector, keyword
 
-    for hit, coverage in zip(hits, words.coverage(question, [hit.document for hit in hits], names)):
+
+def search_collections(question: str, collections: list, n_results=5, persist_dir=None, translated="", english=()) -> list:
+    """Los mejores fragmentos de varias colecciones.
+
+    translated es la pregunta en inglés: se busca además en las colecciones de english,
+    con raíces del inglés, y la cobertura de cada fragmento es la mejor de las dos.
+    """
+    stores = [VectorStore(persist_dir=persist_dir, collection_name=collection) for collection in collections]
+
+    if not stores:
+        return []
+
+    for store in stores:
+        store.sync_words()
+
+    lists = ranked_lists(stores, question, SPANISH)
+    in_english = [store for store, collection in zip(stores, collections) if translated and collection in english]
+
+    if in_english:
+        lists += ranked_lists(in_english, translated, ENGLISH)
+
+    hits = merge(*lists, n_results=n_results)
+    documents = [hit.document for hit in hits]
+    names = [store.name for store in stores]
+    coverages = stores[0].words.coverage(question, documents, names)
+
+    if in_english:
+        names = [store.name for store in in_english]
+        coverages = map(max, coverages, stores[0].words.coverage(translated, documents, names, ENGLISH))
+
+    for hit, coverage in zip(hits, coverages):
         hit.coverage = coverage
 
     return hits

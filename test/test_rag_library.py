@@ -231,7 +231,7 @@ def test_busca_en_todas_las_fuentes_y_dice_de_donde_viene(tmp_path, embeddings, 
 
     monkeypatch.setattr(
         "tools.rag_tool.search_collections",
-        lambda question, collections, n_results: search_collections(question, collections, n_results, folder),
+        lambda question, collections, n_results, **options: search_collections(question, collections, n_results, folder, **options),
     )
 
     everywhere = RagTool().search_project("aaaa bbbb", "asia")
