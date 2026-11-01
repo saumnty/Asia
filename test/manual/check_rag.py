@@ -49,6 +49,7 @@ from core.rag import vector_store
 from core.rag.indexer import ProjectIndexer, unload_chat_models
 from core.rag.library import Library, named_in_question, without_source
 from core.rag.retriever import relevant, search_collections
+from tools import rag_tool
 from tools.rag_tool import DEFAULT_MAX_DISTANCE, DEFAULT_MIN_COVERAGE
 
 COLLECTION = "asia"
@@ -396,6 +397,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--indice", help="carpeta del índice: se conserva y solo se reindexa lo que cambió")
     parser.add_argument("--punta-a-punta", type=int, metavar="CORRIDAS", help="mide las respuestas del modelo real")
+    parser.add_argument("--max-distancia", type=float, help="umbral de distancia de la medición, en vez del de config")
     parser.add_argument("--sin-glosario", action="store_true", help="punta a punta sin el glosario de la medición")
     parser.add_argument("--calibrar", action="store_true", help="cobertura y distancia de cada pregunta")
     parser.add_argument("--fragmentos", type=int, help="fragmentos que recibe el modelo, en vez del valor del código")
@@ -404,6 +406,10 @@ def main():
 
     if args.fragmentos:
         explore.RAG_FRAGMENTS = args.fragmentos
+
+    if args.max_distancia:
+        limits = {"min_coverage": DEFAULT_MIN_COVERAGE, "max_distance": args.max_distancia}
+        rag_tool.SettingsManager = lambda: {"rag": limits}
 
     if args.punta_a_punta or args.calibrar:
         scratch = temp_folder()
