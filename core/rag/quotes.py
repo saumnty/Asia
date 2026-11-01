@@ -174,8 +174,11 @@ def verified_lines(quotes: list) -> str:
         runs = []
 
         for quote in sorted(group, key=lambda q: q.line or 0):
-            if runs and quote.line and runs[-1][-1].line == quote.line - 1:
-                runs[-1].append(quote)
+            # Con la misma etiqueta: los bloques de un modelo numeran sus líneas por separado.
+            run = next((r for r in runs if quote.line and r[-1].line == quote.line - 1 and r[-1].label == quote.label), None)
+
+            if run:
+                run.append(quote)
             else:
                 runs.append([quote])
 

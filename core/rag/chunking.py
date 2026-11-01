@@ -3,6 +3,7 @@
 - Python: una pieza por función, método y clase (ast), más lo que queda fuera
   de ellas (imports, constantes).
 - .md y .tex: una pieza por sección.
+- Simulink: cada bloque con código, como un .m (core/rag/simulink.py).
 - El resto: bloques separados por líneas en blanco.
 
 Una pieza de más de MAX_CHARS se parte por líneas, con solape. Cada fragmento
@@ -13,6 +14,9 @@ función no siempre dice dónde vive.
 import ast
 import re
 from dataclasses import dataclass
+
+from core.rag.simulink import SUFFIX as SIMULINK_SUFFIX
+from core.rag.simulink import split_blocks
 
 MAX_CHARS = 1200
 OVERLAP_LINES = 3
@@ -165,10 +169,22 @@ def split_long(piece: Piece, lines: list) -> list:
         start = max(start + 1, end + 1 - OVERLAP_LINES)
 
 
+def model_chunks(text: str) -> list:
+    """Cada bloque de un modelo de Simulink se trocea como un .m, con su nombre de etiqueta."""
+    return [
+        Chunk(chunk.text, chunk.start_line, chunk.end_line, name)
+        for name, script in split_blocks(text)
+        for chunk in chunk_text(script, ".m")
+    ]
+
+
 def chunk_text(text: str, suffix: str) -> list:
     """Los fragmentos de un archivo con esa extensión."""
     lines = text.splitlines()
     suffix = suffix.lower()
+
+    if suffix == SIMULINK_SUFFIX:
+        return model_chunks(text)
 
     if suffix == ".py":
         pieces = python_pieces(text, lines)

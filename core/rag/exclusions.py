@@ -3,7 +3,8 @@
 - Los datos de Asia: data/, memory/, logs/ y config/settings.json.
 - Secretos: .env, claves (*.key, *.pem, id_rsa...).
 - Lo que el .gitignore de la fuente ignora (el de la raíz y los de subcarpetas).
-- Binarios y archivos de más de 1 MB.
+- Binarios y archivos de más de 1 MB. Un modelo de Simulink (.slx) es binario,
+  pero entra si es un zip de verdad: de él solo se lee código (core/rag/simulink.py).
 
 El .gitignore se interpreta aquí, sin git ni paquetes: una fuente puede no ser
 un repositorio.
@@ -14,6 +15,7 @@ import re
 from pathlib import Path
 
 from core import paths
+from core.rag.simulink import is_model, is_model_name
 
 MAX_FILE_BYTES = 1024 * 1024
 BINARY_SAMPLE = 8192
@@ -155,13 +157,17 @@ class SourceFilter:
         return name in self.ignored_dirs or is_asia_data(folder) or self.ignored_by_git(folder, True)
 
     def allows(self, path: Path) -> bool:
-        if path.suffix.lower() not in self.extensions or is_secret(path) or is_asia_data(path):
-            return False
-
-        if self.ignored_by_git(path, False):
+        if is_secret(path) or is_asia_data(path) or self.ignored_by_git(path, False):
             return False
 
         try:
+            # El único binario que entra: de un modelo solo se lee el código de sus bloques.
+            if is_model_name(path):
+                return not too_large(path) and is_model(path)
+
+            if path.suffix.lower() not in self.extensions:
+                return False
+
             return not too_large(path) and not is_binary(path)
         except OSError:
             return False

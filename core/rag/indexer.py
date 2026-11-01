@@ -6,6 +6,7 @@ from config.settings_manager import SettingsManager
 from core.rag.chunking import chunk_text
 from core.rag.embedder import OllamaEmbedder
 from core.rag.exclusions import SourceFilter
+from core.rag.simulink import is_model_name, model_text
 from core.rag.vector_store import VectorStore
 
 # Cambiar el troceado invalida lo indexado: el hash incluye esta versión.
@@ -63,7 +64,10 @@ class ProjectIndexer:
 
         for file_path in self.filter.files():
             try:
-                files[file_path] = file_path.read_text(encoding="utf-8", errors="ignore")
+                files[file_path] = (
+                    model_text(file_path) if is_model_name(file_path)
+                    else file_path.read_text(encoding="utf-8", errors="ignore")
+                )
             except Exception:
                 continue
 
