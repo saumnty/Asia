@@ -274,7 +274,7 @@ Hecho en la fase G (ver la tabla). Pendientes:
 Antes "Wikipedia offline". Va por capas, y cada fuente lleva su etiqueta para poder citarla:
 
 1. Proyectos propios (repos, reportes, notas) con el RAG actual: primera capa, la más útil. Hecha, ver abajo.
-2. Documentación técnica offline (ROS 2, Gazebo, Python, MATLAB), empaquetada para Kiwix o convertida con zimit. En esta capa (Asia 1.0), la búsqueda por palabras pasa a SQLite FTS5, con los tokens ya pasados por el stemmer, en lugar de reconstruir BM25 en cada búsqueda. Hace falta para las fuentes grandes (Wikipedia, Stack Overflow).
+2. Documentación técnica offline: ROS 2 Jazzy y Gazebo Harmonic (hecho, ver abajo), Python 3.12 pendiente. Fuentes directas, sin Kiwix, zimit ni Docker.
 3. Wikipedia en español e inglés: herramienta offline con Kiwix/ZIM, separada del RAG de proyectos.
 4. Preguntas y respuestas (Stack Overflow, Robotics Stack Exchange).
 
@@ -286,7 +286,7 @@ Antes "Wikipedia offline". Va por capas, y cada fuente lleva su etiqueta para po
 - Nunca entran `data/`, `memory/`, `logs/` ni `config/settings.json` de Asia, secretos (`.env`, `*.key`, `*.pem`, `id_rsa`...), binarios, archivos de más de 1 MB ni lo que ignore el `.gitignore` de la fuente (`core/rag/exclusions.py`). Antes entraban los modelos de Whisper (83 % de los fragmentos) y `memory/`.
 - Troceado: Python por funciones y métodos con `ast`, `.md` y `.tex` por secciones, el resto por bloques; cada fragmento lleva delante dónde vive. Un hash por archivo reindexa solo lo que cambió.
 - Modelos de Simulink: de un `.slx` (zip con XML) entra el código de los bloques MATLAB Function, como un `.m` con el nombre del bloque de etiqueta y las líneas del bloque (`core/rag/simulink.py`). Sin los estados ni las transiciones de Stateflow, sin formatos viejos (`.mdl`) y con el límite de 1 MB de todo archivo. Probado con un solo modelo real: `controlador_trebol.slx`, de R2025b, un bloque de 85 líneas. Las versiones viejas de MATLAB pueden guardar los charts de otra forma.
-- Búsqueda: embeddings con los prefijos de nomic y BM25 propio con raíces del español (`snowballstemmer`), fusionados por posición (RRF), con 2 fragmentos por archivo como mucho.
+- Búsqueda: embeddings con los prefijos de nomic y palabras con SQLite FTS5 (tokens con raíces del español, `snowballstemmer`, en `data/chroma/palabras.sqlite3`), fusionados por posición (RRF), con 2 fragmentos por archivo como mucho.
 - Respuesta: solo con los fragmentos y citándolos. "Fuentes:" la pone el código, no el modelo. Si la cobertura de la pregunta en los fragmentos no llega a `rag.min_coverage` (0,3), dice "No lo encontré en tus proyectos." sin llamar al modelo. La distancia de los embeddings no sirve para esto (se solapan) y la puntuación de BM25 tampoco (depende del tamaño de la colección).
 
 Aciertos con `test/manual/check_rag.py` (20 preguntas sobre C:\Asia, archivo correcto en 1.º / top 3 / top 5):
@@ -361,10 +361,44 @@ Pendientes:
 - NINGUNA sale a veces con preguntas válidas, al azar: 2 de 16 en la última medición.
 - "Cómo se cifra la contraseña" y las otras trampas dependen de que el 7B escriba NINGUNA: la cobertura no las separa. Una línea real que no responde pasaría la verificación.
 - En código con poco texto, una pregunta con otras palabras depende del glosario: sin él, "punto desplazado" no se responde. Con él, 1 de 2 corridas.
-- Una etiqueta con un rango de líneas invalida la redacción si alguna línea del rango no se verificó, aunque los nombres sean reales. Decidir si un rango basta con que sus extremos estén verificados.
 - Un archivo sin fragmentos (`__init__.py` vacío) no guarda hash y `/indexar` lo cuenta como reindexado cada vez. No embebe nada; solo infla la cifra.
 - El troceado solo no ayuda: sin el tope por archivo, las secciones del ROADMAP acapararon los resultados.
-- BM25 se reconstruye en cada búsqueda con todos los documentos: se resuelve con SQLite FTS5 en la capa 2.
+
+**Capa 2, documentación técnica (ROS 2 y Gazebo hechos, Python pendiente):** commits `96736912` (rango de líneas), `a653680b` (FTS5), `f036fd12`, `42807348` (`.rst` y páginas públicas), `8c482fbc` y `3bbd6f34` (medición).
+- Una cita con rango vale si sus nombres aparecen en los fragmentos y el rango se solapa con líneas verificadas.
+- Palabras con FTS5, en `core/rag/word_index.py`: la parte de palabras baja de más de 1 s a unos 20 ms y la consulta de 2,6 a 2,2 s. `check_rag`: la búsqueda pasa de 12/15/20 a 12/14/20 (`atomic_write`, de 3.º a 4.º, con el ROADMAP más largo); "No lo encontré", 4 de 5 y 0 de 20 falsos rechazos. Punta a punta con 11 preguntas: 7/11 y 6/11, frente a 8/11; trampas 0/4 y ajenas 0/5.
+- `.rst` por secciones. Tipo `documentacion` con URL y licencia: `/indexar <nombre> [ruta] [tipo] [url] [licencia]`, con `{}` en la URL para la ruta sin extensión. Las líneas verificadas muestran la página pública y la licencia; la etiqueta de archivo sigue siendo interna, para verificar.
+
+| Fuente | Qué entra | Licencia | Archivos | Fragmentos | Indexar (CPU) |
+|---|---|---|---|---|---|
+| `ros2` | Jazzy, sin referencia por paquete ni `Releases/` | CC BY 4.0 | 279 | 3632 | 1672 s |
+| `gazebo` | Harmonic, las 30 páginas de su `index.yaml` | CC BY 4.0 | 30 | 362 | 162 s |
+| `ros_gz_bridge` | README, rama jazzy | Apache-2.0 | 1 | 21 | 22 s |
+
+Los documentos viven en `C:\AsiaDocs`, no en `data/docs`: `data/` de Asia está excluida del índice. `gazebo_harmonic` se arma desde `harmonic/index.yaml` con el nombre de la URL: el nombre del archivo no coincide con la página en 13 de 59 casos. ROS 2 tardó 34 % más de lo estimado: las siguientes estimaciones, con margen.
+
+La distancia separa mal preguntas en español sobre documentación en inglés. El documento correcto queda en el top 5 en 8 de 9, casi siempre 1.º, pero con 392 el filtro rechaza 4 (publicar un tópico, QoS, launch, mundo SDF). Medición de 20 preguntas (8 de C:\Asia, 3 de Bolitabot, 9 de documentación), 8 trampas (4 de documentación) y 5 ajenas:
+
+| `max_distance` | Corrida | Asia | Bolitabot | Docs | Inválidas | Cita | Trampas | Ajenas | s/pregunta |
+|---|---|---|---|---|---|---|---|---|---|
+| 392 | 1 | 6/8 | 3/3 | 3/9 | 0 | 11/20 | 0/8 | 0/5 | 54 |
+| | 2 | 6/8 | 2/3 | 4/9 | 0 | 11/20 | 0/8 | 0/5 | 20 |
+| 430 | 1 | 5/8 | 2/3 | 3/9 | 1 | 11/20 | 0/8 | 0/5 | 46 |
+| | 2 | 5/8 | 3/3 | 3/9 | 2 | 11/20 | 0/8 | 0/5 | 37 |
+
+La verificación aguanta sin filtro: con 430 las 26 trampas y ajenas llegan a la extracción o a los fragmentos de respaldo y ninguna se responde. Pero subir el umbral no da más respuestas: sigue en 392. Lo que limita es la extracción, que escribe NINGUNA con el documento correcto en primer lugar (QoS, 2 de 2; el puente con YAML, 3 de 4). Lo que sí cambia con 430 es que 3 de las 4 rechazadas (QoS, launch, mundo SDF, con su documento 1.º) enseñan fragmentos en vez de "No lo encontré", a cambio de enseñarlos también con "receta de mole poblano". La página correcta en esos fragmentos se deduce de la calibración, no se leyó: el registro corta el texto. Las diferencias entre umbrales en preguntas que pasan con ambos son azar del 7B: reciben los mismos fragmentos.
+
+Respuestas falsas que pasaron todas las comprobaciones, leídas contra el código (la medición no las cuenta):
+- "Para escribir un archivo sin dejarlo a medias, debes abrirlo con el modo "w"": lo contrario de lo que dice `core/atomic_write.py`. Sin cita (1 de 4 corridas).
+- `drop_client` atribuida a `providers/ollama_provider.py`, donde solo se importa y se llama; está en `ollama_models.py` (3 de 4).
+- El resumen "cada 3 segundos": probablemente de un texto inventado en `test/test_rag_answer.py:231`. Las pruebas se indexan y sus datos falsos se leen como hechos.
+
+Pendientes de la capa 2:
+- Python 3.12: sin descargar. Es `.txt`, hay que decidir cómo trocearlo.
+- Averiguar por qué la extracción escribe NINGUNA con el documento correcto delante: si es el inglés, el tamaño del fragmento o que la respuesta no está en él.
+- Decidir si una pregunta con "en <fuente>" que el filtro rechaza enseña los fragmentos en lugar de negar.
+- "No lo encontré en tus proyectos" suena raro con documentación.
+- Decidir si `test/` entra en la fuente `asia`.
 
 Conocimiento, pendientes generales:
 
