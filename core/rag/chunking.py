@@ -20,6 +20,7 @@ OVERLAP_LINES = 3
 MIN_BLOCK_CHARS = 200
 
 MD_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
+MD_FENCE = re.compile(r"^ {0,3}(`|~)\1\1")
 TEX_HEADING = re.compile(r"^\s*\\(chapter|section|subsection|subsubsection)\*?\{(.+?)\}")
 DOCUMENT_SUFFIXES = {".md": MD_HEADING, ".markdown": MD_HEADING, ".tex": TEX_HEADING}
 
@@ -95,9 +96,17 @@ def document_pieces(lines: list, heading) -> list:
     """Una pieza por sección; la etiqueta es la ruta de títulos ("Voz > J2")."""
     pieces = [Piece(1, 0)]
     trail = []
+    fence = None
 
     for number, line in enumerate(lines, 1):
-        match = heading.match(line)
+        # Dentro de un bloque de código, "# comentario" no es un título.
+        opening = MD_FENCE.match(line) if heading is MD_HEADING else None
+
+        if opening and fence in (None, opening.group(1)):
+            fence = None if fence else opening.group(1)
+            continue
+
+        match = None if fence else heading.match(line)
 
         if not match:
             continue

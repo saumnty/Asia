@@ -121,6 +121,65 @@ def test_markdown_por_secciones_con_su_ruta():
     assert by_label(chunks, "Otra").text.endswith("Fin.")
 
 
+BOLITABOT_README = """# Control de robots
+
+## Cómo Ejecutar
+
+Corre esto:
+
+```bash
+ros2 launch sim.launch.py
+# o explícitamente:
+ros2 launch sim.launch.py use_sim_time:=true
+```
+
+### Con Docker
+
+~~~sh
+# otro comentario
+~~~
+
+## Estructura del Repositorio
+
+Carpetas.
+"""
+
+
+def test_un_comentario_en_un_bloque_de_codigo_no_es_un_titulo():
+    labels = [chunk.label for chunk in chunk_text(BOLITABOT_README, ".md")]
+
+    assert labels == [
+        "Control de robots",
+        "Control de robots > Cómo Ejecutar",
+        "Control de robots > Cómo Ejecutar > Con Docker",
+        "Control de robots > Estructura del Repositorio",
+    ]
+
+
+def test_el_bloque_de_codigo_se_queda_en_su_seccion():
+    [_, section, *_] = chunk_text(BOLITABOT_README, ".md")
+
+    assert "# o explícitamente:" in section.text and "use_sim_time" in section.text
+
+
+def test_un_bloque_se_cierra_con_el_mismo_caracter():
+    text = "# Uno\n```\n~~~\n# no es título\n```\n# Dos\n"
+
+    assert [chunk.label for chunk in chunk_text(text, ".md")] == ["Uno", "Dos"]
+
+
+def test_un_bloque_sin_cerrar_llega_hasta_el_final():
+    text = "# Uno\n```\n# no es título\n"
+
+    assert [chunk.label for chunk in chunk_text(text, ".md")] == ["Uno"]
+
+
+def test_en_tex_las_comillas_no_abren_un_bloque():
+    text = "\\section{Uno}\n```\n\\section{Dos}\nfin\n"
+
+    assert [chunk.label for chunk in chunk_text(text, ".tex")] == ["Uno", "Dos"]
+
+
 def test_tex_por_secciones():
     text = "\\documentclass{article}\n\\section{Modelo}\nTexto.\n\\subsection*{PID}\nMás.\n\\section{Fin}\nYa.\n"
 
@@ -214,7 +273,7 @@ def test_si_ollama_falla_el_indice_queda_como_estaba(tmp_path, project, embeddin
 
 def test_cambiar_el_troceado_reindexa_todo(tmp_path, project, embeddings, monkeypatch):  # noqa: F811
     indexer_of(project, tmp_path).index_project()
-    monkeypatch.setattr(indexer_module, "CHUNKER_VERSION", "2")
+    monkeypatch.setattr(indexer_module, "CHUNKER_VERSION", "otra")
 
     indexer = indexer_of(project, tmp_path)
     indexer.index_project()

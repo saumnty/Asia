@@ -9,7 +9,7 @@ from core.rag.exclusions import SourceFilter
 from core.rag.vector_store import VectorStore
 
 # Cambiar el troceado invalida lo indexado: el hash incluye esta versión.
-CHUNKER_VERSION = "1"
+CHUNKER_VERSION = "2"
 
 
 def unload_chat_models():
