@@ -1,13 +1,15 @@
 """BM25: búsqueda por palabras, para nombres exactos de funciones y variables.
 
-Sin paquetes. Las palabras se parten como en el código: "drop_client" y
-"dropClient" dan "drop", "client" y el nombre entero, así que sirven tanto el
-nombre exacto como una parte. Sin acentos y sin palabras vacías del español.
+Las palabras se parten como en el código: "drop_client" y "dropClient" dan
+"drop", "client" y el nombre entero, así que sirven tanto el nombre exacto como
+una parte. Sin acentos, sin palabras vacías del español y reducidas a su raíz
+con snowballstemmer: "detectan" encuentra "detectar".
 """
 import math
 import re
 import unicodedata
 from collections import Counter
+from functools import lru_cache
 
 K1 = 1.5
 B = 0.75
@@ -25,6 +27,19 @@ def without_accents(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
 
 
+@lru_cache(maxsize=1)
+def spanish_stemmer():
+    # Aquí y no arriba: solo hace falta con RAG.
+    import snowballstemmer
+
+    return snowballstemmer.stemmer("spanish")
+
+
+@lru_cache(maxsize=None)
+def stem(token: str) -> str:
+    return spanish_stemmer().stemWord(token)
+
+
 def tokenize(text: str) -> list:
     tokens = []
 
@@ -33,7 +48,7 @@ def tokenize(text: str) -> list:
         parts = [part for piece in word.split("_") for part in CAMEL.findall(piece)]
         tokens += [token.lower() for token in dict.fromkeys([word, *parts])]
 
-    return [token for token in tokens if len(token) > 1 and token not in STOPWORDS]
+    return [stem(token) for token in tokens if len(token) > 1 and token not in STOPWORDS]
 
 
 class BM25:

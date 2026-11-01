@@ -3,3 +3,4 @@ google-genai==2.6.0
 ollama==0.6.2
 prompt_toolkit==3.0.52
 requests==2.34.2
+snowballstemmer==3.1.1

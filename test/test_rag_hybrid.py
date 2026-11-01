@@ -1,19 +1,41 @@
 """Búsqueda híbrida: BM25 propio y fusión con los embeddings."""
-from core.rag.bm25 import BM25, tokenize
+from core.rag.bm25 import BM25, stem, tokenize
 from core.rag.indexer import ProjectIndexer
 from core.rag.retriever import MAX_PER_FILE, Hit, merge, search_collections
 from test_rag_index import embeddings  # noqa: F401
 
 
 def test_parte_los_nombres_como_en_el_codigo():
-    assert {"drop_client", "drop", "client"} <= set(tokenize("drop_client"))
-    assert {"sessionsummarizer", "session", "summarizer"} <= set(tokenize("SessionSummarizer"))
-    assert {"margin_frames", "margin", "frames"} <= set(tokenize("MARGIN_FRAMES"))
-    assert {"http", "client"} <= set(tokenize("HTTPClient"))
+    assert {stem(t) for t in ("drop_client", "drop", "client")} <= set(tokenize("drop_client"))
+    assert {stem(t) for t in ("sessionsummarizer", "session", "summarizer")} <= set(tokenize("SessionSummarizer"))
+    assert {stem(t) for t in ("margin_frames", "margin", "frames")} <= set(tokenize("MARGIN_FRAMES"))
+    assert {stem(t) for t in ("http", "client")} <= set(tokenize("HTTPClient"))
 
 
 def test_sin_acentos_ni_palabras_vacias():
-    assert set(tokenize("la sesión de pruebas")) == {"sesion", "pruebas"}
+    assert set(tokenize("la sesión de pruebas")) == {stem("sesion"), stem("pruebas")}
+
+
+def test_el_mismo_verbo_cuenta_como_la_misma_palabra():
+    assert tokenize("detectan") == tokenize("detectar")
+    assert tokenize("usuarios") == tokenize("usuario")
+    assert tokenize("guardan") == tokenize("guardar")
+
+
+def test_encuentra_otra_forma_de_la_palabra():
+    documents = ["def otra():\n    pass", "para detectar rutas inventadas", "cliente de correo"]
+
+    assert BM25(documents).top("cómo se detectan", 3)[0][0] == 1
+
+
+def test_la_cobertura_entiende_otra_forma_de_la_palabra():
+    words = BM25(["para detectar rutas", "otra cosa"])
+
+    assert words.coverage("detectan rutas", "para detectar rutas") == 1.0
+
+
+def test_un_nombre_exacto_sigue_coincidiendo_consigo_mismo():
+    assert BM25(["def is_clear_chat():", "otra"]).top("is_clear_chat", 2)[0][0] == 0
 
 
 def test_encuentra_el_nombre_exacto():
