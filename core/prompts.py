@@ -11,6 +11,11 @@ antes: cambiar uno es un cambio de comportamiento.
 NOT_FOUND = "No lo encontré en tus proyectos."
 # Lo que encabeza los fragmentos si había material, pero ninguna línea lo responde.
 NO_DIRECT_ANSWER = "No encontré una respuesta directa. Esto es lo más relevante:"
+# Lo que se muestra en lugar de una redacción con nombres o citas que no existen.
+INVALID_DRAFT = (
+    "Estas son las líneas que responden; no incluyo explicación porque mencionaba "
+    "nombres que no aparecen en tu código."
+)
 # Lo que encabeza, debajo de cada respuesta de /buscar, las líneas que comprobó el código.
 VERIFIED_LINES = "Líneas verificadas:"
 

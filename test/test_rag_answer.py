@@ -5,7 +5,7 @@ from core import prompts
 from core.commands import COMMANDS, options_text
 from core.prompts import NOT_FOUND
 from core.rag.library import is_refusal
-from core.rag.quotes import Quote, best_fragments, verified_lines, verify_quotes
+from core.rag.quotes import Quote, best_fragments, draft_problems, verified_lines, verify_quotes
 from core.rag.retriever import Hit, relevant
 from test_confidencial import make_brain
 from tools.rag_tool import RagTool
@@ -252,6 +252,68 @@ def test_los_mejores_son_tres_y_cortos():
 
     assert "[a2.py:1-9]" in shown and "[a3.py:1-9]" not in shown
     assert shown.count("…") == 3 and "z" * 601 not in shown
+
+
+VERIFIED = [Quote("control/pid.py", 41, "Pid.salida", "    self.kp   =   2.5"), Quote("control/pid.py", 42, "Pid.salida", "x")]
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "La ganancia es 2 [control/pid.py:41].",
+        "La ganancia es 2 [control/pid.py:41-42].",
+        "La ganancia es 2 [control/pid.py:41–42].",
+        "La calcula `salida` con `self.kp   =   2.5` y `self.error`.",
+        "Está en [control/pid.py], en `reinicia`.",
+        "La ganancia sale de self.kp, en un robot.",
+        "Un robot, para la ganancia:\n```python\nself.kp = 2.5\n```",
+    ],
+)
+def test_una_redaccion_con_nombres_reales_vale(answer):
+    assert draft_problems(answer, VERIFIED, CONTEXT) == []
+
+
+@pytest.mark.parametrize(
+    "answer, problem",
+    [
+        ("La ganancia es 2 [control/pid.py:50].", "[control/pid.py:50]"),
+        ("La ganancia es 2 [control/pid.py:41-43].", "[control/pid.py:41-43]"),
+        ("La ganancia es 2 [otro.py:41].", "[otro.py:41]"),
+        ("Está en [otro.py].", "otro.py"),
+        ("Se calcula con `calcula_pid()`.", "calcula_pid()"),
+        ("Se calcula con calcula_pid sobre el error.", "calcula_pid"),
+        ("Se calcula con calculaPid sobre el error.", "calculaPid"),
+        ("Lo hace SessionPid sobre el error.", "SessionPid"),
+        ("Un ejemplo:\n```python\ndef atomic_write(ruta, contenido):\n    pass\n```", "def atomic_write(ruta, contenido):"),
+    ],
+)
+def test_una_redaccion_con_nombres_inventados_no_vale(answer, problem):
+    assert problem in draft_problems(answer, VERIFIED, CONTEXT)
+
+
+def test_una_cita_de_un_fragmento_que_no_se_verifico_no_vale():
+    # Existe en los fragmentos, pero el modelo no la copió.
+    assert draft_problems("Se reinicia [control/pid.py:61].", VERIFIED, CONTEXT) == ["[control/pid.py:61]"]
+
+
+def test_una_etiqueta_entre_comillas_invertidas_se_trata_como_etiqueta():
+    assert draft_problems("Está en `[control/pid.py:41]`.", VERIFIED, CONTEXT) == []
+
+
+def test_las_palabras_normales_no_son_identificadores():
+    assert draft_problems("El filtro de secretos corre antes del envío, según Ollama y JSON.", VERIFIED, CONTEXT) == []
+
+
+def test_con_nombres_inventados_solo_se_muestran_las_lineas():
+    brain = brain_with(QUOTED, "Lo hace con `calcula_pid()` [control/pid.py:41].")
+
+    answer = brain.process("/buscar qué ganancia tiene")
+
+    assert answer == (
+        "Estas son las líneas que responden; no incluyo explicación porque mencionaba nombres que no aparecen en tu código."
+        f"\n\n{prompts.VERIFIED_LINES}\n\ncontrol/pid.py:41 (Pid.salida)\n  self.kp   =   2.5"
+    )
+    assert "calcula_pid" not in answer
 
 
 def test_una_respuesta_parcial_se_conserva():

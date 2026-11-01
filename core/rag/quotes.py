@@ -10,12 +10,19 @@ from dataclasses import dataclass
 
 from core import prompts
 from core.rag.library import FRAGMENT_HEADER
-from tools.review_findings import clean_quote, locate_quote
+from tools.review_findings import clean_quote, locate_quote, squash
 
 # "- [core/brain.py:40-55] línea copiada". La etiqueta es opcional: sin ella, la
 # línea se busca en todos los fragmentos.
 QUOTE = re.compile(r"^[\s*>-]*(?:\[([^\]\n]+)\]\s*:?\s*)?(.+)$", re.MULTILINE)
 FIRST_LINE = re.compile(r":(\d+)(?:-\d+)?$")
+# Lo que la redacción del modelo puede citar o nombrar, para comprobarlo.
+CITED_LINES = re.compile(r"\[([\w./\\-]+\.\w+):(\d+)(?:[-–](\d+))?\]")
+CITED_FILE = re.compile(r"\[([\w./\\-]+\.\w+)\]")
+FENCE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)
+BACKTICKED = re.compile(r"`([^`\n]+)`")
+WORD = re.compile(r"\w+")
+CAMEL_CASE = re.compile(r"[a-z0-9][A-Z]")
 FALLBACK_FRAGMENTS = 3
 FALLBACK_CHARS = 600
 
@@ -90,6 +97,43 @@ def verify_quotes(response: str, context: str) -> list:
 
 def quotes_text(quotes: list) -> str:
     return "\n".join(f"[{quote.cite}] {quote.text.strip()}" for quote in quotes)
+
+
+def unverified_tags(answer: str, quotes: list) -> list:
+    """Las etiquetas [archivo:líneas] de la redacción que no están entre las verificadas."""
+    verified = {(quote.path, quote.line) for quote in quotes}
+    unverified = []
+
+    for match in CITED_LINES.finditer(answer):
+        path, first, last = match.group(1), int(match.group(2)), int(match.group(3) or match.group(2))
+
+        if any((path, line) not in verified for line in range(first, last + 1)):
+            unverified.append(match.group(0))
+
+    return unverified
+
+
+def is_identifier(word: str) -> bool:
+    return "_" in word or bool(CAMEL_CASE.search(word))
+
+
+def unknown_names(answer: str, context: str) -> list:
+    """Los archivos, el código y los identificadores de la redacción que no están en los fragmentos."""
+    text = CITED_LINES.sub(" ", answer)
+    code = [line for block in FENCE.findall(text) for line in block.splitlines() if line.strip()]
+    text = FENCE.sub(" ", text)
+    code += CITED_FILE.findall(text) + BACKTICKED.findall(text)
+    known = squash(context)
+    words = set(WORD.findall(context))
+
+    unknown = [item.strip() for item in code if squash(item.strip(" .,:;")) not in known]
+    unknown += [word for word in WORD.findall(BACKTICKED.sub(" ", text)) if is_identifier(word) and word not in words]
+    return list(dict.fromkeys(unknown))
+
+
+def draft_problems(answer: str, quotes: list, context: str) -> list:
+    """Por qué no se puede mostrar la redacción del modelo. Vacío si se puede."""
+    return unverified_tags(answer, quotes) + unknown_names(answer, context)
 
 
 def block_of(run: list) -> str:

@@ -3,7 +3,7 @@ from pathlib import Path
 
 from core import prompts
 from core.rag.library import is_refusal
-from core.rag.quotes import best_fragments, quotes_text, verified_lines, verify_quotes
+from core.rag.quotes import best_fragments, draft_problems, quotes_text, verified_lines, verify_quotes
 
 # Los mismos que config/defaults.json, por si falta la clave.
 DEFAULT_ANSWER_LIMITS = {
@@ -100,6 +100,10 @@ class ExploreActions:
 
         if is_refusal(answer):
             return best_fragments(rag_context)
+
+        # La redacción no se comprueba frase a frase, pero los nombres y las citas sí.
+        if draft_problems(answer, quotes, rag_context):
+            return f"{prompts.INVALID_DRAFT}\n\n{verified_lines(quotes)}"
 
         return f"{answer}\n\n{verified_lines(quotes)}"
 
