@@ -110,7 +110,8 @@ END_TO_END = [
 ]
 
 
-# Pasan el filtro de cobertura y nada en C:\\Asia las responde.
+# Nada en C:\\Asia las responde: se preguntan "en asia", porque con más fuentes pueden
+# tener respuesta (en Bolitabot sí hay un servidor, en el puerto 9090).
 TRAPS = [
     "cómo se configura el firewall",
     "cómo se conecta la base de datos de usuarios",
@@ -270,10 +271,13 @@ def calibrate():
         calibration_row("bolitabot", question, sources)
 
     for question in TRAPS:
-        calibration_row("trampa", question, sources)
+        calibration_row("trampa", f"{question} en asia", sources)
 
     for question in UNANSWERABLE:
-        calibration_row("ajena", question, sources)
+        calibration_row("ajena", f"{question} en asia", sources)
+
+    for question in UNANSWERABLE:
+        calibration_row("ajena+bol", question, sources)
 
     return 0
 
@@ -314,7 +318,7 @@ def end_to_end(runs):
         traps = []
 
         for question in TRAPS:
-            row = answer_row(brain, question)
+            row = answer_row(brain, f"{question} en asia")
             traps.append(row)
             state, _, seconds, shown = row
             print(f"\n[{run}] TRAMPA {state}, {seconds:.0f} s: {question}", flush=True)
