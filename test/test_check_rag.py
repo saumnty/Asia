@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "test" / "manual"))
 
 import check_rag  # noqa: E402
+from core.rag.vector_store import VectorStore  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -59,6 +60,34 @@ def test_borra_una_carpeta_con_chroma_abierto(tmp_path):
 
     assert done.returncode == 0
     assert not folder.exists()
+
+
+def indexed_in(folder, *documents):
+    store = VectorStore(persist_dir=folder, collection_name=check_rag.COLLECTION)
+    ids = [str(i) for i in range(len(documents))]
+    store.add_documents(ids, list(documents), [[0.1, 0.2]] * len(ids), [{"file_path": "a.py"}] * len(ids))
+
+
+def test_la_copia_quita_lo_que_trae_una_trampa(tmp_path, monkeypatch):
+    original = tmp_path / "chroma"
+    indexed_in(original, "texto normal", f"anotado: {check_rag.TRAPS[0]}")
+    monkeypatch.setattr(check_rag.vector_store, "CHROMA_DIR", original)
+
+    check_rag.clean_copy(tmp_path / "copia")
+
+    copy = VectorStore(persist_dir=tmp_path / "copia", collection_name=check_rag.COLLECTION)
+    assert copy.all_documents()["documents"] == ["texto normal"]
+    assert VectorStore(persist_dir=original, collection_name=check_rag.COLLECTION).collection.count() == 2
+
+
+def test_la_copia_funciona_sin_nada_que_quitar(tmp_path, monkeypatch):
+    original = tmp_path / "chroma"
+    indexed_in(original, "texto normal")
+    monkeypatch.setattr(check_rag.vector_store, "CHROMA_DIR", original)
+
+    check_rag.clean_copy(tmp_path / "copia")
+
+    assert check_rag.vector_store.CHROMA_DIR == tmp_path / "copia"
 
 
 def test_reintenta_si_windows_la_bloquea(tmp_path, monkeypatch, no_wait):
