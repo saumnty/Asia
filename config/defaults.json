@@ -85,7 +85,7 @@
     "rag": {
         "min_coverage": 0.3,
         "max_distance": 392.0,
-        "translate_question": false
+        "translate_question": true
     },
 
     "reflection": {

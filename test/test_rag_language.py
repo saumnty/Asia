@@ -106,8 +106,9 @@ def test_fuentes_muestra_el_idioma():
     [
         ("qué es QoS en ros2", True),
         ("qué es QoS en asia", False),
-        ("qué es QoS", True),
+        ("qué es QoS", False),
         ("drop_client", False),
+        ("drop_client en ros2", False),
         ("qué es QoS en pruebas", False),
     ],
 )
@@ -171,18 +172,27 @@ def brain_with(*answers):
     return brain
 
 
-def test_por_defecto_no_traduce():
+def test_una_busqueda_general_no_traduce():
+    Library().save("ros2", "documentacion", "C:/docs", 10, language="en")
+    brain = brain_with(QUOTED, ANSWER)
+
+    brain.process("/buscar qué ganancia tiene")
+
+    assert brain.tool_registry.calls[0]["translated"] == ""
+    assert len(brain.provider_router.prompts) == 2
+
+
+def test_la_opcion_apaga_la_traduccion():
+    SettingsManager.set_overrides({"rag": {"translate_question": False}})
     Library().save("ros2", "documentacion", "C:/docs", 10, language="en")
     brain = brain_with(QUOTED, ANSWER)
 
     brain.process("/buscar qué ganancia tiene en ros2")
 
     assert brain.tool_registry.calls[0]["translated"] == ""
-    assert len(brain.provider_router.prompts) == 2
 
 
-def test_buscar_traduce_con_la_opcion_para_una_fuente_en_ingles():
-    SettingsManager.set_overrides({"rag": {"translate_question": True}})
+def test_buscar_traduce_si_nombra_una_fuente_en_ingles():
     Library().save("ros2", "documentacion", "C:/docs", 10, language="en")
     brain = brain_with("What is the gain?", QUOTED, ANSWER)
 

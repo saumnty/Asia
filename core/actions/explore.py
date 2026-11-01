@@ -121,9 +121,9 @@ class ExploreActions:
         return f"{prompts.INVALID_DRAFT}\n\n{lines}"
 
     def translated_question(self, question):
-        """La pregunta en inglés si consulta una fuente en ese idioma; si no, vacía.
+        """La pregunta en inglés si nombra una fuente en ese idioma; si no, vacía.
 
-        Solo con rag.translate_question: medida, no redujo los NINGUNA y sube el tiempo.
+        En una búsqueda general no compensa: es otra llamada al modelo en cada pregunta.
         """
         sources = Library().all()
 

@@ -116,9 +116,9 @@ def searched_sources(question: str, sources: list) -> list:
 
 
 def needs_translation(question: str, sources: list) -> bool:
-    """True si consulta una fuente en inglés. Un nombre suelto se dice igual en los dos idiomas."""
-    is_english = any(source.language == ENGLISH_SOURCE for source in searched_sources(question, sources))
-    return is_english and len(question.split()) > 1
+    """True si nombra una fuente en inglés. Un nombre suelto se dice igual en los dos idiomas."""
+    named = named_in_question(question, sources)
+    return bool(named) and named.language == ENGLISH_SOURCE and len(without_source(question, named).split()) > 1
 
 
 def clean_translation(answer: str) -> str:
