@@ -29,6 +29,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
+from core.actions import explore
 from core.rag.indexer import ProjectIndexer, unload_chat_models
 from core.rag.library import is_refusal
 from core.rag.retriever import relevant, search_collections
@@ -194,7 +195,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--indice", help="carpeta del índice: se conserva y solo se reindexa lo que cambió")
     parser.add_argument("--punta-a-punta", type=int, metavar="CORRIDAS", help="mide las respuestas del modelo real")
+    parser.add_argument("--fragmentos", type=int, help="fragmentos que recibe el modelo, en vez del valor del código")
     args = parser.parse_args()
+
+    if args.fragmentos:
+        explore.RAG_FRAGMENTS = args.fragmentos
 
     if args.punta_a_punta:
         return end_to_end(args.punta_a_punta)

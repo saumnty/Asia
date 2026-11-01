@@ -9,6 +9,8 @@ DEFAULT_ANSWER_LIMITS = {
     "explain_file": {"words": 150, "tokens": 450},
     "summarize_file": {"words": 100, "tokens": 300},
 }
+# Los que recibe el modelo en /buscar.
+RAG_FRAGMENTS = 5
 
 
 class ExploreActions:
@@ -79,7 +81,7 @@ class ExploreActions:
             "search_project_rag",
             question=question,
             project_name=project_name,
-            n_results=5
+            n_results=RAG_FRAGMENTS
         )
 
         # Sin nada relevante, ni se llama al modelo: no hay de dónde responder.

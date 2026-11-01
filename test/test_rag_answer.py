@@ -193,6 +193,15 @@ def test_una_respuesta_parcial_no_activa_la_red():
     assert answer.startswith("Está kp") and "Fuentes:" in answer
 
 
+def test_pide_los_fragmentos_configurados(monkeypatch):
+    monkeypatch.setattr("core.actions.explore.RAG_FRAGMENTS", 3)
+    brain = brain_with()
+
+    brain.process("/buscar qué ganancia tiene")
+
+    assert brain.tool_registry.calls[0][1]["n_results"] == 3
+
+
 def test_buscar_sin_pregunta():
     assert "Escribe la pregunta" in brain_with().process("/buscar")
 
