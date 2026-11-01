@@ -23,6 +23,7 @@ tarda minutos en CPU.
     .venv\\Scripts\\python.exe test\\manual\\check_rag.py --punta-a-punta 2
 """
 import argparse
+import gc
 import shutil
 import sys
 import tempfile
@@ -41,6 +42,9 @@ from core.rag.retriever import relevant, search_collections
 from tools.rag_tool import DEFAULT_MIN_COVERAGE
 
 COLLECTION = "asia"
+TEMP_PREFIX = "asia_rag_"
+REMOVE_TRIES = 5
+REMOVE_WAIT_S = 1
 KINDS = ("concepto", "documento", "nombre")
 TOPS = (1, 3, 5)
 
@@ -99,6 +103,45 @@ TRAPS = [
     "cómo se cifra la contraseña del usuario",
     "qué puerto usa el servidor web",
 ]
+
+
+def release_chroma():
+    """Suelta los archivos de Chroma: en Windows los tiene abiertos hasta que se para su sistema."""
+    from chromadb.api.shared_system_client import SharedSystemClient
+
+    for system in list(SharedSystemClient._identifier_to_system.values()):
+        system.stop()
+
+    SharedSystemClient.clear_system_cache()
+    gc.collect()
+
+
+def remove_tree(folder, tries=REMOVE_TRIES) -> bool:
+    """Borra folder, con reintento si Windows la tiene bloqueada. False si no se pudo."""
+    release_chroma()
+
+    for attempt in range(tries):
+        try:
+            shutil.rmtree(folder)
+            return True
+        except FileNotFoundError:
+            return True
+        except OSError:
+            if attempt + 1 < tries:
+                time.sleep(REMOVE_WAIT_S)
+
+    print(f"No se pudo borrar {folder}: la próxima corrida lo vuelve a intentar.", file=sys.stderr)
+    return False
+
+
+def temp_folder() -> Path:
+    return Path(tempfile.mkdtemp(prefix=TEMP_PREFIX))
+
+
+def sweep_leftovers(base=None):
+    """Borra lo que dejaron corridas anteriores que no terminaron."""
+    for folder in Path(base or tempfile.gettempdir()).glob(f"{TEMP_PREFIX}*"):
+        remove_tree(folder, tries=1)
 
 
 def relative(path: str) -> str:
@@ -252,20 +295,21 @@ def main():
     parser.add_argument("--punta-a-punta", type=int, metavar="CORRIDAS", help="mide las respuestas del modelo real")
     parser.add_argument("--fragmentos", type=int, help="fragmentos que recibe el modelo, en vez del valor del código")
     args = parser.parse_args()
+    sweep_leftovers()
 
     if args.fragmentos:
         explore.RAG_FRAGMENTS = args.fragmentos
 
     if args.punta_a_punta:
-        scratch = Path(tempfile.mkdtemp(prefix="asia_rag_"))
+        scratch = temp_folder()
 
         try:
             clean_copy(scratch / "chroma")
             return end_to_end(args.punta_a_punta)
         finally:
-            shutil.rmtree(scratch, ignore_errors=True)
+            remove_tree(scratch)
 
-    folder = Path(args.indice) if args.indice else Path(tempfile.mkdtemp(prefix="asia_rag_"))
+    folder = Path(args.indice) if args.indice else temp_folder()
 
     try:
         count, seconds = build_index(folder)
@@ -297,7 +341,7 @@ def main():
         print("Archivos que más salen primero:", Counter(r[3][0] for r in rows if r[3]).most_common(4))
     finally:
         if not args.indice:
-            shutil.rmtree(folder, ignore_errors=True)
+            remove_tree(folder)
 
     return 0
 
