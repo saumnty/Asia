@@ -395,11 +395,8 @@ Respuestas falsas que pasaron todas las comprobaciones, leídas contra el códig
 
 Pendientes de la capa 2:
 - Python 3.12: sin descargar. Es `.txt`, hay que decidir cómo trocearlo.
-- QoS: la lista de políticas no llega a los 5 fragmentos (abajo). Es de búsqueda, no del 7B. Falta decidir el arreglo. El mismo caso se puede repetir en otras preguntas sin líneas: mirar el puesto del fragmento correcto antes de culpar a la extracción.
-- Sin traducción, publicar un tópico, QoS, launch y mundo SDF no pasan el filtro y enseñan fragmentos sin pasar por el modelo. Con traducción lo pasaban. Decidir si eso compensa el tiempo.
-- Falsas eliminaciones: un nombre de la propia pregunta (`ros_gz_bridge`, 3 de 10) y un número entre comillas invertidas (`1.2`) cuentan como código.
-- Al indexar Python 3.12: `/publica python sí`. `ros_gz_bridge` sigue privada (Apache-2.0, no estaba en la lista).
-- `test_varias_colecciones` falló una vez, con "Nothing found on disk" de Chroma al abrir un índice recién escrito; no se repitió en 4 corridas. No se investigó.
+- QoS y casos parecidos: el glosario lo resuelve pregunta a pregunta; el arreglo general por títulos empeoró el ranking y no se aplicó (abajo). Con otra pregunta sin líneas, mirar el puesto del fragmento correcto antes de culpar a la extracción.
+- Al indexar Python 3.12: `/publica python sí`.
 - "No lo encontré en tus proyectos" suena raro con documentación.
 
 Una pregunta con "en <fuente>" que el filtro rechaza enseña los fragmentos en lugar de negar, sin pasar por el modelo. Sin fuente nombrada, sigue negando.
@@ -437,11 +434,42 @@ Cierre de los ajustes de la capa 2:
 
 Se eliminan 10 de 82 frases, frente a 45 de 87, y se marcan 34. El precio se vio en la corrida 2: `primero debe abrirlo con el modo "w". (sin cita)` vuelve a mostrarse, marcado, sin la línea correcta delante. Docs baja a 2/9 y 3/9 porque cuatro preguntas no pasan el filtro sin traducción.
 
-QoS, con la pregunta del benchmark: la lista está entera en `About-Quality-of-Service-Settings.rst:28-61`, pero sale 13.ª sin tope por archivo y no sale con el tope de 2 ni de 4: "QoS events" y "QoS compatibilities" gastan el cupo del archivo. Con traducción, 8.ª. Con "(policies)" añadido, 8.ª. Con "(QoS policies, History, Reliability, Durability)", 1.ª, incluso con tope 2. Sin arreglar: pendiente de decisión.
+QoS, con la pregunta del benchmark: la lista está entera en `About-Quality-of-Service-Settings.rst:28-61`, pero sale 13.ª sin tope por archivo y no sale con el tope de 2 ni de 4: "QoS events" y "QoS compatibilities" gastan el cupo del archivo. Con traducción, 8.ª. Con "(policies)" añadido, 8.ª. Con "(QoS policies, History, Reliability, Durability)", 1.ª, incluso con tope 2. Arreglado con el glosario de `ros2` (abajo).
 
 Fuentes públicas: atributo `publica` en `fuentes.json`, `false` por defecto; `ros2` y `gazebo` en `true` con `/publica <fuente> sí|no`. Reindexar lo conserva. La búsqueda lleva la etiqueta `publica`, exportable, solo si todas las fuentes consultadas lo son, aunque los fragmentos encontrados sean todos de una pública: una pregunta sin "en <fuente>" también consulta las privadas y cuenta como local. Lo demás de la petición sigue valiendo: un adjunto la vuelve local y en modo local no sale nada. La bitácora registra los envíos con la etiqueta y `exportable`. Probado con Gemini simulado (`test/test_rag_public.py`); nunca se envió nada a Gemini de verdad.
 
 `test/` nunca entró en `asia`: el indexador ignora `test_dirs`. Va aparte, en `asia-pruebas`, que solo se consulta con "en asia-pruebas": `/indexar asia-pruebas C:\Asia\test solo-nombrada`. `/indexar <nombre>` sin ruta ni tipo conserva los de la fuente; antes indexaba la carpeta actual en ella.
+
+Decisiones tras la capa 2 (`cadcd3b7`, `9c9d1f71`, `02811f18`, `591a8fb1`):
+- Traducción solo si la pregunta nombra una fuente en inglés ("en ros2"). Las búsquedas generales no traducen. `rag.translate_question` queda en `true` como interruptor.
+- Glosario en `data/biblioteca/glosario_ros2.json`: "calidad de servicio" → QoS policies, History, Reliability, Durability. Con la pregunta real, la sección de políticas sale 1.ª; una corrida enseñó la lista como primer fragmento, sin líneas extraídas, y otra dio la respuesta completa con citas. `check_rag` usa ese glosario en la medición.
+- `ros_gz_bridge` pasa a pública, como `ros2` y `gazebo`.
+- Los nombres de la pregunta cuentan como conocidos al comprobar las frases, también entre comillas. Un número entre comillas invertidas (`1.2`) es un dato, no un nombre de código.
+- `test_varias_colecciones`: no era aislamiento entre pruebas ni carpetas temporales. Es un defecto de Chroma 1.5.9: tras escribir dos colecciones nuevas en un proceso, cerca del 1 % de las veces la primera deja de leerse con "Nothing found on disk". El disco está bien; el estado roto está en memoria, sigue al reintentar y reabrir en el mismo sistema, y no pasa en otro proceso ni con una sola colección (0 de 1000). También podía darse en uso real al indexar dos fuentes seguidas. `VectorStore.query` lo captura, llama a `clear_system_cache()` y reabre sin parar el sistema, porque pararlo rompe los demás almacenes abiertos. En bucle, 1000 de 1000.
+
+Medición con 392, dos corridas, con estas decisiones ("Prohibidas" son sin marca):
+
+| Corrida | Con resumen | Asia | Bolitabot | Docs | Solo líneas | Sin respuesta directa en docs | Frases | Limpias | Eliminadas | Sin cita | Prohibidas | Cita | Trampas | Ajenas | s/pregunta |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 16/20 | 8/8 | 1/3 | 7/9 | 0 | 2 | 59 | 32 | 2 | 25 | 0 | 14/20 | 0/8 | 0/5 | 73 |
+| 2 | 13/20 | 6/8 | 1/3 | 6/9 | 1 | 3 | 64 | 45 | 2 | 17 | 2 | 11/20 | 0/8 | 0/5 | 45 |
+
+Docs sube de 2/9 y 3/9 a 7/9 y 6/9: la traducción con fuente nombrada devuelve las preguntas que el filtro rechazaba. Las 2 prohibidas son `modo "w"` y "cada 3 segundos", el mismo límite de arriba: la línea citada contiene el dato y la frase dice otra cosa. Salen como limpias dentro del resumen no verificado, con la línea correcta encima. `check_rag` termina con código 1 por ellas.
+
+Arreglo general medido y descartado: sumar a la puntuación RRF hasta 0,02 según la parte del título de sección que está en la pregunta, antes del tope por archivo.
+
+| Medición | Sin arreglo | Con arreglo |
+|---|---|---|
+| Ranking, 1.º / top 3 / top 5 | 12 / 14 / 20 | 10 / 13 / 20 |
+| Nombres en 1.º | 6/6 | 5/6 (`MARGIN_FRAMES`, 3.º) |
+| QoS, pregunta sola, sin tope | 13.ª | 7.ª (con tope 2, sigue sin salir) |
+| QoS, pregunta traducida, tope 2 | no sale | 1.ª |
+| Punta a punta, con resumen | 16/20, 13/20 | 15/20, 14/20 |
+| Punta a punta, Asia | 8/8, 6/8 | 6/8, 6/8 |
+| Punta a punta, docs | 7/9, 6/9 | 7/9, 5/9 |
+| Prohibidas | 0, 2 | 0, 0 |
+
+El ranking es determinista y empeora, y además bajan las coberturas de "filtrar secretos" (de 1,00 a 0,67) y otras cuatro preguntas. Lo punta a punta lleva el azar del 7B. Las prohibidas no bastan: el arreglo no comprueba significado y esas frases dependen de lo que escriba el modelo. Los títulos cortos coinciden por casualidad: premian un título de una palabra igual que uno exacto. Medido con 1 fragmento más en el índice, por el propio cambio.
 
 Conocimiento, pendientes generales:
 
