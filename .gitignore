@@ -32,3 +32,6 @@ data/reflexion/
 
 # Las fuentes de la biblioteca (fase H): rutas personales.
 data/biblioteca/
+# Wikipedia offline: el .zim pesa gigas; la caché se rehace sola.
+data/zim/
+data/wikipedia/

@@ -26,6 +26,7 @@ def reflection_in_tmp(tmp_path, monkeypatch):
     monkeypatch.setattr(paths, "SESSION_SUMMARY_FILE", tmp_path / "reflexion" / "ultima_sesion.json")
     monkeypatch.setattr(paths, "SOURCES_FILE", tmp_path / "biblioteca" / "fuentes.json")
     monkeypatch.setattr(paths, "GLOSSARY_DIR", tmp_path / "biblioteca")
+    monkeypatch.setattr(paths, "WIKIPEDIA_CACHE_FILE", tmp_path / "wikipedia" / "embeddings.sqlite3")
 
 
 @pytest.fixture(autouse=True)

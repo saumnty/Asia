@@ -34,6 +34,8 @@ SESSION_SUMMARY_FILE = REFLECTION_DIR / "ultima_sesion.json"
 # Fase H: las fuentes de la biblioteca de conocimiento (no versionadas).
 SOURCES_FILE = DATA_DIR / "biblioteca" / "fuentes.json"
 GLOSSARY_DIR = DATA_DIR / "biblioteca"
+# Fase H, capa 3: los embeddings de los artículos ya leídos (no versionados).
+WIKIPEDIA_CACHE_FILE = DATA_DIR / "wikipedia" / "embeddings.sqlite3"
 
 LOGS_DIR = PROJECT_ROOT / "logs"
 # Una línea por envío a un proveedor externo, sin el texto (fase G).
