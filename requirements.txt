@@ -1,5 +1,8 @@
+beautifulsoup4==4.14.3
 chromadb==1.5.9
 google-genai==2.6.0
+libzim==4.0.0
+lxml==6.1.1
 ollama==0.6.2
 prompt_toolkit==3.0.52
 requests==2.34.2
