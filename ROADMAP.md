@@ -469,7 +469,7 @@ Arreglo general medido y descartado: sumar a la puntuación RRF hasta 0,02 segú
 | Punta a punta, docs | 7/9, 6/9 | 7/9, 5/9 |
 | Prohibidas | 0, 2 | 0, 0 |
 
-El ranking es determinista y empeora, y además bajan las coberturas de "filtrar secretos" (de 1,00 a 0,67) y otras cuatro preguntas. Lo punta a punta lleva el azar del 7B. Las prohibidas no bastan: el arreglo no comprueba significado y esas frases dependen de lo que escriba el modelo. Los títulos cortos coinciden por casualidad: premian un título de una palabra igual que uno exacto. Medido con 1 fragmento más en el índice, por el propio cambio.
+El ranking es determinista y empeora, y además bajan las coberturas de "filtrar secretos" (de 1,00 a 0,67) y otras cuatro preguntas. Lo punta a punta lleva el azar del 7B. Las prohibidas no bastan: el arreglo no comprueba significado y esas frases dependen de lo que escriba el modelo. Causa probable, sin comprobar: un título de una palabra que coincide por casualidad suma lo mismo que uno exacto. Medido con 1 fragmento más en el índice, por el propio cambio.
 
 Conocimiento, pendientes generales:
 
