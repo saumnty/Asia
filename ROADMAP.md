@@ -275,7 +275,7 @@ Antes "Wikipedia offline". Va por capas, y cada fuente lleva su etiqueta para po
 
 1. Proyectos propios (repos, reportes, notas) con el RAG actual: primera capa, la más útil. Hecha, ver abajo.
 2. Documentación técnica offline: ROS 2 Jazzy y Gazebo Harmonic (hecho, ver abajo), Python 3.12 pendiente. Fuentes directas, sin Kiwix, zimit ni Docker.
-3. Wikipedia en español e inglés: herramienta offline con Kiwix/ZIM, separada del RAG de proyectos.
+3. Wikipedia en español: un `.zim` leído con libzim, separado del RAG de proyectos. A medias, ver abajo. Inglés, sin decidir.
 4. Preguntas y respuestas (Stack Overflow, Robotics Stack Exchange).
 
 - Búsqueda: la de texto de Kiwix encuentra los artículos y los embeddings se usan solo dentro de ellos, sin indexar todo.
@@ -470,6 +470,23 @@ Arreglo general medido y descartado: sumar a la puntuación RRF hasta 0,02 segú
 | Prohibidas | 0, 2 | 0, 0 |
 
 El ranking es determinista y empeora, y además bajan las coberturas de "filtrar secretos" (de 1,00 a 0,67) y otras cuatro preguntas. Lo punta a punta lleva el azar del 7B. Las prohibidas no bastan: el arreglo no comprueba significado y esas frases dependen de lo que escriba el modelo. Causa probable, sin comprobar: un título de una palabra que coincide por casualidad suma lo mismo que uno exacto. Medido con 1 fragmento más en el índice, por el propio cambio.
+
+**Capa 3, Wikipedia offline (a medias):** commits `c14b2cea` (HTML a fragmentos), `2faef3a1` (búsqueda en el `.zim` y caché de embeddings), `429a9f23` (fuente pública con "en wikipedia").
+- Archivo: `wikipedia_es_top_nopic_2026-10.zim` (1,21 GB, sha256 comprobado), en `data/zim/`, que no estaba ignorada y ahora sí (también `data/wikipedia/`). libzim 4.0.0 (GPL-3.0-or-later), beautifulsoup4 y lxml en `requirements.txt`. Registrada como `wikipedia`, tipo `enciclopedia`, pública y solo nombrada: `/indexar wikipedia C:\Asia\data\zim\wikipedia_es_top_nopic_2026-10.zim enciclopedia`. No se indexa: no hay colección de Chroma.
+- Solo con "en wikipedia". Cadena: la búsqueda del `.zim` elige 3 artículos (`core/rag/wikipedia.py`), el HTML pasa a fragmentos por sección con una frase por línea (`core/rag/article.py`, sin infoboxes de navegación, referencias ni "Véase también"), se queda el principio y los 12 fragmentos que más palabras comparten por artículo, y se embeben al momento con caché por hash en `data/wikipedia/embeddings.sqlite3` (`core/rag/embedding_cache.py`, 60 000 entradas, unos 200 MB). Después, la misma fusión, filtro, extracción y verificación que las otras capas. Cita `[Camberra.wiki:12]` por dentro; se muestra el artículo con su sección, URL, CC BY-SA 4.0 y la edición, bajo "De Wikipedia, no de tus proyectos:".
+- Comprobado con el archivo real: la búsqueda del `.zim` exige todas las palabras (OR no es operador), con raíces y sin acentos, y tarda 0,01–0,09 s. Con palabras vacías no encuentra nada, así que se quitan, y si no hay resultados se va quitando la palabra más común. libzim 4.0.0 devuelve objetos `SearchResult`, no rutas como dice su documentación. El metadato dice "mejores 50 000 artículos" y `article_count` da 348 403 (cuenta redirecciones).
+- Búsqueda floja en algunas preguntas naturales: "qué moneda se usa en Japón" no trae Yen, "en qué año llegó el hombre a la Luna" no trae Apolo 11 y "la montaña más alta" no trae el Everest entre los 4 primeros. No se reordena por título.
+- Tiempos en CPU, con el 7B descargado: `wikipedia_hits` 27,5 s la primera vez y 3,3 s con caché. Artículos medidos: Camberra 62 fragmentos, España 195 (1,2 s de troceado), Segunda Guerra Mundial 563 (1,9 s).
+- Memoria: dos `/buscar ... en wikipedia` reales con el 7B (capital de Australia, penicilina) pasaron de 10 minutos sin terminar y se detuvieron sin resultado. Durante la corrida quedaban 0,30 GB de RAM libres de 15,3; `llama-server` con 5,55 GB y el 7B a 16384 de contexto. La estimación era de 70–110 s. Anotado, sin ajustar límites.
+- Pruebas: `test/test_rag_article.py` y `test/test_rag_wikipedia.py`, con un `.zim` pequeño hecho con `libzim.writer` y embeddings simulados.
+
+Falta:
+- Repetir las dos preguntas reales con más RAM libre (o la GPU) y anotar respuesta y tiempo.
+- `check_rag --wikipedia CORRIDAS`, aparte, para que no cambien las bases de lo demás: caché temporal (corrida 1 en frío, 2 con caché), una parte determinista (el artículo esperado entre los encontrados) y otra con el modelo. Preguntas con respuesta conocida y la expresión que tiene que salir en las líneas verificadas: capital de Australia (Camberra), penicilina (Fleming), Don Quijote (Cervantes), Mona Lisa (Leonardo), muro de Berlín (1989), hierve el agua (100), huesos (206), moneda de Japón (yen), montaña más alta (Everest), Cien años de soledad (García Márquez), fotosíntesis (luz), Luna (1969). Trampas con artículos que no están en el top (comprobado con `has_entry_by_path`): Villarrubia de los Ojos, Tlacolula de Matamoros, Río Ulúa, Real del Monte, Purmamarca, Salento (Quindío), Barichara, Vilcabamba (Ecuador), Concepción de Ataco, Copán Ruinas, Salto del Laja, Parque nacional Conguillío, Laguna de Bacalar. Base en `check_rag_base.json` tras la primera medición real. Sin escribir.
+- `check_rag`: `answer_row` compara con `prompts.NOT_FOUND`; tiene que usar `prompts.NOTHING_TO_ANSWER`.
+- Una fuente `enciclopedia` con `idioma=en` todavía no busca con la pregunta traducida.
+- Para después: cuando una pregunta no se encuentra en los proyectos, Asia ofrece buscar en Wikipedia ("¿Busco en Wikipedia?") en lugar de hacerlo sola, medido aparte en `check_rag`.
+- Wikipedia completa (`maxi`, 13,3 GB): pedir permiso aparte antes de descargarla.
 
 Conocimiento, pendientes generales:
 
