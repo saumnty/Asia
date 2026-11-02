@@ -14,7 +14,7 @@ decidir cuándo decir "no lo encontré".
 Punta a punta, con el modelo real y el índice real (data/chroma, solo lectura):
 cuántas de 20 preguntas responde (8 de C:\\Asia, 3 de Bolitabot y 9 de documentación), cuántas citan el archivo correcto en las líneas
 verificadas, cuántas frases de la redacción quedan limpias, se eliminan o se marcan "(sin cita)" y por qué, si dice sin
-marca una de las tres frases falsas conocidas (sale con código 1) y a cuántas de 8 trampas responde. "Con resumen" es que quedó alguna frase. Las trampas pasan
+marca una de las tres frases falsas conocidas (el límite conocido, aparte) y a cuántas de 8 trampas responde. "Con resumen" es que quedó alguna frase. Las trampas pasan
 el filtro de cobertura pero no tienen respuesta en C:\\Asia: una cita verificada
 prueba que la línea existe, no que responda, así que su respuesta se imprime entera
 para leerla. Mide sobre una copia del índice sin este archivo ni los fragmentos que
@@ -30,6 +30,10 @@ carpeta temporal; --sin-glosario mide sin ellos.
 Para calibrar el filtro, la cobertura y la distancia de cada pregunta, sin el modelo:
 
     .venv\\Scripts\\python.exe test\\manual\\check_rag.py --calibrar
+
+Sale con código 1 si el ranking baja de check_rag_base.json, si se responde una trampa
+o una ajena, o si alguna corrida supera el límite conocido de ese archivo. Lo demás
+del punta a punta varía con el azar del 7B: se lee, no se comprueba.
 """
 import argparse
 import gc
@@ -61,6 +65,8 @@ REMOVE_TRIES = 5
 REMOVE_WAIT_S = 1
 KINDS = ("concepto", "documento", "nombre")
 TOPS = (1, 3, 5)
+# Por tipo, los aciertos en cada top; el límite conocido, por corrida.
+BASE_FILE = Path(__file__).with_name("check_rag_base.json")
 
 # (pregunta, archivo correcto, tipo)
 QUESTIONS = [
@@ -160,7 +166,8 @@ TRAPS = [
 # Las frases falsas que el ROADMAP recoge: citarlas no prueba nada, como con las trampas.
 INDEXED_FALSE_CLAIMS = ['debes abrirlo con el modo "w"', 'el resumen "cada 3 segundos"']
 
-# Tres respuestas falsas que pasaron todas las comprobaciones: el resumen no puede decirlas.
+# Tres respuestas falsas que pasaron todas las comprobaciones: el código no comprueba
+# significado, así que pueden salir en el resumen no verificado. Es el límite conocido.
 FORBIDDEN = {
     "cómo se escribe un archivo sin dejarlo a medias": r'modo\s+\W?w\b',
     "drop_client": r'(?:defin|se encuentra)[^.\n]*ollama_provider',
@@ -207,6 +214,48 @@ def sweep_leftovers(base=None):
         remove_tree(folder, tries=1)
 
 
+def load_base(path=None) -> dict:
+    return json.loads(Path(path or BASE_FILE).read_text(encoding="utf-8"))
+
+
+def ranking_failures(rows, base) -> list:
+    """Cada top de cada tipo que baja de la base: una mejora en un tipo no tapa otro."""
+    failures = []
+
+    for kind in KINDS:
+        found = in_top([r for r in rows if r[0] == kind])
+
+        for top, got, expected in zip(TOPS, found, base["ranking"][kind]):
+            if got < expected:
+                failures.append(f"ranking, {kind}, top {top}: {got}, base {expected}")
+
+    return failures
+
+
+def end_to_end_failures(known_limit, traps, strangers, base) -> list:
+    """known_limit: uno por corrida. traps y strangers: las respondidas, en total."""
+    failures = []
+
+    if max(known_limit) > base["limite_conocido"]:
+        failures.append(f"límite conocido: {max(known_limit)} en una corrida, base {base['limite_conocido']}")
+
+    if traps:
+        failures.append(f"trampas respondidas: {traps}")
+
+    if strangers:
+        failures.append(f"ajenas respondidas: {strangers}")
+
+    return failures
+
+
+def finished(failures) -> int:
+    """El código de salida. Dice qué falló."""
+    for failure in failures:
+        print(f"FALLA: {failure}")
+
+    return 1 if failures else 0
+
+
 def relative(path: str) -> str:
     return path.replace("\\", "/").removeprefix(ROOT.as_posix() + "/")
 
@@ -245,11 +294,16 @@ def describe(hit) -> str:
     return f"distancia {distance}, cobertura {hit.coverage:.2f}"
 
 
+def in_top(rows) -> list:
+    """Cuántas filas tienen el archivo correcto en cada top."""
+    return [sum(1 for r in rows if r[1] and r[1] <= top) for top in TOPS]
+
+
 def table(rows) -> str:
     lines = ["| Tipo | 1.º | Top 3 | Top 5 |", "|---|---|---|---|"]
 
     def line(name, subset):
-        hits = [sum(1 for r in subset if r[1] and r[1] <= top) for top in TOPS]
+        hits = in_top(subset)
         return f"| {name} | " + " | ".join(f"{h}/{len(subset)}" for h in hits) + " |"
 
     lines.append(line("Total", rows))
@@ -357,7 +411,7 @@ def calibrate():
     return 0
 
 
-def end_to_end(runs, glossary_dir):
+def end_to_end(runs, glossary_dir, base):
     from core import paths
     from core.brain import Brain
     from core.session import Session
@@ -407,11 +461,11 @@ def end_to_end(runs, glossary_dir):
     explore.check_draft = showing_removed
     summary = [
         "| Corrida | Con resumen | Asia | Bolitabot | Docs | Solo líneas | Sin respuesta directa en docs | Frases "
-        "| Limpias | Eliminadas | Sin etiqueta | Dato | Definición | Frases prohibidas | Cita el archivo "
+        "| Limpias | Eliminadas | Sin etiqueta | Dato | Definición | Límite conocido | Cita el archivo "
         "| Trampas respondidas | Ajenas respondidas | Segundos por pregunta |",
         "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
-    said = 0
+    known_limit, all_fell, all_strayed = [], 0, 0
 
     for run in range(1, runs + 1):
         rows = []
@@ -425,8 +479,7 @@ def end_to_end(runs, glossary_dir):
             print(f"[{run}] {state}, {'cita' if cited else 'no cita'}, {seconds:.0f} s: {question[:45]} -> {opening}", flush=True)
 
             if forbidden_said(question, shown):
-                said += 1
-                print(f"    FRASE PROHIBIDA: {question}", flush=True)
+                print(f"    LÍMITE CONOCIDO: {question}", flush=True)
 
         traps = []
 
@@ -452,6 +505,9 @@ def end_to_end(runs, glossary_dir):
         forbidden = sum(forbidden_said(question, row[3]) for (question, _), row in zip(END_TO_END, rows))
         fell = sum(1 for r in traps if r[0] in ANSWERED)
         strayed = sum(1 for r in strangers if r[0] in ANSWERED)
+        known_limit.append(forbidden)
+        all_fell += fell
+        all_strayed += strayed
         seconds = sum(r[2] for r in rows + traps + strangers) / len(rows + traps + strangers)
         groups = "".join(f"{count_answered(group)} | " for group in by_source(rows))
         refused = sum(1 for r in by_source(rows)[2] if r[0] == "sin respuesta directa")
@@ -463,7 +519,8 @@ def end_to_end(runs, glossary_dir):
         print()
 
     print("\n".join(summary))
-    return 1 if said else 0
+    print(f"Límite conocido: {max(known_limit)} como máximo en una corrida, base {base['limite_conocido']}.")
+    return finished(end_to_end_failures(known_limit, all_fell, all_strayed, base))
 
 
 def main():
@@ -475,6 +532,7 @@ def main():
     parser.add_argument("--calibrar", action="store_true", help="cobertura y distancia de cada pregunta")
     parser.add_argument("--fragmentos", type=int, help="fragmentos que recibe el modelo, en vez del valor del código")
     args = parser.parse_args()
+    base = load_base()
     sweep_leftovers()
 
     if args.fragmentos:
@@ -493,7 +551,7 @@ def main():
             if args.calibrar:
                 return calibrate()
 
-            return end_to_end(args.punta_a_punta, None if args.sin_glosario else scratch)
+            return end_to_end(args.punta_a_punta, None if args.sin_glosario else scratch, base)
         finally:
             remove_tree(scratch)
 
@@ -527,11 +585,10 @@ def main():
 
         print(f"\n{table(rows)}")
         print("Archivos que más salen primero:", Counter(r[3][0] for r in rows if r[3]).most_common(4))
+        return finished(ranking_failures(rows, base))
     finally:
         if not args.indice:
             remove_tree(folder)
-
-    return 0
 
 
 if __name__ == "__main__":

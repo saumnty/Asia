@@ -454,7 +454,7 @@ Medición con 392, dos corridas, con estas decisiones ("Prohibidas" son sin marc
 | 1 | 16/20 | 8/8 | 1/3 | 7/9 | 0 | 2 | 59 | 32 | 2 | 25 | 0 | 14/20 | 0/8 | 0/5 | 73 |
 | 2 | 13/20 | 6/8 | 1/3 | 6/9 | 1 | 3 | 64 | 45 | 2 | 17 | 2 | 11/20 | 0/8 | 0/5 | 45 |
 
-Docs sube de 2/9 y 3/9 a 7/9 y 6/9: la traducción con fuente nombrada devuelve las preguntas que el filtro rechazaba. Las 2 prohibidas son `modo "w"` y "cada 3 segundos", el mismo límite de arriba: la línea citada contiene el dato y la frase dice otra cosa. Salen como limpias dentro del resumen no verificado, con la línea correcta encima. `check_rag` termina con código 1 por ellas.
+Docs sube de 2/9 y 3/9 a 7/9 y 6/9: la traducción con fuente nombrada devuelve las preguntas que el filtro rechazaba. Las 2 prohibidas son `modo "w"` y "cada 3 segundos", el mismo límite de arriba: la línea citada contiene el dato y la frase dice otra cosa. Salen como limpias dentro del resumen no verificado, con la línea correcta encima. `check_rag` las cuenta aparte como límite conocido, con base de 2 por corrida en `test/manual/check_rag_base.json`: solo sale con 1 si una corrida la supera, si se responde una trampa o una ajena, o si el ranking baja de esa base.
 
 Arreglo general medido y descartado: sumar a la puntuación RRF hasta 0,02 según la parte del título de sección que está en la pregunta, antes del tope por archivo.
 

@@ -188,3 +188,67 @@ def test_estado_de_una_respuesta(shown, state):
 
     assert check_rag.answer_row(Brain(), "q", "a.py")[0] == state
     assert check_rag.answer_row(Brain(), "q", "a.py")[1]
+
+
+BASE = {"limite_conocido": 2, "ranking": {"concepto": [1, 2, 2], "documento": [0, 0, 0], "nombre": [1, 1, 1]}}
+
+
+def ranked(*concepts):
+    return [("concepto", rank) for rank in concepts] + [("nombre", 1)]
+
+
+def test_el_limite_conocido_hasta_la_base_no_falla():
+    assert check_rag.end_to_end_failures([0, 2], 0, 0, BASE) == []
+
+
+def test_el_limite_conocido_se_compara_por_corrida():
+    assert check_rag.end_to_end_failures([2, 2, 2], 0, 0, BASE) == []
+
+
+def test_superar_el_limite_conocido_falla():
+    assert "límite conocido" in check_rag.end_to_end_failures([1, 3], 0, 0, BASE)[0]
+
+
+@pytest.mark.parametrize("traps, strangers, name", [(1, 0, "trampas"), (0, 1, "ajenas")])
+def test_una_trampa_o_una_ajena_respondida_falla_aunque_el_limite_este_bien(traps, strangers, name):
+    assert name in check_rag.end_to_end_failures([0], traps, strangers, BASE)[0]
+
+
+def test_el_ranking_igual_o_mejor_que_la_base_no_falla():
+    assert check_rag.ranking_failures(ranked(1, 3), BASE) == []
+    assert check_rag.ranking_failures(ranked(1, 1), BASE) == []
+
+
+def test_el_ranking_por_debajo_de_la_base_falla():
+    assert check_rag.ranking_failures(ranked(1, 4), BASE) == ["ranking, concepto, top 3: 1, base 2"]
+
+
+def test_mejorar_un_tipo_no_tapa_que_baje_otro():
+    rows = [("concepto", 1), ("concepto", 1), ("nombre", 3)]
+
+    assert check_rag.ranking_failures(rows, BASE) == ["ranking, nombre, top 1: 0, base 1"]
+
+
+def test_una_pregunta_sin_puesto_cuenta_como_fallo():
+    assert check_rag.ranking_failures(ranked(1, None), BASE)
+
+
+def test_el_codigo_de_salida_y_lo_que_fallo(capsys):
+    assert check_rag.finished([]) == 0
+    assert check_rag.finished(["trampas respondidas: 1"]) == 1
+    assert "FALLA: trampas respondidas: 1" in capsys.readouterr().out
+
+
+def test_la_base_se_lee_de_su_archivo(tmp_path):
+    path = tmp_path / "base.json"
+    path.write_text(check_rag.json.dumps(BASE), encoding="utf-8")
+
+    assert check_rag.load_base(path) == BASE
+
+
+def test_la_base_guardada_cubre_cada_tipo_y_cada_top():
+    base = check_rag.load_base()
+
+    assert set(base["ranking"]) == set(check_rag.KINDS)
+    assert all(len(found) == len(check_rag.TOPS) for found in base["ranking"].values())
+    assert base["limite_conocido"] >= 0
