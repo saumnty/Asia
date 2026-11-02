@@ -2,11 +2,14 @@
 import pytest
 from libzim.writer import Creator, Hint, Item, StringProvider
 
+from core import prompts
+from core.prompts import NOT_FOUND, NOT_FOUND_IN_WIKIPEDIA, WIKIPEDIA_MISSING
+from core.provenance import PUBLICA
 from core.rag.article import article_chunks
 from core.rag.chunking import Chunk
 from core.rag.embedding_cache import EmbeddingCache
-from core.rag.library import Source
-from core.rag.quotes import CITED_LINES
+from core.rag.library import Library, Source
+from core.rag.quotes import CITED_LINES, Quote, verified_lines
 from core.rag.retriever import relevant
 from core.rag.wikipedia import (
     ARTICLE_FRAGMENTS,
@@ -19,6 +22,9 @@ from core.rag.wikipedia import (
     wikipedia_hits,
     zim_summary,
 )
+from test_confidencial import make_brain
+from test_rag_answer import Router
+from tools.rag_tool import RagTool
 
 CANBERRA = """<html><head><title>Camberra</title></head><body>
 <section data-mw-section-id="0"><p>Camberra es la capital de Australia. Tiene un lago artificial.</p></section>
@@ -281,3 +287,161 @@ def test_la_cache_tiene_tope_y_sale_lo_mas_viejo(tmp_path, monkeypatch):
 
     assert cache.count() == 2
     assert embedder.embedded == ["uno", "dos", "tres", "uno"]
+
+
+class Tools:
+    """El registro, con la herramienta real."""
+    def execute(self, action, **kwargs):
+        tool = RagTool()
+        return tool.index_project(**kwargs) if action == "index_project_rag" else tool.search_project(**kwargs)
+
+
+def brain_with(*answers):
+    brain = make_brain()
+    brain.tool_registry = Tools()
+    brain.provider_router = Router(*answers)
+    return brain
+
+
+@pytest.fixture
+def registered(zim, monkeypatch):
+    """Wikipedia en la biblioteca, sin Ollama: el embedder de las pruebas."""
+    assert "lista" in RagTool().index_project("wikipedia", str(zim), "enciclopedia")
+    monkeypatch.setattr("core.rag.wikipedia.OllamaEmbedder", Embedder)
+    return zim
+
+
+def wikipedia_quote():
+    return "[Camberra.wiki:1] Camberra es la capital de Australia."
+
+
+def test_indexar_solo_registra_el_archivo(registered, monkeypatch):
+    source = Library().get("wikipedia")
+
+    assert (source.kind, source.named_only, source.publica) == ("enciclopedia", True, True)
+    assert source.url == "https://es.wikipedia.org/wiki/{}" and source.license == "CC BY-SA 4.0"
+    assert source.path == registered.as_posix() and source.fragments >= 2
+
+
+def test_el_comando_registra_la_ruta_y_el_tipo(zim):
+    answer = brain_with().process(f"/indexar wikipedia {zim} enciclopedia")
+
+    assert "lista" in answer and Library().get("wikipedia").kind == "enciclopedia"
+
+
+def test_fuentes_la_muestra_en_articulos(registered):
+    assert "artículos" in make_brain().process("/fuentes")
+
+
+def test_reindexar_conserva_lo_que_dijo_publica(registered):
+    Library().set_public("wikipedia", False)
+
+    RagTool().index_project("wikipedia")
+
+    assert Library().get("wikipedia").publica is False
+
+
+def test_otro_idioma_apunta_a_su_wikipedia(zim):
+    RagTool().index_project("wiki-en", str(zim), "enciclopedia", language="en")
+
+    assert Library().get("wiki-en").url == "https://en.wikipedia.org/wiki/{}"
+
+
+@pytest.mark.parametrize("path", ["no_existe.zim", "C:/Asia/README.md"])
+def test_no_registra_lo_que_no_es_un_zim(path):
+    assert "No encuentro" in RagTool().index_project("wikipedia", path, "enciclopedia")
+    assert Library().get("wikipedia") is None
+
+
+def test_no_registra_un_zim_sin_indice(tmp_path, zim, monkeypatch):
+    monkeypatch.setattr("tools.rag_tool.zim_summary", lambda path: {"articles": 3, "searchable": False})
+
+    assert "índice" in RagTool().index_project("wikipedia", str(zim), "enciclopedia")
+
+
+def test_una_busqueda_general_no_entra_en_wikipedia(registered, monkeypatch):
+    seen = {}
+
+    def search(query, collections, **kwargs):
+        seen["collections"] = collections
+        return []
+
+    monkeypatch.setattr("tools.rag_tool.search_collections", search)
+
+    assert RagTool().search_project("capital de Australia", "asia") == NOT_FOUND
+    assert "wikipedia" not in seen["collections"]
+
+
+def test_el_contexto_lleva_la_etiqueta_y_el_origen(registered):
+    context = RagTool().search_project("capital de Australia en wikipedia", "asia")
+
+    assert "--- [Camberra.wiki:" in context and "es.wikipedia.org/wiki/Camberra" in context
+
+
+def test_la_busqueda_en_wikipedia_es_publica(registered):
+    assert RagTool().search_project("capital de Australia en wikipedia", "asia").label == PUBLICA
+
+
+def test_marcada_privada_no_es_exportable(registered):
+    Library().set_public("wikipedia", False)
+
+    assert RagTool().search_project("capital de Australia en wikipedia", "asia").label != PUBLICA
+
+
+def test_sin_articulos_dice_wikipedia_y_no_proyectos(registered):
+    assert RagTool().search_project("zzzyyyxxx en wikipedia", "asia") == NOT_FOUND_IN_WIKIPEDIA
+
+
+def test_sin_el_archivo_lo_dice(registered):
+    source = Library().get("wikipedia")
+    source.path = "C:/no/existe.zim"
+    Library().write([source])
+
+    assert RagTool().search_project("capital de Australia en wikipedia", "asia") == WIKIPEDIA_MISSING
+
+
+def test_sin_articulos_ni_se_llama_al_modelo(registered):
+    brain = brain_with()
+
+    assert brain.process("/buscar zzzyyyxxx en wikipedia") == NOT_FOUND_IN_WIKIPEDIA
+    assert brain.provider_router.prompts == []
+
+
+def test_sin_el_archivo_ni_se_llama_al_modelo(registered):
+    source = Library().get("wikipedia")
+    source.path = "C:/no/existe.zim"
+    Library().write([source])
+    brain = brain_with()
+
+    assert brain.process("/buscar capital de Australia en wikipedia") == WIKIPEDIA_MISSING
+    assert brain.provider_router.prompts == []
+
+
+def test_de_punta_a_punta_con_cita_de_articulo(registered):
+    brain = brain_with(wikipedia_quote(), "Camberra es la capital de Australia [Camberra.wiki:1].")
+
+    shown = brain.process("/buscar capital de Australia en wikipedia")
+
+    assert prompts.FROM_WIKIPEDIA in shown
+    assert "Wikipedia · https://es.wikipedia.org/wiki/Camberra · CC BY-SA 4.0 · edición 2026-10" in shown
+    assert "Camberra es la capital de Australia." in shown
+    assert prompts.UNCITED not in shown.partition(prompts.UNVERIFIED_SUMMARY)[2]
+
+
+def test_una_cita_inventada_no_pasa(registered):
+    brain = brain_with("[Camberra.wiki:1] Sídney es la capital de Australia.", "no se usa")
+
+    shown = brain.process("/buscar capital de Australia en wikipedia")
+
+    assert shown.startswith(prompts.NO_DIRECT_ANSWER)
+    assert prompts.FROM_WIKIPEDIA in shown and "Sídney" not in shown
+
+
+def test_lo_de_tus_proyectos_no_lleva_el_aviso_de_wikipedia():
+    quote = Quote("core/brain.py", 4, "", "x = 1")
+
+    assert prompts.FROM_WIKIPEDIA not in verified_lines([quote])
+
+
+def test_el_prompt_no_dice_que_wikipedia_son_sus_proyectos():
+    assert "proyectos" not in prompts.answer_from_quotes("q", "[a.wiki:1] línea")

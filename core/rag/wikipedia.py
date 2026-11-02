@@ -10,6 +10,7 @@ from pathlib import Path
 from core.rag.article import article_chunks
 from core.rag.embedder import OllamaEmbedder
 from core.rag.embedding_cache import EmbeddingCache
+from core.rag.library import WIKI_SUFFIX
 from core.rag.retriever import CANDIDATES, Hit, merge
 from core.rag.tokens import WORD, tokenize
 from core.rag.word_index import inverse_frequency
@@ -19,7 +20,6 @@ ARTICLES = 3
 SEARCH_RESULTS = 10
 # Por artículo: 40 fragmentos por pregunta. Un artículo largo pasa de 500.
 ARTICLE_FRAGMENTS = 13
-WIKI_SUFFIX = ".wiki"
 NOT_IN_TAG = re.compile(r"_*[^\w.-]+_*")
 FALLBACK_SLUG = "articulo"
 

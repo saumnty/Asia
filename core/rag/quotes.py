@@ -9,7 +9,7 @@ import textwrap
 from dataclasses import dataclass
 
 from core import prompts
-from core.rag.library import FRAGMENT_HEADER, ORIGIN_PREFIX
+from core.rag.library import FRAGMENT_HEADER, ORIGIN_PREFIX, WIKI_SUFFIX
 from tools.review_findings import clean_quote, locate_quote, squash
 
 # "- [core/brain.py:40-55] línea copiada". La etiqueta es opcional: sin ella, la
@@ -348,14 +348,17 @@ def verified_lines(quotes: list) -> str:
 
         blocks += [block_of(run) for run in runs]
 
-    return f"{prompts.VERIFIED_LINES}\n\n" + "\n\n".join(blocks)
+    # Lo que viene de fuera no se puede confundir con lo que hay en sus proyectos.
+    from_wikipedia = [prompts.FROM_WIKIPEDIA] if any(quote.path.endswith(WIKI_SUFFIX) for quote in quotes) else []
+    return f"{prompts.VERIFIED_LINES}\n\n" + "\n\n".join(from_wikipedia + blocks)
 
 
 def best_fragments(context: str) -> str:
     """Los mejores fragmentos tal cual: lo que se muestra si no hay citas verificadas."""
-    blocks = []
+    fragments = parse_fragments(context)[:FALLBACK_FRAGMENTS]
+    blocks = [prompts.FROM_WIKIPEDIA] if any(WIKI_SUFFIX in fragment.tag for fragment in fragments) else []
 
-    for fragment in parse_fragments(context)[:FALLBACK_FRAGMENTS]:
+    for fragment in fragments:
         text = fragment.text.partition("\n")[2].strip()
         cut = "…" if len(text) > FALLBACK_CHARS else ""
         place = f"[{fragment.origin or fragment.tag}] {fragment.label}".strip()

@@ -2,7 +2,7 @@
 import shlex
 
 from core.rag.glossary import glossary_path, read_glossary
-from core.rag.library import DEFAULT_LANGUAGE, KINDS, LANGUAGES, Library
+from core.rag.library import DEFAULT_LANGUAGE, ENCYCLOPEDIA, KINDS, LANGUAGES, Library
 from core.rag.tokens import without_accents
 
 NAMED_ONLY = "solo-nombrada"
@@ -12,6 +12,7 @@ USAGE = (
     f"El tipo es {', '.join(KINDS)}. "
     "En la url, {} es la ruta del archivo sin extensión: https://docs.ros.org/en/jazzy/{}.html. "
     f"Con {NAMED_ONLY}, la fuente solo se consulta con \"en <fuente>\". "
+    f"Una {ENCYCLOPEDIA} es un archivo .zim: no se indexa, es {NAMED_ONLY} y pública salvo /publica. "
     f"El idioma es {' o '.join(LANGUAGES)}: si es en, una pregunta con \"en <fuente>\" también se busca traducida."
 )
 PUBLIC_USAGE = "Uso: /publica <fuente> sí|no. Una búsqueda solo en fuentes públicas puede salir a un proveedor externo en modo normal."
@@ -73,8 +74,10 @@ def source_line(source) -> str:
     if source.publica:
         notes.append("pública")
 
+    units = "artículos" if source.kind == ENCYCLOPEDIA else "fragmentos"
+
     return (
-        f"- {source.name} ({', '.join(notes)}): {source.fragments} fragmentos, "
+        f"- {source.name} ({', '.join(notes)}): {source.fragments} {units}, "
         f"{source.url or source.path}, indexada {source.indexed.replace('T', ' ')[:16]}"
     )
 

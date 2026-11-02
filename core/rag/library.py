@@ -15,11 +15,14 @@ from core.atomic_write import write_json_atomic
 from core.rag.tokens import without_accents
 from core.rag.vector_store import safe_collection_name
 
-KINDS = ("proyecto", "reporte", "notas", "documentacion")
+ENCYCLOPEDIA = "enciclopedia"
+KINDS = ("proyecto", "reporte", "notas", "documentacion", ENCYCLOPEDIA)
 DEFAULT_KIND = "proyecto"
 LANGUAGES = ("es", "en")
 DEFAULT_LANGUAGE, ENGLISH_SOURCE = LANGUAGES
 ORIGIN_PREFIX = "Página: "
+# Las etiquetas de un artículo de Wikipedia: "Camberra.wiki:12".
+WIKI_SUFFIX = ".wiki"
 FRAGMENT_HEADER = re.compile(r"^--- \[(.+?)\](?: (.+))? ---$", re.MULTILINE)
 REFUSAL = re.compile(
     r"\bno (lo |la |se )?(encontr|encuentr|hay informacion|tengo informacion|dispongo|puedo (responder|determinar))"

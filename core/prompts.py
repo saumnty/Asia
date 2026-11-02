@@ -9,6 +9,11 @@ antes: cambiar uno es un cambio de comportamiento.
 
 # Lo que responde Asia cuando la biblioteca no tiene la respuesta (fase H).
 NOT_FOUND = "No lo encontré en tus proyectos."
+NOT_FOUND_IN_WIKIPEDIA = "No lo encontré en Wikipedia."
+WIKIPEDIA_MISSING = "No encuentro el archivo de Wikipedia. Mira la ruta en /fuentes."
+# Sin esto no hay nada que pasarle al modelo.
+NOTHING_TO_ANSWER = (NOT_FOUND, NOT_FOUND_IN_WIKIPEDIA, WIKIPEDIA_MISSING)
+FROM_WIKIPEDIA = "De Wikipedia, no de tus proyectos:"
 # Lo que encabeza los fragmentos si había material, pero ninguna línea lo responde.
 NO_DIRECT_ANSWER = "No encontré una respuesta directa. Esto es lo más relevante:"
 # Lo que se muestra en lugar de una redacción con nombres o citas que no existen.
@@ -175,7 +180,7 @@ Instrucciones:
 
 def answer_from_quotes(question, quotes):
     return f"""
-Responde la pregunta usando únicamente estas líneas. Ya se comprobó que existen en los proyectos del usuario.
+Responde la pregunta usando únicamente estas líneas. Ya se comprobó que existen en las fuentes consultadas.
 
 Pregunta:
 {question}
