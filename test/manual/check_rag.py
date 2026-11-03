@@ -341,7 +341,7 @@ def answer_row(brain, question, expected=None):
     shown = brain.process(f"/buscar {question}")
     seconds = time.perf_counter() - start
 
-    if shown == prompts.NOT_FOUND:
+    if shown in prompts.NOTHING_TO_ANSWER:
         return "el código negó", False, seconds, shown
 
     if shown.startswith(prompts.NO_DIRECT_ANSWER):

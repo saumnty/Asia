@@ -190,6 +190,15 @@ def test_estado_de_una_respuesta(shown, state):
     assert check_rag.answer_row(Brain(), "q", "a.py")[1]
 
 
+@pytest.mark.parametrize("shown", check_rag.prompts.NOTHING_TO_ANSWER)
+def test_cualquier_negativa_del_codigo_cuenta_como_negada(shown):
+    class Brain:
+        def process(self, text):
+            return shown
+
+    assert check_rag.answer_row(Brain(), "q en wikipedia")[0] == "el código negó"
+
+
 BASE = {"limite_conocido": 2, "ranking": {"concepto": [1, 2, 2], "documento": [0, 0, 0], "nombre": [1, 1, 1]}}
 
 
