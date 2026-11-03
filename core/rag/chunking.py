@@ -2,7 +2,8 @@
 
 - Python: una pieza por función, método y clase (ast), más lo que queda fuera
   de ellas (imports, constantes).
-- .md, .rst y .tex: una pieza por sección.
+- .md, .rst y .tex: una pieza por sección. Un .txt con títulos subrayados como en
+  rst (el texto que genera Sphinx, como la documentación de Python), también.
 - Simulink: cada bloque con código, como un .m (core/rag/simulink.py).
 - El resto: bloques separados por líneas en blanco.
 
@@ -225,7 +226,7 @@ def chunk_text(text: str, suffix: str) -> list:
 
     if suffix == ".py":
         pieces = python_pieces(text, lines)
-    elif suffix == ".rst":
+    elif suffix in (".rst", ".txt"):
         pieces = rst_pieces(lines)
     elif suffix in DOCUMENT_SUFFIXES:
         pieces = document_pieces(lines, DOCUMENT_SUFFIXES[suffix])

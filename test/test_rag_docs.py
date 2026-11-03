@@ -96,6 +96,38 @@ def test_rst_sin_secciones_va_por_bloques():
     assert labels("Solo texto.\n\nMas texto.\n") == [""]
 
 
+SPHINX_TEXT = """"json" --- JSON encoder and decoder
+***********************************
+
+**Source code:** Lib/json/__init__.py
+
+======================================================================
+
+JSON is a lightweight data interchange format.
+
+
+Basic Usage
+===========
+
+json.dumps(obj)
+
+   Serialize *obj* to a JSON formatted "str".
+"""
+
+
+def test_el_texto_de_sphinx_va_por_secciones():
+    chunks = chunk_text(SPHINX_TEXT, ".txt")
+
+    assert [chunk.label for chunk in chunks] == ['"json" --- JSON encoder and decoder', '"json" --- JSON encoder and decoder > Basic Usage']
+    assert "lightweight" in chunks[0].text and "Serialize" in chunks[1].text
+
+
+def test_un_txt_sin_titulos_sigue_por_bloques():
+    chunks = chunk_text("flask==3.0\nrequests==2.32\n\notra linea\n", ".txt")
+
+    assert [chunk.label for chunk in chunks] == [""] * len(chunks) and chunks
+
+
 def test_la_pagina_de_un_archivo():
     assert origin_of("Tutorials/Topics.rst", ROS2_URL, "CC BY 4.0") == f"{PAGE} · CC BY 4.0"
     assert origin_of("a.rst", "https://x.org/{}/", "") == "https://x.org/a/"
