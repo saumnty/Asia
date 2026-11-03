@@ -52,13 +52,18 @@ def test_model_for():
     assert model_for(Settings(forced_model="fijo"), "math") == "fijo"
 
 
-def test_defaults_solo_math_usa_otro_modelo():
-    # math usa qwen3:4b (Thinking-2507) con razonamiento; el chat general y
-    # el código siguen en el modelo por defecto hasta que se decida otra cosa.
+def test_defaults_estrategia_b():
+    # Estrategia B (2026-11-03): qwen3 instruct para el IntentEngine y la charla,
+    # entero en la GPU con 4096 de contexto; el 7B para código, /buscar y
+    # revisiones; math con qwen3:4b (Thinking-2507) y razonamiento.
     defaults = read_json(DEFAULTS_FILE)
     by_domain = defaults["models_by_domain"]
+    small = "qwen3:4b-instruct-2507-q4_K_M"
 
-    assert by_domain["code"] == by_domain["general"] == defaults["ollama_model"]
+    assert by_domain["code"] == defaults["ollama_model"] == "qwen2.5-coder:7b"
+    assert by_domain["general"] == defaults["intent_model"] == small
+    assert defaults["ollama_model_options"][small] == {"num_ctx": 4096, "num_gpu": 37}
+    assert defaults["ollama_num_ctx"] == 16384
     assert by_domain["math"] == "qwen3:4b"
     assert defaults["think_domains"] == ["math"]
     assert defaults["ollama_one_model_at_a_time"] is True

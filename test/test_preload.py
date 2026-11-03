@@ -47,7 +47,8 @@ def test_precarga_sin_prompt_ni_keep_alive_con_el_mismo_num_ctx():
     settings = SettingsManager()
     model = settings.get("intent_model")
     assert client.generated == [{"model": model, "options": model_options(settings, model)}]
-    assert client.generated[0]["options"]["num_ctx"] == settings.get("ollama_num_ctx")
+    # El num_ctx propio del modelo (ollama_model_options), el mismo que usa detect.
+    assert client.generated[0]["options"]["num_ctx"] == model_options(settings, model)["num_ctx"]
 
 
 def test_ollama_apagado_no_muestra_nada(capsys):

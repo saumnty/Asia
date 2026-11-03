@@ -73,9 +73,9 @@ def brain(monkeypatch):
 def test_mostrar_modelos(brain):
     message = brain.process("¿qué modelo estás usando?")
 
-    assert message.startswith("Chat: qwen2.5-coder:7b (dominio general).")
+    assert message.startswith("Chat: qwen3:4b-instruct-2507-q4_K_M (dominio general).")
     assert "Acciones de código: qwen2.5-coder:7b." in message
-    assert "Detección de intención: qwen2.5-coder:7b." in message
+    assert "Detección de intención: qwen3:4b-instruct-2507-q4_K_M." in message
     assert "matemáticas = qwen3:4b" in message
 
 

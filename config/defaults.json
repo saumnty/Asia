@@ -7,11 +7,11 @@
 
     "ollama_host": "http://localhost:11434",
     "ollama_model": "qwen2.5-coder:7b",
-    "intent_model": "qwen2.5-coder:7b",
+    "intent_model": "qwen3:4b-instruct-2507-q4_K_M",
     "models_by_domain": {
         "code": "qwen2.5-coder:7b",
         "math": "qwen3:4b",
-        "general": "qwen2.5-coder:7b"
+        "general": "qwen3:4b-instruct-2507-q4_K_M"
     },
     "ollama_one_model_at_a_time": true,
     "think_domains": ["math"],
@@ -22,7 +22,8 @@
     "open_mode_default": false,
     "ollama_num_ctx": 16384,
     "ollama_model_options": {
-        "qwen2.5-coder:7b": {"num_gpu": 16}
+        "qwen2.5-coder:7b": {"num_gpu": 16},
+        "qwen3:4b-instruct-2507-q4_K_M": {"num_ctx": 4096, "num_gpu": 37}
     },
     "ollama_temperature": 0.1,
     "ollama_repeat_penalty": 1.15,
