@@ -156,14 +156,19 @@ Question:
 """
 
 
-def extract_quotes(question, rag_context, translated=""):
+def extract_quotes(question, rag_context, translated="", notes=""):
+    """notes: los ASIA.md de las fuentes (core/rag/instructions.py), que no se citan."""
     in_english = f"\n\nLa misma pregunta en inglés, porque los fragmentos pueden estar en inglés:\n{translated}" if translated else ""
+    about = (
+        f"\n\nNotas del usuario sobre las fuentes (sirven para entender los fragmentos; no las copies):\n{notes}"
+        if notes else ""
+    )
 
     return f"""
 Copia de estos fragmentos las líneas que responden la pregunta. No respondas la pregunta.
 
 Pregunta:
-{question}{in_english}
+{question}{in_english}{about}
 
 Fragmentos encontrados:
 {rag_context}

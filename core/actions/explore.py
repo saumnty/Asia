@@ -3,6 +3,7 @@ from pathlib import Path
 
 from core import prompts
 from core.rag.glossary import expand
+from core.rag.instructions import source_notes
 from core.rag.library import Library, clean_translation, is_refusal, named_in_question, needs_translation, without_source
 from core.rag.quotes import (
     best_fragments,
@@ -118,7 +119,8 @@ class ExploreActions:
         # Con tope: un 7B puede no parar nunca (llenó 16384 tokens con una pregunta de Python).
         # Si se corta, vale lo que copió entero; la última línea a medias no se verifica.
         extracted = self.provider_router.ask(
-            prompts.extract_quotes(question, rag_context, translated), max_tokens=self.answer_limits("search_quotes")["tokens"]
+            prompts.extract_quotes(question, rag_context, translated, source_notes(rag_context, Library().all())),
+            max_tokens=self.answer_limits("search_quotes")["tokens"],
         )
         quotes = verify_quotes(without_cut_notice(extracted)[0], rag_context)
 
