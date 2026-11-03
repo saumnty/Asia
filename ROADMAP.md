@@ -158,8 +158,8 @@ Wikipedia (capa 3), la medición que faltaba:
 Faltan, o quedaron a medias:
 - ~~`check_rag --punta-a-punta` entero (se cortó en la 15 de 20) y su segunda corrida.~~ Entero una vez con `num_gpu` 16 (ver "Memoria de Ollama"); la segunda se atascó en la pregunta 24 de 24.
 - ~~`check_rag --wikipedia 1` entero, con las 11 trampas.~~ Hecho (ver "Memoria de Ollama").
-- `check_speed --descargar --espera 15` (la segunda tanda) y `jarvis.exe` hasta el primer prompt.
-- La primera frase con voz precargada (9,2 → 1,8 s en CPU) y el corte de Ctrl+C con un prompt en proceso.
+- ~~`check_speed --descargar --espera 15` (la segunda tanda) y `jarvis.exe` hasta el primer prompt.~~ Hecho (ver "Decisiones del 2026-11-03 (noche)").
+- ~~La primera frase con voz precargada (9,2 → 1,8 s en CPU) y el corte de Ctrl+C con un prompt en proceso.~~ Hecho (ver la misma sección).
 - Con 1–2 GB de RAM libres y el 7B cargado, las mediciones largas no terminan: hace falta cerrar programas o un modelo que quepa en la GPU (ver "Cambio de modelo seguro"). La causa principal resultó ser la caché de prompts del llama-server (ver "Memoria de Ollama").
 
 ### Memoria de Ollama (2026-11-03, tarde)
@@ -272,6 +272,50 @@ Estrategias (en las dos, `/buscar`, el código y las revisiones van con el 7B):
 | VRAM | 3011 MiB (7B, 55 % GPU) | 2859 (qwen3) o 3011 (7B) | igual que A |
 
 A es más lenta que el 7B solo: cada intención de una acción carga qwen3 y la acción recarga el 7B. B es la más rápida en una sesión de charla, pero cambia la calidad del chat (la memoria mal usada) y no hay benchmark de charla que lo mida. Con 4096 de contexto, una charla larga con historial dejaría de caber. Elegir una cambia `intent_model` y `models_by_domain.general`: pide confirmación.
+
+### Decisiones del 2026-11-03 (noche)
+
+**Memoria en la charla** (`1c9db038`, `7b5234c1`, `1f1d490c`).
+- La memoria personal ya no va en el prompt de sistema, que ahora no cambia entre mensajes. La charla breve (saludos, gracias, despedidas) no lleva memoria.
+- El resto lleva solo las entradas que tienen que ver con el mensaje, delante del mensaje y en tercera persona, bajo "Datos sobre el usuario, no sobre ti". Como mucho 5; todas solo con "qué sabes de mí" o "quién soy".
+- Una pregunta a Asia ("¿cuál es tu color favorito?") no lleva memoria. Con la memoria completa, también el 7B contestaba "Mi color favorito es el amarillo".
+- `recall` solo si se pregunta por un dato del usuario: el IntentEngine con qwen3 mandaba "¿cuál es tu color favorito?" a recall ("color_favorito: amarillo") y "¿qué sabes de mí?" a recall del nombre. Esos dos mensajes ahora van al chat.
+- El historial que se envía cabe en el `num_ctx` del modelo: se descartan los turnos más antiguos y, si ni sin historial cabe, esa respuesta va con `ollama_model`. El historial guardado no se recorta.
+
+**`check_chat`** (`f024e933`, `f81fc91d`, `f208c9d9`): 14 mensajes en una sesión real del launcher, con la memoria, el resumen de sesión y los pendientes en una carpeta temporal. Atribución: una frase en primera persona del modelo con un dato del usuario. Fuga: un dato del usuario en la respuesta a un mensaje que no trata de él. Las corridas, una tras otra:
+
+| | Atribuciones | Fugas | Correctas | Tiempo total | t/s |
+|---|---|---|---|---|---|
+| 7B, memoria completa (antes) | 1 ("Mi color favorito es el amarillo") | 0 | 9/10 | 146,5 s | 9–12 |
+| 7B, con los cambios (2 corridas) | 0 / 0 | 0 / 0 | 10/10 / 10/10 | 153,3 / 169,6 s | 9–13 |
+| B, sin el filtro de recall (2 corridas) | 0 / 0 | 1 / 1 (recall de "tu color") | 9/10 / 9/10 | 40,9 / 40,4 s | 48–51 |
+| B, con el filtro (2 corridas) | 0 / 0 | 0 / 0 | 9/10 / 9/10 | 42,5 / 46,6 s | 47–51 |
+
+En B, el "NO" de las correctas era siempre "grafo bipartito": qwen3 dice "dos grupos" y la regla solo aceptaba "conjunto". Se corrigió después de las corridas (`f208c9d9`); con la regla nueva serían 10/10. En la primera corrida del 7B, el "NO" era "Tóquio", que ahora también vale.
+
+**Estrategia B: no se aplicó.** La condición era 0 atribuciones en dos corridas sin empeorar `check_intents` ni `check_speed`. `check_intents` 44/44, como antes. `check_speed` en serie, sin nada más corriendo:
+
+| | hola | grafo | si | explica @ROADMAP.md | Total |
+|---|---|---|---|---|---|
+| 7B solo | 16,2 s (carga 9,7) | 6,6 s | 2,7 s | 53,5 s (354 tokens) | 79,0 s |
+| B | 11,6 s (carga 6,4) | 2,5 s | 0,6 s | 66,0 s (carga 8,5, 450 tokens) | 80,7 s |
+
+La charla es 3–4 veces más rápida, pero "explica @ROADMAP.md" empeora: recarga el 7B tras la charla con qwen3 (8,5 s) y generó 96 tokens más. Una primera tanda de `check_speed` coincidió con un pytest completo y se descartó. Para aplicarla haría falta aceptar ~8,5 s por cada cambio de charla a acción.
+
+**`/buscar`.**
+- Líneas de adorno (`2d9b426e`): las que son solo "=", "-", "*", "~" o "#" repetidos se vacían del contexto antes de la extracción. No las ve el modelo ni valen como cita, y los números de línea no cambian.
+- Regla del eco, rechazada: "una línea verificada cuyas palabras están todas en la pregunta (o su traducción) no cuenta". Punta a punta, sin y con la regla: Asia 8/8 y 8/8, Bolitabot 2/3 y 2/3, docs 9/13 y 9/13, frases limpias 44 y 34, eliminadas 5 y 8, cita 15/24 y 16/24, límite conocido 1 y 0, trampas 0/9 y 0/9, ajenas 0/5 y 0/5. Quitaba líneas buenas: "* History", "* Reliability" y "* Durability" de la pregunta de QoS, porque el glosario y la traducción ponen esas palabras en la pregunta. "- Australia" no se repitió en ninguna de las dos corridas. Otra regla posible: comparar solo con la pregunta escrita, sin glosario ni traducción.
+- `check_rag --wikipedia 1` con las 6 trampas y la regla de negativas: artículo encontrado 9/12 (la base), 5/12 correctas, 7 sin respuesta directa, trampas respondidas 0/6 (5 sin respuesta directa y 1 que el modelo negó, Barichara); 31 s por pregunta.
+
+**Mediciones con la GPU que faltaban** (7B solo):
+- `check_speed --descargar --espera 15`: hola 4,9 s (carga 0,0: la precarga terminó en la espera), grafo 8,4 s, si 3,4 s, explica @ROADMAP.md 47,3 s.
+- `jarvis.exe` (modelo descargado): "Escribe /opciones" a los 1,5 s. El primer "hola", tecleado enseguida, respondió en 15,9 s (carga 9,7 s).
+- Voz precargada, "cuéntame un chiste" a los 15 s de abrir: primer audio a los 15,5 s del mensaje. Incluye 6,7 s de intención (no es charla clara). Respuesta corta: la lectura empezó al final.
+- Ctrl+C con "explica @ROADMAP.md" en proceso, a los 6 s: "(Respuesta cortada.)" en 0,1 s. El "hola" siguiente respondió normal (5,3 s).
+
+**Ideas de OpenCode hechas**:
+- Recorte de salidas de herramientas (`a30b27c8`): `search_text` hacia el modelo (`context_limits.search_text` 6000) y el sandbox (`sandbox_max_output`). Va al prompt el principio, en líneas completas, con un aviso; la salida completa queda en `data/salidas/`, que se borra a los 7 días.
+- `ASIA.md` opcional por fuente (`7e84af52`): sus notas van a la extracción de `/buscar` cuando hay fragmentos de esa fuente. No se citan, y llevan la etiqueta de la fuente.
 
 ## Fases futuras (diseño pendiente)
 
