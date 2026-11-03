@@ -745,6 +745,15 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 
   Fuera: `gemma3:4b` (3,4 GB con visión, no deja sitio al contexto en 4 GB) y `qwen2.5:3b` (Qwen Research License, no comercial). Con 16384 de contexto, la caché del contexto se suma al tamaño: cabría entero solo con menos contexto para el IntentEngine, y cambiarlo pide confirmación.
 
+**Ideas de OpenCode** ([sst/opencode](https://github.com/sst/opencode), MIT). Se toman ideas, no código. Crédito en el README.
+- *Recorte de salidas de herramientas* (pequeña): una salida larga (sandbox, búsqueda de texto, lectura de carpetas) entra al prompt recortada, con un aviso que dice dónde está el resto. El texto completo va a un archivo de `data/`, que se borra a los 7 días.
+- *Instrucciones por proyecto* (pequeña): OpenCode lee `AGENTS.md` de la carpeta del proyecto. En Asia sería un `ASIA.md` opcional en la raíz de cada fuente (proyecto o biblioteca), que se suma al prompt de las acciones sobre esa fuente. Pasa por la barrera de confidencialidad como contenido del proyecto.
+- `/init`: el modelo propone un primer `ASIA.md` a partir de los archivos clave (cómo se prueba, convenciones). Nunca lo escribe sin confirmación.
+- Permisos por herramienta (permitir, preguntar, denegar) en la configuración. Asia ya pide confirmación para ejecutar y para aplicar cambios: sería generalizar esa tabla.
+- Compactación de la sesión: cuando el historial no cabe en el contexto, resumir los turnos viejos en vez de solo descartarlos. Hoy se descartan, con presupuesto de tokens.
+- Diagnósticos tras editar: después de `generate_code` o `smart_refactor`, pasar un verificador estático (`py_compile` o `ruff`, si está instalado) y mostrar los errores con el cambio pendiente.
+- Deshacer por instantáneas: guardar el estado de los archivos antes de aplicar un cambio, para un `/deshacer` de varios pasos.
+
 **Especialistas internos** (no varios asistentes separados).
 - Un orquestador manda cada mensaje a un especialista (prompt + modelo + herramientas), todos con la misma memoria, biblioteca de conocimiento y barrera de confidencialidad. `models_by_domain` es la primera versión.
 - Verificación cruzada (uno genera, otro revisa) solo en tareas importantes, porque duplica el tiempo.

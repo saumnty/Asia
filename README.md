@@ -49,3 +49,7 @@ Remove-Item C:\Tools\jarvis.exe
 ```
 
 `jarvis` vuelve a ser `C:\Tools\jarvis.bat`, que llama a `C:\Asia\jarvis.bat`. Con él vuelve el "¿Desea terminar el trabajo por lotes (S/N)?" al pulsar Ctrl+C.
+
+## Créditos
+
+Algunas ideas de diseño (recorte de salidas de herramientas, instrucciones por proyecto) vienen de [OpenCode](https://github.com/sst/opencode) (licencia MIT). No se copió código.
