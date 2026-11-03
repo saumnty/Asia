@@ -1,6 +1,6 @@
 import re
 
-from providers.ollama_provider import OllamaProvider
+from providers.ollama_provider import RESPONSE_RESERVE_TOKENS, OllamaProvider, estimate_tokens, model_options
 from core.actions.models import command_text
 from memory.memory_manager import MemoryManager
 from memory.project_memory import ProjectMemory
@@ -17,6 +17,7 @@ from core.confidential import (
     outgoing_messages,
 )
 from core.audit import log_external_send
+from core.chat_memory import memory_note, relevant_memory
 from core.model_selection import StickyModel, model_for, thinks
 from core.interruptible import call as interruptible_call
 from core.timing import timed
@@ -129,17 +130,6 @@ class ProviderRouter:
 
         return self.providers[name]
 
-    def build_memory_context(self):
-        data = self.memory.load()
-
-        if not data:
-            return "No hay memoria guardada."
-
-        return "\n".join(
-            f"- {key}: {value}"
-            for key, value in data.items()
-        )
-
     def build_project_context(self):
         project_name = self.settings.get("active_project")
 
@@ -185,24 +175,27 @@ class ProviderRouter:
             return str(e)
 
     def chat(self, prompt: str, on_chunk=None, history_prompt=None) -> str:
-        """Conversación con el usuario: incluye memoria, proyecto e historial.
+        """Conversación con el usuario: incluye proyecto, historial y la memoria que venga al caso.
 
         history_prompt es lo que se guarda en el historial en lugar de prompt
         (p. ej. el mensaje sin el contenido de los archivos adjuntos).
 
-        Procedencia: la memoria y el resumen del proyecto del prompt de
-        sistema, cada mensaje del historial con la etiqueta que heredó su
-        turno y lo que trae este mensaje (usuario, adjuntos...). Hacia un
-        proveedor externo solo va lo exportable de ese contexto de fondo.
+        La memoria personal no va en el prompt de sistema (core/chat_memory.py):
+        solo las entradas relevantes, delante del mensaje y en tercera
+        persona. Así el prompt de sistema no cambia entre mensajes y Ollama
+        lo reutiliza de su caché.
+
+        Procedencia: el resumen del proyecto, la memoria incluida, cada
+        mensaje del historial que cabe con la etiqueta que heredó su turno y
+        lo que trae este mensaje (usuario, adjuntos...). Hacia un proveedor
+        externo solo va lo exportable de ese contexto de fondo.
         """
-        memory_context = self.build_memory_context()
+        typed = history_prompt or prompt
+        note = memory_note(relevant_memory(typed, self.memory.load()))
         project_context = self.build_project_context()
         system_prompt = f"""{SYSTEM_PROMPT}
 
 {CHAT_RULES}
-
-Contexto personal:
-{memory_context}
 
 Contexto del proyecto:
 {project_context}
@@ -210,37 +203,44 @@ Contexto del proyecto:
 
         model = self.sticky_model.choose(prompt, self.settings)
         options = {"model": model, "think": thinks(self.settings, self.sticky_model.domain)}
-        max_tokens = self.chat_max_tokens(history_prompt or prompt, options["think"])
+        max_tokens = self.chat_max_tokens(typed, options["think"])
 
         # Con la regla solo en el prompt de sistema, el 7B la ignoraba (350
         # tokens ante "qué es un grafo bipartito"): se recuerda al final del
         # mensaje. No se guarda en el historial.
         reminder = ""
 
-        if max_tokens and not wants_detail(history_prompt or prompt):
+        if max_tokens and not wants_detail(typed):
             reminder = VOICE_REMINDER if self.voice_mode() else BRIEF_REMINDER
 
-        user_message = {"role": "user", "content": prompt + reminder}
+        plain_message = {"role": "user", "content": prompt + reminder}
+        user_message = plain_message
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            *self.history,
-            user_message
-        ]
+        if note:
+            user_message = {"role": "user", "content": f"{note}\n\nMensaje del usuario:\n{prompt}{reminder}"}
+
+        system = {"role": "system", "content": system_prompt}
+        kept, options["model"] = self.fit_history(system, user_message, max_tokens, model)
+        history = self.history[len(self.history) - kept:]
+        history_labels = self.history_labels[len(self.history_labels) - kept:]
+
+        messages = [system, *history, user_message]
 
         ambient = []
 
-        if self.memory.load():
-            ambient.append(Fragment(MEMORIA, memory_context))
+        if note:
+            ambient.append(Fragment(MEMORIA, note))
 
         if project_context:
             ambient.append(Fragment(PROYECTO, project_context))
 
         turn = current_fragments() or [Fragment(DESCONOCIDO, prompt)]
-        past = [Fragment(label, m["content"]) for m, label in zip(self.history, self.history_labels)]
+        past = [Fragment(label, m["content"]) for m, label in zip(history, history_labels)]
         self.last_fragments = ambient + past + turn
 
-        request = self.external_chat_request(messages, turn, memory_context, project_context, user_message)
+        request = self.external_chat_request(
+            messages, turn, note, project_context, user_message, plain_message, history, history_labels
+        )
         request.max_tokens = max_tokens
         self.last_request = (request, options)
 
@@ -266,6 +266,31 @@ Contexto del proyecto:
 
         return answer
 
+    def fit_history(self, system, user_message, max_tokens, model):
+        """(cuántos mensajes del historial caben, modelo) dentro del num_ctx del modelo.
+
+        Se descartan los turnos más antiguos. Si ni sin historial cabe (un
+        modelo de 4096 con un mensaje largo), esa respuesta va con
+        ollama_model, si tiene una ventana más grande.
+        """
+        fixed = estimate_tokens([system, user_message]) + (max_tokens or RESPONSE_RESERVE_TOKENS)
+        num_ctx = model_options(self.settings, model)["num_ctx"]
+        default = self.settings.get("ollama_model")
+
+        if not num_ctx:
+            return len(self.history), model
+
+        if fixed > num_ctx and model != default and (model_options(self.settings, default)["num_ctx"] or 0) > num_ctx:
+            model, num_ctx = default, model_options(self.settings, default)["num_ctx"]
+
+        kept = 0
+
+        # De a turnos (pregunta y respuesta), del más reciente al más antiguo.
+        while kept + 2 <= len(self.history) and fixed + estimate_tokens(self.history[len(self.history) - kept - 2:]) <= num_ctx:
+            kept += 2
+
+        return kept, model
+
     def chat_max_tokens(self, text, think):
         """Tope de la respuesta del chat (answer_limits.chat): más alto si se pide detalle
         y más bajo en modo voz (voice_tokens).
@@ -289,36 +314,40 @@ Contexto del proyecto:
 
         return bool(self.settings.get(VOICE_SETTING))
 
-    def external_chat_request(self, messages, turn, memory_context, project_context, user_message):
-        """El chat completo y su versión para fuera, sin el contexto de fondo local."""
+    def external_chat_request(self, messages, turn, note, project_context, user_message, plain_message,
+                              history, history_labels):
+        """El chat completo y su versión para fuera, sin el contexto de fondo local.
+
+        Sin permiso para la memoria, afuera va el mensaje sin la nota de memoria.
+        """
         exportable = exportable_labels(self.settings)
-        memory_ok = MEMORIA in exportable and self.memory.load()
+        memory_ok = MEMORIA in exportable and bool(note)
         omitted = []
 
-        if self.memory.load() and not memory_ok:
+        if note and not memory_ok:
             omitted.append("memoria")
 
         if project_context:
             omitted.append("resumen del proyecto")
 
-        system = f"{SYSTEM_PROMPT}\n\n{CHAT_RULES}" + (f"\n\nContexto personal:\n{memory_context}\n" if memory_ok else "")
-        history = [m for m, label in zip(self.history, self.history_labels) if label in exportable]
-        exported = {label for label in self.history_labels if label in exportable}
+        system = f"{SYSTEM_PROMPT}\n\n{CHAT_RULES}"
+        exportable_history = [m for m, label in zip(history, history_labels) if label in exportable]
+        exported = {label for label in history_labels if label in exportable}
 
         if memory_ok:
             exported.add(MEMORIA)
 
-        if len(history) < len(self.history):
-            omitted.append(f"{len(self.history) - len(history)} mensajes del historial")
+        if len(exportable_history) < len(history):
+            omitted.append(f"{len(history) - len(exportable_history)} mensajes del historial")
 
-        external = [{"role": "system", "content": system}, *history, user_message]
+        external = [{"role": "system", "content": system}, *exportable_history, user_message if memory_ok else plain_message]
 
         # Modo abierto: todo el chat (memoria, proyecto, historial) menos los
         # turnos que nunca salen.
-        open_history = [m for m, label in zip(self.history, self.history_labels) if label not in NEVER_EXPORT]
-        open_labels = {label for label in self.history_labels if label not in NEVER_EXPORT}
+        open_history = [m for m, label in zip(history, history_labels) if label not in NEVER_EXPORT]
+        open_labels = {label for label in history_labels if label not in NEVER_EXPORT}
 
-        if self.memory.load():
+        if note:
             open_labels.add(MEMORIA)
 
         if project_context:

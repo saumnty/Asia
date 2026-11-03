@@ -259,15 +259,25 @@ def test_historial_hereda_la_etiqueta_mas_restrictiva():
     assert labels_of(router.last_fragments) == {USUARIO, ADJUNTO}
 
 
-def test_memoria_y_proyecto_del_prompt_de_sistema():
+def test_memoria_y_proyecto_del_contexto():
     router = make_router(memory={"nombre": "Santiago"}, project="resumen")
 
-    with request_sources(Fragment(USUARIO, "hola")):
-        router.chat("hola")
+    with request_sources(Fragment(USUARIO, "cómo me llamo?")):
+        router.chat("cómo me llamo?")
 
     assert labels_of(router.last_fragments) == {USUARIO, MEMORIA, PROYECTO}
     # Una respuesta con memoria y proyecto en el contexto no queda como "usuario".
     assert router.history_labels == [PROYECTO, PROYECTO]
+
+
+def test_un_saludo_no_lleva_memoria():
+    router = make_router(memory={"nombre": "Santiago"})
+
+    with request_sources(Fragment(USUARIO, "hola")):
+        router.chat("hola")
+
+    assert labels_of(router.last_fragments) == {USUARIO}
+    assert router.history_labels == [USUARIO, USUARIO]
 
 
 def test_chat_sin_registro_es_desconocido():

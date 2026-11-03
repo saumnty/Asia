@@ -50,11 +50,11 @@ def test_open_mode_default_es_false():
 def test_adjunto_llega_al_proveedor_externo(cwd, capsys, settings_untouched, gemini_default):
     brain = make_brain()
 
-    out = interactive(brain, ["/modo abierto", "explica @datos.py", "salir"], capsys)
+    out = interactive(brain, ["/modo abierto", "explica @datos.py y dime cómo me llamo", "salir"], capsys)
 
     assert len(received(brain)) == 1
     text = gemini_text(brain)
-    # El adjunto, la memoria y nada de avisos de modo confidencial.
+    # El adjunto, la memoria que viene al caso y nada de avisos de modo confidencial.
     assert FILE_SECRET in text and "Santiago" in text
     assert "No envié esto" not in out
 
@@ -159,7 +159,7 @@ def test_no_persiste_entre_sesiones(cwd, capsys, settings_untouched):
 def test_bitacora_registra_los_envios(cwd, capsys, gemini_default):
     brain = make_brain()
 
-    interactive(brain, ["modo abierto", "explica @datos.py", "salir"], capsys)
+    interactive(brain, ["modo abierto", "explica @datos.py y dime cómo me llamo", "salir"], capsys)
 
     entries = [json.loads(l) for l in paths.EXTERNAL_AUDIT_FILE.read_text(encoding="utf-8").splitlines()]
     [entry] = entries

@@ -157,10 +157,19 @@ def test_lo_tecleado_si_sale_sin_rutas_ni_contexto_local():
 def test_memoria_sale_solo_si_se_permite():
     router = make_router(memory={"nombre": "Santiago"}, external_allow_memory=True)
 
-    with request_sources(Fragment(USUARIO, "hola")):
-        router.chat("hola")
+    with request_sources(Fragment(USUARIO, "cómo me llamo?")):
+        router.chat("cómo me llamo?")
 
     assert "Santiago" in sent_to_gemini(router)
+
+    # Sin permiso sale la pregunta, sin la nota de memoria.
+    router = make_router(memory={"nombre": "Santiago"})
+
+    with request_sources(Fragment(USUARIO, "cómo me llamo?")):
+        router.chat("cómo me llamo?")
+
+    sent = sent_to_gemini(router)
+    assert "cómo me llamo?" in sent and "Santiago" not in sent and "Datos sobre el usuario" not in sent
 
 
 def test_historial_local_no_sale():
