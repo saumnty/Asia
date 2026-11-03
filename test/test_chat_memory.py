@@ -145,3 +145,12 @@ def test_si_ni_sin_historial_cabe_responde_el_modelo_grande():
     assert kwargs["model"] == "big"
     # Con 16384 el historial corto entra.
     assert len(messages) == 1 + 4 + 1
+
+
+@pytest.mark.parametrize("text", ["¿cuál es tu color favorito?", "¿quién eres?", "¿cómo te llamas?", "¿qué proyecto te gusta?"])
+def test_una_pregunta_a_asia_no_lleva_memoria(text):
+    assert relevant_memory(text, MEMORY) == {}
+
+
+def test_tu_y_mi_juntos_si_llevan_memoria():
+    assert list(relevant_memory("¿te acuerdas de mi color favorito?", MEMORY)) == ["color_favorito"]

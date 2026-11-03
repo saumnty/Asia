@@ -23,8 +23,13 @@ SMALL_TALK = re.compile(
 # ("hola, ¿cómo me llamo?").
 ABOUT_USER = re.compile(r"\b(mi|mis|me|yo|sobre mi|de mi)\b")
 
-# "qué sabes de mí", "quién soy": todo lo guardado tiene que ver.
-WHOLE_MEMORY = re.compile(r"\b(sobre mi|de mi|quien soy|que sabes de mi|que recuerdas)\b")
+# Una pregunta a Asia ("¿cuál es tu color favorito?", "¿quién eres?"): sin
+# memoria, o el 7B contestaba "Mi color favorito es el amarillo".
+ABOUT_ASSISTANT = re.compile(r"\b(tu|tus|te|ti|eres|contigo)\b")
+
+# "qué sabes de mí", "háblame sobre mí", "quién soy": todo lo guardado tiene que
+# ver. "de mi color favorito" no: ahí va solo esa entrada.
+WHOLE_MEMORY = re.compile(r"\b(sobre|de) mi$|\bquien soy\b")
 
 # Palabras con que se pregunta por una entrada sin nombrar su clave.
 SYNONYMS = {
@@ -72,7 +77,12 @@ def relevant_memory(text: str, data: dict) -> dict:
     if not data or is_small_talk(text):
         return {}
 
-    if WHOLE_MEMORY.search(command_text(text)):
+    command = command_text(text)
+
+    if ABOUT_ASSISTANT.search(command) and not ABOUT_USER.search(command):
+        return {}
+
+    if WHOLE_MEMORY.search(command):
         return dict(list(data.items())[:MAX_ENTRIES])
 
     asked = words(text)
