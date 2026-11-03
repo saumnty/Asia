@@ -240,6 +240,20 @@ Hecho en la fase G (ver la tabla). Pendientes:
 - Con Ollama remoto no confiable, el RAG no indexa ni busca; no hay forma de autorizarlo una vez.
 - La etiqueta "emocional" existe pero todavía nada la produce (ver "Afecto y cognición social" en Extras).
 
+Extras de Asia 2.0, junto al modo confidencial:
+
+**a. Guardián de envíos externos.** Antes de cada llamada externa, revisar lo que sale (secretos, datos personales e identificables), mostrar exactamente qué se envía y pedir confirmación. Solo para uso personal o donde el uso de IA esté autorizado. Benchmark propio de fugas, como `check_rag`, para medir cuánto se le escapa, en un entorno sin red:
+- Un proveedor simulado que guarda todo lo que recibiría.
+- Cada frase o fragmento enviado se busca en las fuentes privadas de Asia (FTS5 y similitud de embeddings). Lo que no aparece se descarta; lo que sí, queda en la lista de fugas.
+- Datos canario: una fuente de prueba con datos falsos y únicos (cuentas, clientes, claves inventadas). Cualquier canario en lo enviado cuenta como fuga segura.
+- Resultado: número de fugas y la lista de cada una con su fuente, antes y después de cada cambio del guardián, con línea base como `check_rag`.
+
+**b. Modo sin rastro.** Llamadas externas sin historial, con el contexto mínimo preparado por el modelo local y sin caché del proveedor. La bitácora sigue siendo local, y se avisa de que lo enviado queda bajo las políticas del proveedor.
+
+**c. Perfiles aislados (trabajo y personal).** Memoria, fuentes, RAG y bitácoras separadas. En el perfil de trabajo, el modo local queda bloqueado: sin proveedores externos, salvo uno que apruebe la empresa (por ejemplo, Claude vía Bedrock o Vertex). Un comando para borrar todo un perfil.
+
+**d. Asia multiplataforma (Windows y Ubuntu).** Preparar el paso al servidor y al Jetson aislando lo que hoy es solo de Windows: `open_app`, `jarvis.exe` y las rutas.
+
 ### Voz y avatar
 
 **J1, voz en la terminal (hecho):** `core/voice/` es una capa de entrada y salida; el cerebro no cambia. Con `/voz` (o `--voz`), Enter en una línea vacía escucha (sounddevice, 16 kHz mono; Silero VAD tramo a tramo con el ONNX que trae faster-whisper, sin el paquete `silero-vad` ni PyTorch); termina con 800 ms de silencio o con otro Enter. faster-whisper `small` siempre en CPU int8 (`beam_size` 5: igual de rápido que 1 y acierta más). Lo entendido se muestra como tecleado y lleva la etiqueta "usuario". Las respuestas se muestran enteras y se lee su texto normal con Piper (`es_MX-claude-high`), sin código, tablas, rutas ni markdown ("te dejo el código en pantalla"). Motores elegidos por config (`voice` en `defaults.json`); el audio no se guarda. `/sin voz` libera los modelos. Paquetes en `requirements-voice.txt`; modelos y voces en `data/models` y `data/voices` (no versionados). Commits: `af14fd52`, `3ccb0f5b`, `b8a31257`, `e9763b0f`, `49ef551a`, `37f519c3`.
@@ -276,7 +290,7 @@ Antes "Wikipedia offline". Va por capas, y cada fuente lleva su etiqueta para po
 1. Proyectos propios (repos, reportes, notas) con el RAG actual: primera capa, la más útil. Hecha, ver abajo.
 2. Documentación técnica offline: ROS 2 Jazzy y Gazebo Harmonic (hecho, ver abajo), Python 3.12 pendiente. Fuentes directas, sin Kiwix, zimit ni Docker.
 3. Wikipedia en español: un `.zim` leído con libzim, separado del RAG de proyectos. Código hecho, medición con el modelo pendiente, ver abajo. Inglés: el código lo admite, sin archivo descargado.
-4. Preguntas y respuestas (Stack Overflow, Robotics Stack Exchange).
+4. Preguntas y respuestas: sitios de Stack Exchange en `.zim`, cada uno como fuente pública. Diseño pendiente, ver abajo.
 
 - Búsqueda: la de texto de Kiwix encuentra los artículos y los embeddings se usan solo dentro de ellos, sin indexar todo.
 - Regla en el prompt: responder con lo que dice la fuente y decir "no lo encontré" si no está.
@@ -492,6 +506,12 @@ Falta:
 - Para después: cuando una pregunta no se encuentra en los proyectos, Asia ofrece buscar en Wikipedia ("¿Busco en Wikipedia?") en lugar de hacerlo sola, medido aparte en `check_rag`.
 - Wikipedia completa (`maxi`, 13,3 GB): pedir permiso aparte antes de descargarla.
 
+**Capa 4, preguntas y respuestas (Asia 1.0, diseño pendiente):** un conjunto de sitios de Stack Exchange en `.zim`, cada uno como fuente pública, con la cadena de la capa 3.
+- Sitios: Stack Overflow en español, Ask Ubuntu, Unix & Linux, Super User, Robotics Stack Exchange y Electrical Engineering. Stack Overflow en inglés solo si hay espacio en disco y los demás se quedan cortos.
+- Medir el tamaño de cada uno antes de descargar, y pedir permiso con esa cifra, uno por uno.
+- Respuesta: priorizar la aceptada o, si no hay, la más votada; mostrar la fecha y preferir lo reciente; citar la pregunta y el autor (CC BY-SA).
+- Traducción de la pregunta solo para los sitios en inglés, como `idioma=en`.
+
 Conocimiento, pendientes generales:
 
 - Knowledge Manager: destilar lo aprendido de proveedores externos, deduplicar y reindexar en una base global.
@@ -527,6 +547,7 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 - Perfil por modelo en la configuración: contexto, si razona, si ve imágenes y ajustes de prompt propios (por ejemplo, el recordatorio de brevedad al final). Asia lee el perfil en vez de suponer.
 - Comando de evaluación: corre con un modelo candidato los intents (`check_intents`), el benchmark de revisión (`check_review_quality`) y las pruebas de velocidad (`check_speed`), y da una tabla contra el modelo actual: aciertos, errores, velocidad.
 - Los modelos abiertos (Gemma, Qwen, Llama, etc.) entran por Ollama; Claude y otros, solo por API, con un proveedor nuevo de una clase y siempre pasando por el modo confidencial.
+- Opción de un modelo chico (3–4B) que quepa entero en la GPU para tareas simples (IntentEngine, charla corta), solo si pasa `check_intents` y `check_rag`. El 7B sigue como referencia de calidad y de pruebas.
 
 **Especialistas internos** (no varios asistentes separados).
 - Un orquestador manda cada mensaje a un especialista (prompt + modelo + herramientas), todos con la misma memoria, biblioteca de conocimiento y barrera de confidencialidad. `models_by_domain` es la primera versión.
@@ -583,6 +604,7 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 
 Va después de los extras.
 - Medir el uso real de RAM/VRAM antes de comprar el Jetson Orin Nano Super (8 GB de RAM soldada).
+- El Jetson Orin Nano Super tiene 8 GB compartidos entre CPU y GPU: sirve para estar siempre encendido y para lo privado, no para modelos de 14B o más. La calidad en lo público vendrá de los proveedores; la de lo privado, de mejores modelos pequeños con el tiempo.
 - Portar a ARM64 y revisar requisitos del Jetson.
 - Tailscale para acceso remoto, con modo reducido en conexiones lentas.
 - Respaldos de `memory/memory.json`, `memory/projects/`, `data/chroma/` y `data/reflexion/`.
@@ -608,5 +630,5 @@ Va después de los extras.
 3. Cambio entre modelos. ~~Ver y cambiar el modelo por comando, `--model`, `models_by_domain`.~~ Hecho (`1231b36b`, `fccf75bd`). Falta lo de "Qué falta" en "Multi-modelo según tipo de tarea".
 4. Voz: J4 y voz propia.
 5. Avatar.
-6. Extras: imágenes en la terminal, cambio de modelo seguro, especialistas internos, control y estimación, Asia → ROS 2 → Bolitabot, SQLite como almacenamiento, afecto y cognición social, tareas grandes y MCP.
+6. Extras: guardián de envíos externos, modo sin rastro, perfiles aislados, Asia multiplataforma, imágenes en la terminal, cambio de modelo seguro, especialistas internos, control y estimación, Asia → ROS 2 → Bolitabot, SQLite como almacenamiento, afecto y cognición social, tareas grandes y MCP.
 7. Jetson, servidor y uso remoto (siempre disponible).
