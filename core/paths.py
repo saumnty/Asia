@@ -29,6 +29,8 @@ DATA_DIR = PROJECT_ROOT / "data"
 CHROMA_DIR = DATA_DIR / "chroma"
 # Fase R: pendientes y resumen de la última sesión (no versionados).
 REFLECTION_DIR = DATA_DIR / "reflexion"
+# Salidas completas de herramientas que entraron recortadas al prompt (core/tool_output.py).
+TOOL_OUTPUT_DIR = DATA_DIR / "salidas"
 TASKS_FILE = REFLECTION_DIR / "pendientes.json"
 SESSION_SUMMARY_FILE = REFLECTION_DIR / "ultima_sesion.json"
 # Fase H: las fuentes de la biblioteca de conocimiento (no versionadas).

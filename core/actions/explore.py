@@ -13,6 +13,7 @@ from core.rag.quotes import (
     verify_quotes,
     without_decoration,
 )
+from core.tool_output import clip
 from providers.ollama_provider import without_cut_notice
 
 # Los mismos que config/defaults.json, por si falta la clave.
@@ -24,6 +25,8 @@ DEFAULT_ANSWER_LIMITS = {
 }
 # Los que recibe el modelo en /buscar.
 RAG_FRAGMENTS = 5
+# El mismo que context_limits.search_text en config/defaults.json, por si falta la clave.
+SEARCH_TEXT_CHARS = 6000
 # Una pregunta en inglés: si no cabe aquí, no es una traducción.
 TRANSLATION_TOKENS = 80
 
@@ -186,6 +189,12 @@ class ExploreActions:
         configured = (self.settings.get("answer_limits") or {}).get(action)
         return configured or DEFAULT_ANSWER_LIMITS[action]
 
+    def search_text_for_model(self, query, folder_path):
+        """search_text para el prompt: un nombre común puede salir en cientos de líneas (core/tool_output.py)."""
+        results = self.tool_registry.execute("search_text", query=query, folder_path=folder_path)
+        limit = (self.settings.get("context_limits") or {}).get("search_text", SEARCH_TEXT_CHARS)
+        return clip(results, limit, f"search_text-{query}")
+
     def handle_find_references(self, text, params):
         query = params.get("query")
         folder_path = params.get("folder_path", ".")
@@ -193,11 +202,7 @@ class ExploreActions:
         if not query:
             return "Necesito saber qué referencia quieres buscar."
 
-        raw_results = self.tool_registry.execute(
-            "search_text",
-            query=query,
-            folder_path=folder_path
-        )
+        raw_results = self.search_text_for_model(query, folder_path)
 
         return self.provider_router.ask(prompts.find_references(query, raw_results))
 
@@ -208,11 +213,7 @@ class ExploreActions:
         if not symbol:
             return "Necesito saber qué clase, función o método quieres explicar."
 
-        raw_results = self.tool_registry.execute(
-            "search_text",
-            query=symbol,
-            folder_path=folder_path
-        )
+        raw_results = self.search_text_for_model(symbol, folder_path)
 
         return self.provider_router.ask(prompts.explain_symbol(symbol, raw_results))
 
@@ -234,10 +235,6 @@ class ExploreActions:
         if not query:
             return "Necesito saber qué dependencia, clase o módulo quieres buscar."
 
-        raw_results = self.tool_registry.execute(
-            "search_text",
-            query=query,
-            folder_path=folder_path
-        )
+        raw_results = self.search_text_for_model(query, folder_path)
 
         return self.provider_router.ask(prompts.find_dependencies(query, raw_results))

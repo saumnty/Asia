@@ -30,6 +30,7 @@ from pathlib import Path
 
 from core.atomic_write import write_json_atomic
 from core.paths import PENDING_RUN_FILE
+from core.tool_output import clip
 from tools.import_check import STDLIB, extract_imports
 
 
@@ -101,13 +102,6 @@ def kill_tree(process: subprocess.Popen):
     process.kill()
 
 
-def truncate(text: str, max_chars: int) -> str:
-    if len(text) <= max_chars:
-        return text
-
-    return text[:max_chars] + f"\n... [salida recortada: {len(text)} caracteres]"
-
-
 class SandboxRunner:
     def __init__(self, timeout: float = 20, max_output: int = 4000, base_python: str = sys.executable):
         self.timeout = timeout
@@ -164,7 +158,8 @@ class SandboxRunner:
             timed_out = True
 
         def text(data):
-            return truncate(data.decode("utf-8", errors="replace").replace("\r\n", "\n"), self.max_output)
+            # Lo que no cabe queda en data/salidas (core/tool_output.py).
+            return clip(data.decode("utf-8", errors="replace").replace("\r\n", "\n"), self.max_output, "sandbox")
 
         return RunResult(
             returncode=None if timed_out else process.returncode,

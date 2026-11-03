@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from core import paths
+
 from core.brain import Brain
 from tools.sandbox import PendingRun, RunResult, SandboxRunner, format_result, sandbox_import_problems
 
@@ -96,8 +98,11 @@ def test_sin_stdin(runner):
 def test_salida_recortada(runner):
     result = runner.run("print('x' * 2000)\n")
 
+    # Una sola línea que no cabe: va cortada, y entera al archivo del aviso.
     assert result.stdout.startswith("x" * 500)
-    assert "[salida recortada: 2001 caracteres]" in result.stdout
+    assert "[Salida recortada: 1 de 1 líneas. Completa en " in result.stdout
+    [saved] = paths.TOOL_OUTPUT_DIR.glob("*-sandbox.txt")
+    assert saved.read_text(encoding="utf-8") == "x" * 2000 + "\n"
 
 
 # --- Imports que no existen en el sandbox ------------------------------------
