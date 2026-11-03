@@ -16,6 +16,7 @@ from core.actions.voice import VoiceActions, voice_command
 from core import timing
 from core.commands import is_launcher_command, options_text, resolve as resolve_command, unknown_message as unknown_command
 from core.session import Session
+from core.chat_memory import is_recall
 from core.fast_chat import is_clear_chat
 from core.fixed_intents import fixed_intent
 from tools.app_tool import AppTool
@@ -305,6 +306,12 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
         action = intent.get("action")
         params = intent.get("params")
+
+        # qwen3 mandaba "¿cuál es tu color favorito?" a recall (y contestaba
+        # "color_favorito: amarillo") y "¿qué sabes de mí?" a recall del nombre.
+        if action == "recall" and not is_recall(text):
+            action = "chat"
+
         self.last_action = action if action in self.HANDLERS or action in DIRECT_TOOL_ACTIONS else "chat"
 
         if not isinstance(params, dict):

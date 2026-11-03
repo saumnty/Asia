@@ -90,6 +90,20 @@ def relevant_memory(text: str, data: dict) -> dict:
     return dict(list(chosen.items())[:MAX_ENTRIES])
 
 
+def is_recall(text: str) -> bool:
+    """False si recall no es la acción: una pregunta a Asia o una por toda la memoria.
+
+    "¿cuál es tu color favorito?" no pregunta por el del usuario, y "¿qué
+    sabes de mí?" no se contesta con una sola entrada: los dos van al chat.
+    """
+    command = command_text(text or "")
+
+    if ABOUT_ASSISTANT.search(command) and not ABOUT_USER.search(command):
+        return False
+
+    return not WHOLE_MEMORY.search(command)
+
+
 def memory_note(entries: dict) -> str:
     """Las entradas en tercera persona, bajo TITLE; vacío si no hay ninguna."""
     if not entries:

@@ -154,3 +154,25 @@ def test_una_pregunta_a_asia_no_lleva_memoria(text):
 
 def test_tu_y_mi_juntos_si_llevan_memoria():
     assert list(relevant_memory("¿te acuerdas de mi color favorito?", MEMORY)) == ["color_favorito"]
+
+
+class RecallIntent:
+    def detect(self, text):
+        return {"action": "recall", "params": {"key": "color_favorito"}}
+
+
+@pytest.mark.parametrize("text", ["¿cuál es tu color favorito?", "¿qué sabes de mí?", "háblame sobre mí"])
+def test_recall_que_no_pregunta_por_un_dato_del_usuario_va_al_chat(text):
+    brain = make_brain()
+    brain.intent_engine = RecallIntent()
+
+    assert brain.process(text) is None
+    assert brain.last_action == "chat"
+
+
+def test_recall_de_un_dato_del_usuario_sigue_igual(monkeypatch):
+    brain = make_brain()
+    brain.intent_engine = RecallIntent()
+    brain.memory = type("M", (), {"recall": lambda self, key: "amarillo"})()
+
+    assert brain.process("¿cuál es mi color favorito?") == "color_favorito: amarillo"
