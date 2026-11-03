@@ -4,7 +4,15 @@ from pathlib import Path
 from core import prompts
 from core.rag.glossary import expand
 from core.rag.library import Library, clean_translation, is_refusal, named_in_question, needs_translation, without_source
-from core.rag.quotes import best_fragments, check_draft, is_thin, quotes_text, verified_lines, verify_quotes
+from core.rag.quotes import (
+    best_fragments,
+    check_draft,
+    is_thin,
+    quotes_text,
+    verified_lines,
+    verify_quotes,
+    without_decoration,
+)
 from providers.ollama_provider import without_cut_notice
 
 # Los mismos que config/defaults.json, por si falta la clave.
@@ -100,6 +108,9 @@ class ExploreActions:
         # Sin nada relevante, ni se llama al modelo: no hay de dónde responder.
         if rag_context in prompts.NOTHING_TO_ANSWER or rag_context.startswith(prompts.NO_DIRECT_ANSWER):
             return rag_context
+
+        # Sin subrayados ni separadores: ni el modelo los copia ni valen como cita.
+        rag_context = without_decoration(rag_context)
 
         # Con tope: un 7B puede no parar nunca (llenó 16384 tokens con una pregunta de Python).
         # Si se corta, vale lo que copió entero; la última línea a medias no se verifica.

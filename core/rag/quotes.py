@@ -41,6 +41,8 @@ LIST_MARKER = re.compile(r"\s*(?:\d+[.)]\s+|[-*]\s+)?")
 CAMEL_CASE = re.compile(r"[a-z][a-z0-9]*[A-Z]")
 # Una línea de código suelta, no una frase.
 CODE_LINE = re.compile(r"\s*(?:import|from|def|class|return|if|for|while)\b|\s*[\w.]+\s*=[^=]")
+# Una línea que es solo adorno: "=====" (subrayado RST), "-----", "*****", "~~~~", "####".
+DECORATION = re.compile(r"^[ \t]*([=\-*~#])\1{2,}[ \t]*$", re.MULTILINE)
 MIN_DRAFT_WORDS = 4
 FALLBACK_FRAGMENTS = 3
 FALLBACK_CHARS = 600
@@ -84,6 +86,16 @@ def parse_fragments(context: str) -> list:
         fragments.append(Fragment(header.group(1), header.group(2) or "", text.strip(), origin))
 
     return fragments
+
+
+def without_decoration(context: str) -> str:
+    """El contexto con las líneas de adorno vacías.
+
+    El 7B repetía un subrayado RST de 70 "=" sin parar, y una línea así se
+    verificaba como cita. Se vacían en vez de quitarse para que los números de
+    línea de las citas sigan siendo los del archivo.
+    """
+    return DECORATION.sub("", context)
 
 
 def parse_quotes(response: str) -> list:

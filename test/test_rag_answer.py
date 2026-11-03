@@ -465,3 +465,51 @@ def test_los_fragmentos_de_una_fuente_nombrada_no_pasan_por_el_modelo():
 
     assert brain.process("/buscar qué políticas hay en ros2") == rejected
     assert brain.provider_router.prompts == []
+
+
+DECORATED = """
+--- [docs/guia.rst:1-6] ---
+Fuente: Python (documentación)
+Contenido:
+docs/guia.rst
+Dataclasses
+======================================================================
+   -----
+El decorador dataclass agrega __init__ y __repr__.
+~~~~
+"""
+
+
+def test_las_lineas_de_adorno_no_llegan_al_modelo_ni_valen_como_cita():
+    extracted = "[docs/guia.rst:1-6] ======================================================================\n[docs/guia.rst:1-6] -----"
+    brain = brain_with(extracted, ANSWER, context=DECORATED)
+
+    shown = brain.process("/buscar qué agrega dataclass")
+
+    assert "=====" not in brain.provider_router.prompts[0] and "~~~~" not in brain.provider_router.prompts[0]
+    assert "El decorador dataclass agrega __init__ y __repr__." in brain.provider_router.prompts[0]
+    # Ninguna cita verificada: no se llama a la redacción.
+    assert len(brain.provider_router.prompts) == 1
+    assert "=====" not in shown
+
+
+def test_sin_adorno_los_numeros_de_linea_no_cambian():
+    brain = brain_with("[docs/guia.rst:1-6] El decorador dataclass agrega __init__ y __repr__.", ANSWER, context=DECORATED)
+
+    shown = brain.process("/buscar qué agrega dataclass")
+
+    assert "docs/guia.rst:4" in shown
+
+
+@pytest.mark.parametrize("line", ["====", "  ------  ", "*****", "~~~", "######"])
+def test_lineas_de_adorno(line):
+    from core.rag.quotes import without_decoration
+
+    assert without_decoration(f"a\n{line}\nb") == "a\n\nb"
+
+
+@pytest.mark.parametrize("line", ["==", "- item", "# Título", "a = b", "=-=-=-", "--- [a.py:1-2] ---"])
+def test_no_son_adorno(line):
+    from core.rag.quotes import without_decoration
+
+    assert without_decoration(line) == line
