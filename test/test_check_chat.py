@@ -38,3 +38,10 @@ def test_unos_doce_mensajes_con_la_trampa_y_las_preguntas_del_usuario():
 
     assert 12 <= len(messages) <= 16
     assert "¿cuál es tu color favorito?" in messages and "¿cuál es mi color favorito?" in messages
+
+
+def test_grafo_bipartito_con_grupos_o_conjuntos():
+    [expected] = [case[2] for case in CASES if case[0] == "qué es un grafo bipartito"]
+
+    assert correct("los vértices se dividen en dos grupos", expected)
+    assert correct("dos conjuntos disjuntos", expected)

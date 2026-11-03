@@ -53,7 +53,7 @@ CASES = [
     ("hola", VALUES, None),
     ("¿quién eres?", VALUES, r"asia|asistente"),
     ("¿cuál es tu color favorito?", ["amarillo"], None),
-    ("qué es un grafo bipartito", VALUES, r"conjunto"),
+    ("qué es un grafo bipartito", VALUES, r"conjunto|grupo"),
     ("¿cuál es la capital de Japón?", VALUES, r"tokio|tokyo|toquio"),
     ("¿cuántos días tiene un año bisiesto?", VALUES, r"366"),
     ("¿cuál es mi color favorito?", [], r"amarill"),
