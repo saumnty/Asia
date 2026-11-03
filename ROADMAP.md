@@ -221,9 +221,57 @@ Sale con código 1 por las trampas (base 0). Son las mismas 3 en las dos corrida
 Quedó: `OLLAMA_KV_CACHE_TYPE=q8_0` como variable de usuario. Libera ~420 MiB de caché, ~0,4 GB de RAM con el 7B cargado y la mitad de RAM por prompt en la caché de prompts, y la velocidad no cambia. `OLLAMA_FLASH_ATTENTION` se quitó: ya estaba activado. Para deshacer: `[Environment]::SetEnvironmentVariable("OLLAMA_KV_CACHE_TYPE", $null, "User")`, cerrar Ollama desde la bandeja y volver a abrirlo.
 
 Sin aplicar, porque piden permiso:
-- **`num_gpu` 16:** RAM libre de 2,5 a 3,5 GB y t/s de ~8 a ~10. No es una variable de entorno: hace falta un ajuste nuevo (`ollama_num_gpu`, pasado en las opciones de cada llamada) en `settings.json`. 17 capas no conviven con nomic.
-- **Bajar la caché de prompts del llama-server:** `--cache-ram`, probablemente `LLAMA_ARG_CACHE_RAM` en el entorno de Ollama, que ya lista las `LLAMA_ARG_FIT*`. Sería otra variable y un límite.
-- **Un tope de tokens para la extracción y la redacción de `/buscar`:** evitaría el atasco.
+- ~~**`num_gpu` 16:** RAM libre de 2,5 a 3,5 GB y t/s de ~8 a ~10.~~ Hecho (`353e5e9b`): `ollama_model_options` en `defaults.json`, por modelo, para que qwen3 no herede las capas del 7B. Lo llevan todas las llamadas que cargan el modelo (provider, IntentEngine y su precarga); si una no, Ollama lo recarga. 17 capas no conviven con nomic.
+- ~~**Bajar la caché de prompts del llama-server.**~~ Hecho (ver abajo).
+- ~~**Un tope de tokens para la extracción y la redacción de `/buscar`.**~~ Hecho (`eb116cb1`).
+
+### Decisiones del 2026-11-03 (tarde)
+
+**Caché de prompts del llama-server.** `LLAMA_ARG_CACHE_RAM=2048`, como variable de usuario: Ollama se la pasa al llama-server (en el log, "prompt cache is enabled, size limit: 2048 MiB", antes 8192).
+- Con 32 prompts distintos de ~3000 tokens, la RAM privada del llama-server sube hasta ~7,9 GB hacia el prompt 24 y ahí se queda (+1,8 GB sobre lo que ocupa recién cargado). La RAM libre se queda en ~1,5 GB.
+- `check_speed`: 11,5–12,2 t/s, como sin tope.
+- Punta a punta: entero, con 1,32 GB libres como mínimo. Con Asia 6/8, Bolitabot 2/3, docs 9/13, cita 16/24, límite conocido 0, trampas 0/9 y 35 s por pregunta. Sale con código 1 por una ajena: "cuál es la capital de Australia" verificó "- Australia" de la lista de mirrors de ROS y el resumen no dice nada ("La capital de Australia es [Australia]. (sin cita)"). En la corrida anterior esa pregunta salió sin respuesta directa.
+- Para deshacer: `[Environment]::SetEnvironmentVariable("LLAMA_ARG_CACHE_RAM", $null, "User")` y reiniciar Ollama. Con 1024 dejaría más margen y menos aciertos de caché; sin medir.
+
+**Topes de `/buscar`** (`eb116cb1`): `search_quotes` 1024 y `search_answer` 512 en `answer_limits`. Con la pregunta de dataclass, tres intentos:
+- 64 s (73 y 246 tokens).
+- 131 s: la extracción llegó a 1024 tokens y se cortó, y se muestran los fragmentos de respaldo.
+- 10 s (6 tokens, NINGUNA).
+
+La causa del atasco es una línea de subrayado RST (70 "=") del fragmento de `dataclasses`, que el 7B se queda repitiendo. Quitar esas líneas decorativas del contexto del modelo queda como mejora aparte.
+
+**Ranking sobre una copia congelada** (`dae0d365`): `ranking_commit` en `check_rag_base.json` (`55193166`, donde se guardó la base). La copia se extrae con `git archive`: el mismo contenido que un worktree, sin dejar registros en `.git` si una corrida se corta. Medido: 12/14/20, concepto 4/6/12, documento 2/2/2, nombre 6/6/6 y código 0, igual que la base. "No lo encontré", 4 de 5. Para actualizarla, se cambian el commit y la base juntos, a propósito.
+
+**Trampas de Wikipedia** (`8fb136c4`): un resumen que dice que el dato no está ("no está disponible en las líneas proporcionadas", "no … en las fuentes consultadas") cuenta como "el modelo negó". Fuera 5 trampas cuyo dato sí está en otro artículo del `.zim` (búsqueda de texto completo):
+- Villarrubia de los Ojos: tabla de Provincia de Ciudad Real.
+- Salento: tabla de Quindío.
+- Vilcabamba: "menos de mil", en Provincia de Loja.
+- Salto del Laja: Cascada.
+- Real del Monte: Mina de Acosta y Minas de Pachuca.
+
+Quedan 6. Sin medir con el modelo después del cambio.
+
+**qwen3:4b-instruct-2507 con contexto 4096 y `num_gpu` 37** (como override de sesión; los defaults no cambiaron):
+- `check_intents`: 44 de 44, a 0,51 s por mensaje, con las opciones por modelo reales (sin envoltorio).
+- `check_rag` punta a punta, con qwen3 también en `/buscar`: Asia 8/8, Bolitabot 3/3, docs 12/13, cita 21/24, límite conocido 0 y 19 s por pregunta. Pero **responde 5 de 9 trampas y 1 de 5 ajenas**: la extracción copia líneas que no vienen al caso en vez de escribir NINGUNA ("cómo se configura el firewall" → `SettingsManager`; "cómo se entrena una red neuronal en gazebo" → el ejemplo del lidar). No sirve para `/buscar`.
+- En la charla usa mal la memoria personal: "Mi color favorito es el amarillo" en un "hola", y "un día lleno de energía amarilla" en un "gracias".
+
+Estrategias (en las dos, `/buscar`, el código y las revisiones van con el 7B):
+- A: qwen3 para el IntentEngine; el 7B para todo lo demás.
+- B: qwen3 para el IntentEngine y la charla (dominio `general`); el 7B para código, `/buscar` y revisiones.
+
+| | 7B solo | A | B |
+|---|---|---|---|
+| `check_intents` | 44/44 (2026-10-23), 4–7 s por intención en la sesión | 44/44, 0,51 s | 44/44, 0,51 s |
+| `check_speed`: hola / grafo / si / explica @ROADMAP.md | 17,6 / 7,5 / 2,6 / 26,7 s | 27,1 / 11,5 / 2,8 / 44,3 s | 13,3 / 2,4 / 1,9 / 57,0 s |
+| Sesión mixta (8 mensajes: charla, explicar un archivo, resumen, chiste) | 143 s | 193 s | 94 s |
+| Cambio de modelo | — | ~7 s cargar qwen3 + 9–10 s recargar el 7B, en cada acción entre charlas | 7–9 s solo al pasar de charla a código y vuelta |
+| t/s de la charla | 11–13 | 11–13 (7B) | 48–50 (qwen3) |
+| `check_rag` punta a punta | el de arriba (7B) | igual: `/buscar` va con el 7B | igual |
+| RAM libre mínima | 3,57 GB | 1,13 GB | 3,68 GB |
+| VRAM | 3011 MiB (7B, 55 % GPU) | 2859 (qwen3) o 3011 (7B) | igual que A |
+
+A es más lenta que el 7B solo: cada intención de una acción carga qwen3 y la acción recarga el 7B. B es la más rápida en una sesión de charla, pero cambia la calidad del chat (la memoria mal usada) y no hay benchmark de charla que lo mida. Con 4096 de contexto, una charla larga con historial dejaría de caber. Elegir una cambia `intent_model` y `models_by_domain.general`: pide confirmación.
 
 ## Fases futuras (diseño pendiente)
 
