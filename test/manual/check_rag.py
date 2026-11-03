@@ -19,7 +19,8 @@ el filtro de cobertura pero no tienen respuesta en C:\\Asia: una cita verificada
 prueba que la línea existe, no que responda, así que su respuesta se imprime entera
 para leerla. Mide sobre una copia del índice sin este archivo ni los fragmentos que
 contengan una trampa: si no, el modelo podría "citar" la pregunta misma. Cada corrida
-tarda minutos en CPU.
+tarda minutos en CPU. Ahí y en el ranking, al ROADMAP se le quitan las líneas que citan
+una pregunta del benchmark: anota los resultados y saldría primero por repetirla.
 
     .venv\\Scripts\\python.exe test\\manual\\check_rag.py --punta-a-punta 2
 
@@ -60,6 +61,7 @@ sys.path.insert(0, str(ROOT))
 from core import prompts
 from core.actions import explore
 from core.rag import vector_store
+from core.rag.embedder import OllamaEmbedder
 from core.rag.indexer import ProjectIndexer, unload_chat_models
 from core.rag.library import Library, named_in_question, without_source
 from core.rag.quotes import BAD_TAG, NOT_DEFINED, UNKNOWN_FIGURE, UNKNOWN_NAME
@@ -189,6 +191,10 @@ FORBIDDEN = {
 
 WIKIPEDIA = "wikipedia"
 
+ROADMAP = "ROADMAP.md"
+# Lo que se añade para nombrar la fuente: el ROADMAP cita la pregunta con o sin ello.
+SOURCE_SUFFIX = re.compile(r" en (?:asia|bolitabot|ros2|gazebo|ros_gz_bridge|python|wikipedia)$", re.IGNORECASE)
+
 # (pregunta, artículos que la responden, lo que tiene que salir en las líneas verificadas).
 WIKIPEDIA_QUESTIONS = [
     ("cuál es la capital de Australia en wikipedia", ("Camberra",), r"Camberra|Canberra"),
@@ -262,6 +268,47 @@ def sweep_leftovers(base=None):
         remove_tree(folder, tries=1)
 
 
+def benchmark_questions() -> list:
+    """Las preguntas de frase del benchmark, en minúsculas y sin la fuente al final.
+
+    Los nombres exactos (drop_client) no: que el ROADMAP los nombre es contenido, no una cita.
+    """
+    questions = [q for q, _, _ in QUESTIONS] + [q for q, _ in DOCS + BOLITABOT] + TRAPS + DOC_TRAPS + UNANSWERABLE
+    questions += [q for q, _, _ in WIKIPEDIA_QUESTIONS] + WIKIPEDIA_TRAPS
+    return [SOURCE_SUFFIX.sub("", q).lower() for q in questions if " " in q]
+
+
+def without_benchmark_lines(store, embedder=None) -> int:
+    """Quita de los fragmentos del ROADMAP las líneas que citan una pregunta del benchmark.
+
+    El ROADMAP anota los resultados con la pregunta entre comillas: sin esto sale primero
+    por repetirla, como pasaría con las trampas. Se vuelven a embeber con el mismo id.
+    Devuelve cuántas líneas quitó.
+    """
+    questions = benchmark_questions()
+    indexed = store.all_documents()
+    ids, documents, metadatas, removed = [], [], [], 0
+
+    for doc_id, document, metadata in zip(indexed["ids"], indexed["documents"], indexed["metadatas"]):
+        if (metadata or {}).get("relative_path") != ROADMAP:
+            continue
+
+        # La primera línea es "ROADMAP.md · sección", la de indexable_text.
+        where, *lines = document.split("\n")
+        kept = [line for line in lines if not any(q in line.lower() for q in questions)]
+
+        if len(kept) < len(lines):
+            removed += len(lines) - len(kept)
+            ids.append(doc_id)
+            documents.append("\n".join([where, *kept]))
+            metadatas.append(metadata)
+
+    if ids:
+        store.add_documents(ids, documents, (embedder or OllamaEmbedder()).embed_documents(documents), metadatas)
+
+    return removed
+
+
 def load_base(path=None) -> dict:
     return json.loads(Path(path or BASE_FILE).read_text(encoding="utf-8"))
 
@@ -313,7 +360,9 @@ def build_index(folder):
     indexer = ProjectIndexer(str(ROOT), COLLECTION, persist_dir=folder)
     start = time.perf_counter()
     count = indexer.index_project()
-    return count, time.perf_counter() - start
+    seconds = time.perf_counter() - start
+    print(f"ROADMAP: {without_benchmark_lines(indexer.store)} líneas que citan el benchmark, fuera.", flush=True)
+    return count, seconds
 
 
 def rank_of(expected, files):
@@ -414,8 +463,10 @@ def clean_copy(folder):
     ]
 
     store.delete_ids(ids)
+    lines = without_benchmark_lines(store)
     vector_store.CHROMA_DIR = folder
-    print(f"Índice de la medición: {store.collection.count()} fragmentos, {len(ids)} fuera.", flush=True)
+    print(f"Índice de la medición: {store.collection.count()} fragmentos, {len(ids)} fuera; "
+          f"{lines} líneas del ROADMAP que citan el benchmark, fuera.", flush=True)
 
 
 def calibration_row(group, question, sources, expected=""):

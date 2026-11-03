@@ -91,6 +91,95 @@ def test_la_copia_funciona_sin_nada_que_quitar(tmp_path, monkeypatch):
     assert check_rag.vector_store.CHROMA_DIR == tmp_path / "copia"
 
 
+class FakeEmbedder:
+    def __init__(self):
+        self.documents = []
+
+    def embed_documents(self, documents):
+        self.documents.extend(documents)
+        return [[0.3, 0.4]] * len(documents)
+
+
+def indexed_roadmap(folder, *documents, path=check_rag.ROADMAP):
+    store = VectorStore(persist_dir=folder, collection_name=check_rag.COLLECTION)
+    ids = [str(i) for i in range(len(documents))]
+    store.add_documents(ids, list(documents), [[0.1, 0.2]] * len(ids), [{"relative_path": path}] * len(ids))
+    return store
+
+
+def test_quita_del_roadmap_las_lineas_que_citan_una_pregunta(tmp_path):
+    question = check_rag.QUESTIONS[7][0]
+    store = indexed_roadmap(tmp_path, f"ROADMAP.md · Velocidad\nantes\n\"{question}\" pasa a 2.º\ndespués", "otro\ntexto")
+    embedder = FakeEmbedder()
+
+    assert check_rag.without_benchmark_lines(store, embedder) == 1
+
+    stored = store.collection.get(include=["documents", "embeddings"])
+    assert stored["documents"] == ["ROADMAP.md · Velocidad\nantes\ndespués", "otro\ntexto"]
+    assert list(stored["embeddings"][0]) == pytest.approx([0.3, 0.4])
+    assert embedder.documents == ["ROADMAP.md · Velocidad\nantes\ndespués"]
+
+
+def test_tambien_trampas_ajenas_y_wikipedia_sin_la_fuente(tmp_path):
+    cited = [
+        f"- {check_rag.TRAPS[3].capitalize()}, con Bolitabot",
+        f"menciona \"{check_rag.UNANSWERABLE[0]}\"",
+        f"- \"{check_rag.WIKIPEDIA_QUESTIONS[1][0]}\": 47 s",
+        "\"cómo se lee un archivo JSON\" sin respuesta directa",
+    ]
+    store = indexed_roadmap(tmp_path, "\n".join(["ROADMAP.md", *cited, "queda"]))
+
+    assert check_rag.without_benchmark_lines(store, FakeEmbedder()) == 4
+    assert store.all_documents()["documents"] == ["ROADMAP.md\nqueda"]
+
+
+def test_un_nombre_exacto_en_el_roadmap_no_es_una_cita(tmp_path):
+    store = indexed_roadmap(tmp_path, "ROADMAP.md\n- `drop_client` llama a `cancel`")
+    embedder = FakeEmbedder()
+
+    assert check_rag.without_benchmark_lines(store, embedder) == 0
+    assert embedder.documents == []
+
+
+def test_solo_quita_lineas_del_roadmap(tmp_path):
+    store = indexed_roadmap(tmp_path, f"README.md\n{check_rag.QUESTIONS[0][0]}", path="README.md")
+
+    assert check_rag.without_benchmark_lines(store, FakeEmbedder()) == 0
+    assert store.all_documents()["documents"] == [f"README.md\n{check_rag.QUESTIONS[0][0]}"]
+
+
+def test_la_copia_quita_las_lineas_del_roadmap(tmp_path, monkeypatch):
+    original = tmp_path / "chroma"
+    indexed_roadmap(original, f"ROADMAP.md\n\"{check_rag.QUESTIONS[0][0]}\"\nqueda")
+    monkeypatch.setattr(check_rag.vector_store, "CHROMA_DIR", original)
+    monkeypatch.setattr(check_rag, "OllamaEmbedder", FakeEmbedder)
+
+    check_rag.clean_copy(tmp_path / "copia")
+
+    copy = VectorStore(persist_dir=tmp_path / "copia", collection_name=check_rag.COLLECTION)
+    assert copy.all_documents()["documents"] == ["ROADMAP.md\nqueda"]
+    assert VectorStore(persist_dir=original, collection_name=check_rag.COLLECTION).collection.count() == 1
+
+
+def test_el_indice_del_ranking_quita_las_lineas_del_roadmap(tmp_path, monkeypatch):
+    class Indexer:
+        def __init__(self, root, collection, persist_dir):
+            self.store = indexed_roadmap(persist_dir, f"ROADMAP.md\n\"{check_rag.QUESTIONS[0][0]}\"\nqueda")
+
+        def index_project(self):
+            return self.store.collection.count()
+
+    monkeypatch.setattr(check_rag, "ProjectIndexer", Indexer)
+    monkeypatch.setattr(check_rag, "unload_chat_models", lambda: None)
+    monkeypatch.setattr(check_rag, "OllamaEmbedder", FakeEmbedder)
+
+    count, _ = check_rag.build_index(tmp_path / "indice")
+
+    store = VectorStore(persist_dir=tmp_path / "indice", collection_name=check_rag.COLLECTION)
+    assert count == 1
+    assert store.all_documents()["documents"] == ["ROADMAP.md\nqueda"]
+
+
 def test_reintenta_si_windows_la_bloquea(tmp_path, monkeypatch, no_wait):
     folder = tmp_path / "indice"
     folder.mkdir()
