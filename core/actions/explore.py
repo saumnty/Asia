@@ -5,11 +5,14 @@ from core import prompts
 from core.rag.glossary import expand
 from core.rag.library import Library, clean_translation, is_refusal, named_in_question, needs_translation, without_source
 from core.rag.quotes import best_fragments, check_draft, is_thin, quotes_text, verified_lines, verify_quotes
+from providers.ollama_provider import without_cut_notice
 
 # Los mismos que config/defaults.json, por si falta la clave.
 DEFAULT_ANSWER_LIMITS = {
     "explain_file": {"words": 150, "tokens": 450},
     "summarize_file": {"words": 100, "tokens": 300},
+    "search_quotes": {"tokens": 1024},
+    "search_answer": {"tokens": 512},
 }
 # Los que recibe el modelo en /buscar.
 RAG_FRAGMENTS = 5
@@ -98,24 +101,31 @@ class ExploreActions:
         if rag_context in prompts.NOTHING_TO_ANSWER or rag_context.startswith(prompts.NO_DIRECT_ANSWER):
             return rag_context
 
-        extracted = self.provider_router.ask(prompts.extract_quotes(question, rag_context, translated))
-        quotes = verify_quotes(extracted, rag_context)
+        # Con tope: un 7B puede no parar nunca (llenó 16384 tokens con una pregunta de Python).
+        # Si se corta, vale lo que copió entero; la última línea a medias no se verifica.
+        extracted = self.provider_router.ask(
+            prompts.extract_quotes(question, rag_context, translated), max_tokens=self.answer_limits("search_quotes")["tokens"]
+        )
+        quotes = verify_quotes(without_cut_notice(extracted)[0], rag_context)
 
         # Sin líneas verificadas no hay respuesta del modelo: no hay con qué comprobarla.
         if not quotes:
             return best_fragments(rag_context)
 
-        answer = self.provider_router.ask(prompts.answer_from_quotes(question, quotes_text(quotes)))
+        answer, cut = without_cut_notice(self.provider_router.ask(
+            prompts.answer_from_quotes(question, quotes_text(quotes)), max_tokens=self.answer_limits("search_answer")["tokens"]
+        ))
 
         if is_refusal(answer) or is_thin(answer):
             return best_fragments(rag_context)
 
-        # Las frases que quedan tienen nombres reales, no significado comprobado.
+        # Las frases que quedan tienen nombres reales, no significado comprobado. El aviso
+        # de recorte lo escribe el código: va al final, sin pasar por la comprobación.
         shown = check_draft(answer, quotes, question)[0]
         lines = verified_lines(quotes)
 
         if shown:
-            summary = "\n".join(shown)
+            summary = "\n".join(shown + [cut] if cut else shown)
             return f"{lines}\n\n{prompts.UNVERIFIED_SUMMARY}\n\n{summary}"
 
         return f"{prompts.INVALID_DRAFT}\n\n{lines}"

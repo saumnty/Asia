@@ -67,7 +67,21 @@ def cut_notice(response, max_tokens) -> str:
     if not max_tokens or response is None or response.get("done_reason") != "length":
         return ""
 
-    return f"\n\n[Respuesta recortada en {max_tokens} tokens (answer_limits en config).]"
+    return f"\n\n{CUT_NOTICE.format(max_tokens)}"
+
+
+CUT_NOTICE = "[Respuesta recortada en {} tokens (answer_limits en config).]"
+CUT_PREFIX, _, CUT_SUFFIX = CUT_NOTICE.partition("{}")
+
+
+def without_cut_notice(text: str) -> tuple:
+    """(texto, aviso): separa el aviso de cut_notice, que no es parte de la respuesta del modelo."""
+    body, mark, rest = text.rpartition(f"\n\n{CUT_PREFIX}")
+
+    if mark and rest.endswith(CUT_SUFFIX) and rest.removesuffix(CUT_SUFFIX).isdigit():
+        return body, f"{CUT_PREFIX}{rest}"
+
+    return text, ""
 
 
 class OllamaProvider:

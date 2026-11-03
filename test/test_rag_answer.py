@@ -8,6 +8,7 @@ from core.rag.library import Library, is_refusal
 from core.rag.quotes import Quote, best_fragments, is_thin, verified_lines, verify_quotes
 from core.rag.retriever import Hit, relevant
 from test_confidencial import make_brain
+from providers.ollama_provider import CUT_NOTICE, without_cut_notice
 from tools.rag_tool import RagTool
 
 CONTEXT = """
@@ -52,9 +53,11 @@ class Router:
     def __init__(self, *answers):
         self.answers = list(answers)
         self.prompts = []
+        self.options = []
 
     def ask(self, prompt, **options):
         self.prompts.append(prompt)
+        self.options.append(options)
         return self.answers.pop(0)
 
 
@@ -161,6 +164,49 @@ def test_el_modelo_responde_solo_con_las_verificadas():
     )
     assert "[control/pid.py:41] self.kp   =   2.5" in brain.provider_router.prompts[1]
     assert "inventado" not in brain.provider_router.prompts[1]
+
+
+def test_la_extraccion_y_la_redaccion_llevan_su_tope_de_tokens():
+    brain = brain_with()
+
+    brain.process("/buscar cuál es la ganancia")
+
+    assert brain.provider_router.options == [{"max_tokens": 1024}, {"max_tokens": 512}]
+
+
+def test_los_topes_vienen_de_answer_limits(monkeypatch):
+    brain = brain_with()
+    limits = {"search_quotes": {"tokens": 300}, "search_answer": {"tokens": 90}}
+    real = brain.settings.get
+    monkeypatch.setattr(brain.settings, "get", lambda key, default=None: limits if key == "answer_limits" else real(key, default))
+
+    brain.process("/buscar cuál es la ganancia")
+
+    assert brain.provider_router.options == [{"max_tokens": 300}, {"max_tokens": 90}]
+
+
+def test_una_extraccion_recortada_vale_lo_que_copio():
+    # Un trozo de una línea real también es real: se muestra la línea entera del archivo.
+    cut = "[control/pid.py:40-55] self.kp = 2.5\n[README.md:1-8] Un robot que bal\n\n" + CUT_NOTICE.format(1024)
+    brain = brain_with(cut, ANSWER)
+
+    shown = brain.process("/buscar cuál es la ganancia")
+
+    assert "  self.kp   =   2.5" in shown and "  Un robot que balancea una bolita." in shown
+    assert "recortada" not in shown and "recortada" not in brain.provider_router.prompts[1]
+
+
+def test_una_redaccion_recortada_lo_dice_al_final_sin_marcarlo():
+    brain = brain_with(QUOTED, f"{ANSWER}\n\n{CUT_NOTICE.format(512)}")
+
+    shown = brain.process("/buscar cuál es la ganancia")
+
+    assert shown.endswith(f"[control/pid.py:41].\n{CUT_NOTICE.format(512)}")
+
+
+@pytest.mark.parametrize("text", ["sin aviso", "acaba en [Respuesta recortada en mil tokens (answer_limits en config).]"])
+def test_sin_aviso_de_recorte_el_texto_queda_igual(text):
+    assert without_cut_notice(text) == (text, "")
 
 
 def quote(path, line, text, label=""):

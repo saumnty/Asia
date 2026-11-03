@@ -100,6 +100,8 @@
     "answer_limits": {
         "explain_file": {"words": 150, "tokens": 450},
         "summarize_file": {"words": 100, "tokens": 300},
+        "search_quotes": {"tokens": 1024},
+        "search_answer": {"tokens": 512},
         "chat": {"tokens": 350, "detail_tokens": 1500, "voice_tokens": 150},
         "session_summary": {"tokens": 120}
     },
