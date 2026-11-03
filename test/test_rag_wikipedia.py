@@ -71,6 +71,22 @@ def zim(tmp_path):
     return path
 
 
+KANGAROO = """<html><head><title>Kangaroo</title></head><body>
+<section data-mw-section-id="0"><p>The kangaroo lives in Australia. It carries its young in a pouch.</p></section>
+</body></html>"""
+
+
+@pytest.fixture
+def english_zim(tmp_path):
+    path = tmp_path / "wiki_en.zim"
+
+    with Creator(str(path)).config_indexing(True, "eng") as creator:
+        creator.set_mainpath("Kangaroo")
+        creator.add_item(Page("Kangaroo", "Kangaroo", KANGAROO))
+
+    return path
+
+
 def archive_of(path):
     from libzim.reader import Archive
 
@@ -339,6 +355,43 @@ def test_reindexar_conserva_lo_que_dijo_publica(registered):
     RagTool().index_project("wikipedia")
 
     assert Library().get("wikipedia").publica is False
+
+
+def english_wiki(path):
+    return Source("wiki-en", "enciclopedia", str(path), "wiki-en", named_only=True, language="en", publica=True)
+
+
+def test_en_ingles_busca_con_la_pregunta_traducida(english_zim):
+    hits = wikipedia_hits(
+        "dónde vive el canguro", english_wiki(english_zim), embedder=Embedder(), translated="where does the kangaroo live"
+    )
+
+    assert [hit.metadata["label"] for hit in hits] == ["Kangaroo"]
+    assert hits[0].coverage > 0
+
+
+def test_en_ingles_sin_traduccion_no_lo_encuentra(english_zim):
+    assert wikipedia_hits("dónde vive el canguro", english_wiki(english_zim), embedder=Embedder()) == []
+
+
+def test_en_espanol_no_usa_la_traduccion(zim):
+    hits = wikipedia_hits("capital de Australia", wiki(zim), embedder=Embedder(), translated="zzzyyyxxx")
+
+    assert {hit.metadata["label"] for hit in hits} == {"Camberra", "Camberra > Historia"}
+
+
+def test_buscar_en_una_wikipedia_en_ingles_traduce(english_zim, monkeypatch):
+    monkeypatch.setattr("core.rag.wikipedia.OllamaEmbedder", Embedder)
+    RagTool().index_project("wiki-en", str(english_zim), "enciclopedia", language="en")
+    brain = brain_with(
+        "where does the kangaroo live",
+        "[Kangaroo.wiki:1] The kangaroo lives in Australia.",
+        "El canguro vive en Australia [Kangaroo.wiki:1].",
+    )
+
+    shown = brain.process("/buscar dónde vive el canguro en wiki-en")
+
+    assert "The kangaroo lives in Australia." in shown and "en.wikipedia.org/wiki/Kangaroo" in shown
 
 
 def test_otro_idioma_apunta_a_su_wikipedia(zim):

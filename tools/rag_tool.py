@@ -55,7 +55,7 @@ class RagTool:
             return WIKIPEDIA_MISSING
 
         if in_wikipedia:
-            hits = wikipedia_hits(query, named, n_results)
+            hits = wikipedia_hits(query, named, n_results, translated=translated)
         else:
             hits = search_collections(query, collections, n_results=n_results, translated=translated, english=english)
 
