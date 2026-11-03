@@ -304,7 +304,7 @@ La charla es 3–4 veces más rápida, pero "explica @ROADMAP.md" empeora: recar
 
 **`/buscar`.**
 - Líneas de adorno (`2d9b426e`): las que son solo "=", "-", "*", "~" o "#" repetidos se vacían del contexto antes de la extracción. No las ve el modelo ni valen como cita, y los números de línea no cambian.
-- Regla del eco, rechazada: "una línea verificada cuyas palabras están todas en la pregunta (o su traducción) no cuenta". Punta a punta, sin y con la regla: Asia 8/8 y 8/8, Bolitabot 2/3 y 2/3, docs 9/13 y 9/13, frases limpias 44 y 34, eliminadas 5 y 8, cita 15/24 y 16/24, límite conocido 1 y 0, trampas 0/9 y 0/9, ajenas 0/5 y 0/5. Quitaba líneas buenas: "* History", "* Reliability" y "* Durability" de la pregunta de QoS, porque el glosario y la traducción ponen esas palabras en la pregunta. "- Australia" no se repitió en ninguna de las dos corridas. Otra regla posible: comparar solo con la pregunta escrita, sin glosario ni traducción.
+- Regla del eco, rechazada: "una línea verificada cuyas palabras están todas en la pregunta (o su traducción) no cuenta". Punta a punta, sin y con la regla: Asia 8/8 y 8/8, Bolitabot 2/3 y 2/3, docs 9/13 y 9/13, frases limpias 44 y 34, eliminadas 5 y 8, cita 15/24 y 16/24, límite conocido 1 y 0, trampas 0/9 y 0/9, ajenas 0/5 y 0/5. Quitaba líneas buenas: "* History", "* Reliability" y "* Durability" de la pregunta de QoS, porque el glosario y la traducción ponen esas palabras en la pregunta. "- Australia" no se repitió en ninguna de las dos corridas. Queda anotada, sin implementar hasta que el caso vuelva a salir, otra regla posible: comparar solo con la pregunta escrita, sin glosario ni traducción.
 - `check_rag --wikipedia 1` con las 6 trampas y la regla de negativas: artículo encontrado 9/12 (la base), 5/12 correctas, 7 sin respuesta directa, trampas respondidas 0/6 (5 sin respuesta directa y 1 que el modelo negó, Barichara); 31 s por pregunta.
 
 **Mediciones con la GPU que faltaban** (7B solo):
@@ -315,7 +315,29 @@ La charla es 3–4 veces más rápida, pero "explica @ROADMAP.md" empeora: recar
 
 **Ideas de OpenCode hechas**:
 - Recorte de salidas de herramientas (`a30b27c8`): `search_text` hacia el modelo (`context_limits.search_text` 6000) y el sandbox (`sandbox_max_output`). Va al prompt el principio, en líneas completas, con un aviso; la salida completa queda en `data/salidas/`, que se borra a los 7 días.
-- `ASIA.md` opcional por fuente (`7e84af52`): sus notas van a la extracción de `/buscar` cuando hay fragmentos de esa fuente. No se citan, y llevan la etiqueta de la fuente.
+- `ASIA.md` opcional por fuente (`7e84af52`): sus notas van a la extracción de `/buscar` cuando hay fragmentos de esa fuente. No se citan, y llevan la etiqueta de la fuente. También al explicar, revisar y generar código (`08a257b0`): el prompt empieza con el `ASIA.md` de la fuente que contiene el archivo (la más interna).
+
+### Estrategia B aplicada (2026-11-03, noche)
+
+`b3ed9e1a`: `intent_model` y `models_by_domain.general` = `qwen3:4b-instruct-2507-q4_K_M`, con `{"num_ctx": 4096, "num_gpu": 37}` en `ollama_model_options`. El 7B sigue para código, `/buscar` y revisiones, y `ollama_num_ctx` sigue en 16384. Para volver atrás, poner `qwen2.5-coder:7b` en las dos claves.
+
+**Precarga anticipada del 7B** (`825097db`, `ollama_early_load`):
+- Mientras se escribe (prompt_toolkit), si el texto lleva `@archivo`, `/buscar` o un verbo de acción con archivo, carpeta o proyecto, el 7B empieza a cargarse en un hilo.
+- La intención de ese mensaje va con el 7B: qwen3 y el 7B no caben juntos en 4 GB, y con qwen3 se recargarían los dos.
+- Medido con `check_speed --escritura 8` (8 s tecleando cada mensaje), con la precarga y sin ella. Se compara el tiempo hasta empezar a generar (intención + carga + prompt), porque los tokens generados varían de una corrida a otra:
+
+| Mensaje | Sin precarga | Con precarga | Se recupera |
+|---|---|---|---|
+| explica @ROADMAP.md (`check_speed`) | 4,0 + 9,8 + 4,1 = 17,9 s | 8,6 (con 1,5 de carga que faltaba) + 0 + 4,1 = 12,7 s | 5,2 s |
+| explica core/fast_chat.py (sesión mixta) | 3,9 + 9,3 + 2,0 = 15,2 s | 8,1 + 0 + 1,9 = 10,0 s | 5,2 s |
+| resume el archivo core/brain.py (sesión mixta) | 3,9 + 9,3 + 3,0 = 16,2 s | 8,3 + 0 + 3,0 = 11,3 s | 4,9 s |
+
+Se recuperan ~5 de los ~9,5 s. El resto lo pone la intención con el 7B (prompt de 2090 tokens sin caché tras la carga: 3,3 s, frente a 1,4 s con qwen3). La vuelta a la charla sigue recargando qwen3 (6,7–6,9 s en "gracias" y en "TCP y UDP"). Sesión mixta entera: 157,2 s sin precarga y 147,1 s con ella; la diferencia incluye la variación de tokens.
+
+**Base nueva con B** (una medición tras otra):
+- `check_chat`: 0 atribuciones, 0 fugas, 10/10 correctas, 44,1 s en total, 48–51 t/s.
+- `check_intents`: 44 de 44.
+- `check_speed`: hola 10,5 s (carga 5,4), grafo 1,9 s, si 0,6 s, explica @ROADMAP.md 30,1 s (intención 1,7, carga 8,7, 144 tokens). Sin `--escritura` la precarga anticipada no actúa: nadie teclea.
 
 ## Fases futuras (diseño pendiente)
 
