@@ -85,10 +85,82 @@ Medido con `test/manual/check_speed.py` (una sesión, `qwen2.5-coder:7b`, `num_c
 
 Ctrl+C, comprobado con una consola real y `jarvis.exe`: sin voz corta la respuesta en ~0,2 s y vuelve al prompt, sin dejar el turno en el historial; con voz, el primero corta la lectura y el segundo la respuesta (~0,1 s); en el prompt vacío cierra con código 0, sin S/N. El mensaje siguiente al corte responde normal.
 
-- ~~La primera carga de la voz de Piper tarda ~9 s, detiene los tokens ~7,5 s y retrasa Ctrl+C.~~ Hecho (`b63a9506`): la voz se precarga en un hilo con `/voz` o `--voz` (3,6 s, mientras se escribe). La primera frase pasó de 9,2 a 1,8 s, sin huecos de más de 0,7 s entre tokens. Medido con el 7B al 100 % en CPU; repetir con la GPU.
+- ~~La primera carga de la voz de Piper tarda ~9 s, detiene los tokens ~7,5 s y retrasa Ctrl+C.~~ Hecho (`b63a9506`): la voz se precarga en un hilo con `/voz` o `--voz` (3,6 s, mientras se escribe). La primera frase pasó de 9,2 a 1,8 s, sin huecos de más de 0,7 s entre tokens. Medido con el 7B al 100 % en CPU; con la GPU, sin repetir (ver "Mediciones con la GPU").
 - Pendiente: `jarvis "mensaje"` (una sola ejecución) sigue cerrando con Ctrl+C.
 - ~~En Windows Ctrl+C no interrumpe la espera del socket~~ Hecho: la llamada al modelo va en otro hilo (`core/interruptible.py`, desde el router y el IntentEngine; también cubre Gemini) y Ctrl+C cierra la conexión. Corta en ~0,1 s también durante la intención y con el modelo cargándose (antes, hasta 65 s en CPU). El turno cortado no queda en el historial.
-- Límite de Ollama: cerrar la conexión no detiene el prompt que ya está procesando. El mensaje siguiente espera a que termine (medido en CPU, con el modelo recién cargado: 99 s de intención con 12 s de carga). Con tokens saliendo sí para al instante. Repetir con la GPU, donde ese prompt tarda ~4 s.
+- Límite de Ollama: cerrar la conexión no detiene el prompt que ya está procesando. El mensaje siguiente espera a que termine (medido en CPU, con el modelo recién cargado: 99 s de intención con 12 s de carga). Con tokens saliendo sí para al instante. Con la GPU, sin repetir (ver "Mediciones con la GPU").
+
+### Mediciones con la GPU (2026-11-03)
+
+Ollama 0.40.14 detecta la RTX 3050 Laptop (CUDA, 4 GB). Una corrida de cada medición, con un vigilante que corta si la RAM libre baja de 1 GB. No se ajustó ningún límite ni línea base por estos números.
+
+Reparto (`ollama ps`, `nvidia-smi`), con el 7B a 16384 de contexto:
+
+| Cargado | 7B | `nomic-embed-text` | VRAM | RAM libre |
+|---|---|---|---|---|
+| Solo el 7B | 5,8 GB, 59 %/41 % CPU/GPU | — | 2347 de 4096 MiB | 2,25 GB |
+| 7B y después nomic | 59 %/41 % | 335 MB, 100 % GPU | 2749 MiB | 1,94 GB |
+| nomic y después 7B | 59 %/41 % | sale al cargar el 7B | 2347 MiB | 2,29 GB |
+
+`nomic-embed-text` no le quita VRAM al 7B: o conviven (con el 7B cargado antes) o el 7B lo descarga. El 59 %/41 % es el mismo reparto que ya anotaba "Velocidad" ("el 7B corre 59 % en CPU"); lo que limita ahora es la RAM, no la VRAM: Ollama deja ~1,7 GB de VRAM sin usar.
+
+Hechas, CPU frente a GPU:
+
+| `check_speed` | CPU | GPU |
+|---|---|---|
+| "hola" | 4,9 s | 7,5 s (10 tokens, prompt 1,7 s) |
+| "qué es un grafo bipartito" | 14,6 s (81 tokens, segunda tanda) | 10,1 s (78 tokens, 8,2 t/s) |
+| "si" | 2,4–4,4 s | 2,1 s |
+| "explica @ROADMAP.md" | 35,8 s (154 tokens) | 50,3 s (196 tokens, 5,6 t/s; intención 8,6 s; prompt 2654 tokens en 4,8 s) |
+
+Generación de 5,6 a 10 t/s, frente a 5–7. Empezó con 1,20 GB de RAM libres (el 7B y nomic cargados).
+
+| `check_rag`, ranking | CPU (2026-11-02) | GPU |
+|---|---|---|
+| Total, 1.º / top 3 / top 5 | 12 / 14 / 20 | 11 / 15 / 20 |
+| Concepto | 4 / 6 / 12 | 3 / 7 / 12 |
+| Documento, nombre | 2 / 2 / 2, 6 / 6 / 6 | igual |
+| "No lo encontré" | 3 de 5 | 2 de 5 |
+| Índice | 1119 fragmentos, 101 s (91 ms/fragmento) | 1165 fragmentos, 196 s (168 ms/fragmento) |
+| Consulta | 2,2 s | 3,0 s |
+
+Sale con código 1: concepto en 1.º baja de la base (3 frente a 4). No es la GPU: las distancias coinciden con las de CPU a 0,1 (452,2 y 452,2; 417,5 y 417,4). Es el contenido nuevo del ROADMAP: menciona "capital de Australia" (la ajena pasa ahora con cobertura 1,00) y "envíos externos" ("dónde se guarda la bitácora de envíos externos" pasa de 1.º a 2.º, por detrás del ROADMAP). Indexar fue más lento con 1,5 GB de RAM libres. La base no se cambió.
+
+| `check_rag`, punta a punta (corrida 1) | CPU | GPU (cortada) |
+|---|---|---|
+| Preguntas | 20 | 14 de 20: la RAM bajó a 0,88 GB |
+| Asia | 7/8 | 8/8 (6 citan el archivo) |
+| Bolitabot | 1/3 | 2/3 |
+| Docs | 6/9 | 3/3 de las que dio tiempo |
+| Límite conocido | 1 | 0 en esas 14 |
+| Trampas, ajenas | 0/8, 0/5 | sin llegar |
+| s/pregunta | 72 | 64 (de 7 a 205 s: dos pasaron de 190 s, con la RAM justa) |
+
+| `check_voz --sin-microfono --sin-audio` | CPU | GPU |
+|---|---|---|
+| Voz a texto (Whisper, siempre en CPU) | 2,5–2,7 s (4,6 la primera) | 3,1–3,2 s (5,3 la primera) |
+| Primer audio, "qué es un grafo bipartito" | 9,1 s | 13,2 s (79 tokens) |
+| Primer audio, "cuéntame un chiste" | 9,3 s | 18,3 s (con 4,8 s de carga del 7B: estaba descargado) |
+
+| `check_reflexion` | CPU | GPU |
+|---|---|---|
+| `/revisar memoria a fondo` | 14,6–24 s | 10,0 s |
+| Resumen al día tras la última respuesta | 17,5 s | 7,5 s |
+| Salir | 0,0 s | 0,0 s |
+
+El modelo no añadió casos a los 2 de las reglas (no vio `ciudad`/`vivo_en`). La memoria de prueba quedó igual.
+
+Wikipedia (capa 3), la medición que faltaba:
+- "cuál es la capital de Australia en wikipedia": 66 s, sin respuesta directa. "Capital: Camberra" estaba en el primer fragmento y la extracción no la copió.
+- "quién descubrió la penicilina en wikipedia": 47 s, una línea verificada con Fleming y la sección. La frase se corta en "Hospital St.": el troceado toma la abreviatura por fin de frase.
+- `check_rag --wikipedia 1`: búsqueda 9/12 (la base). Con el modelo, cortada en la pregunta 10 de 12 (RAM a 0,90 GB): 4 correctas de 9 (penicilina, muro de Berlín, 206 huesos, Everest, este por el artículo "Montaña" aunque la búsqueda no trajo "Monte_Everest") y 5 sin respuesta directa (Australia, Quijote, Mona Lisa, agua, Japón); 38 s por pregunta, de 17 a 79. Las trampas no llegaron a correr.
+
+Faltan, o quedaron a medias:
+- `check_rag --punta-a-punta` entero (se cortó en la 15 de 20) y su segunda corrida.
+- `check_rag --wikipedia 1` entero, con las 11 trampas.
+- `check_speed --descargar --espera 15` (la segunda tanda) y `jarvis.exe` hasta el primer prompt.
+- La primera frase con voz precargada (9,2 → 1,8 s en CPU) y el corte de Ctrl+C con un prompt en proceso.
+- Con 1–2 GB de RAM libres y el 7B cargado, las mediciones largas no terminan: hace falta cerrar programas o un modelo que quepa en la GPU (ver "Cambio de modelo seguro").
 
 ## Fases futuras (diseño pendiente)
 
@@ -288,7 +360,7 @@ Extras de Asia 2.0, junto al modo confidencial:
 Antes "Wikipedia offline". Va por capas, y cada fuente lleva su etiqueta para poder citarla:
 
 1. Proyectos propios (repos, reportes, notas) con el RAG actual: primera capa, la más útil. Hecha, ver abajo.
-2. Documentación técnica offline: ROS 2 Jazzy y Gazebo Harmonic (hecho, ver abajo), Python 3.12 pendiente. Fuentes directas, sin Kiwix, zimit ni Docker.
+2. Documentación técnica offline: ROS 2 Jazzy, Gazebo Harmonic y Python 3.12 (hecho, ver abajo). Fuentes directas, sin Kiwix, zimit ni Docker.
 3. Wikipedia en español: un `.zim` leído con libzim, separado del RAG de proyectos. Código hecho, medición con el modelo pendiente, ver abajo. Inglés: el código lo admite, sin archivo descargado.
 4. Preguntas y respuestas: sitios de Stack Exchange en `.zim`, cada uno como fuente pública. Diseño pendiente, ver abajo.
 
@@ -366,10 +438,10 @@ Primera invención cazada con el 7B: en la corrida 2 escribió una función `wri
 
 La distancia aporta poco: solo deja pasar a "punto desplazado" sin glosario, y ahí el 7B escribe NINGUNA. Separa mal: la ajena más cercana está en 386,3 y esa pregunta en 391,5, así que con 392 también llega al modelo una ajena (Maradona), que la extracción frena con NINGUNA.
 
-Tiempos en CPU, solo como referencia (repetir con la GPU; no se ajustó nada por ellos): índice completo de 994 fragmentos, 423 s; incremental de 6 archivos, 29 s; consulta, 2,5 s, y `/buscar` entero, 45–110 s.
+Tiempos en CPU, solo como referencia (con la GPU, en "Mediciones con la GPU"; no se ajustó nada por ellos): índice completo de 994 fragmentos, 423 s; incremental de 6 archivos, 29 s; consulta, 2,5 s, y `/buscar` entero, 45–110 s.
 
 Pendientes:
-- Medir con la GPU si `nomic-embed-text` junto al 7B le quita VRAM (389 MB en CPU); hoy conviven para no recargar en cada pregunta.
+- ~~Medir con la GPU si `nomic-embed-text` junto al 7B le quita VRAM.~~ No se la quita: ver "Mediciones con la GPU".
 - La redacción no se comprueba frase a frase, solo sus nombres y citas: con nombres reales puede decir algo falso (dijo que `drop_client` llama a `cancel`, y es al revés).
 - "Responde" no es "responde bien": una frase real copiada ("Llamadas al modelo que Ctrl+C corta al momento") pasa como respuesta.
 - NINGUNA sale a veces con preguntas válidas, al azar: 2 de 16 en la última medición.
@@ -378,7 +450,7 @@ Pendientes:
 - Un archivo sin fragmentos (`__init__.py` vacío) no guarda hash y `/indexar` lo cuenta como reindexado cada vez. No embebe nada; solo infla la cifra.
 - El troceado solo no ayuda: sin el tope por archivo, las secciones del ROADMAP acapararon los resultados.
 
-**Capa 2, documentación técnica (ROS 2 y Gazebo hechos, Python pendiente):** commits `96736912` (rango de líneas), `a653680b` (FTS5), `f036fd12`, `42807348` (`.rst` y páginas públicas), `8c482fbc` y `3bbd6f34` (medición).
+**Capa 2, documentación técnica (ROS 2, Gazebo y Python hechos):** commits `96736912` (rango de líneas), `a653680b` (FTS5), `f036fd12`, `42807348` (`.rst` y páginas públicas), `8c482fbc` y `3bbd6f34` (medición).
 - Una cita con rango vale si sus nombres aparecen en los fragmentos y el rango se solapa con líneas verificadas.
 - Palabras con FTS5, en `core/rag/word_index.py`: la parte de palabras baja de más de 1 s a unos 20 ms y la consulta de 2,6 a 2,2 s. `check_rag`: la búsqueda pasa de 12/15/20 a 12/14/20 (`atomic_write`, de 3.º a 4.º, con el ROADMAP más largo); "No lo encontré", 4 de 5 y 0 de 20 falsos rechazos. Punta a punta con 11 preguntas: 7/11 y 6/11, frente a 8/11; trampas 0/4 y ajenas 0/5.
 - `.rst` por secciones. Tipo `documentacion` con URL y licencia: `/indexar <nombre> [ruta] [tipo] [url] [licencia]`, con `{}` en la URL para la ruta sin extensión. Las líneas verificadas muestran la página pública y la licencia; la etiqueta de archivo sigue siendo interna, para verificar.
@@ -407,10 +479,14 @@ Respuestas falsas que pasaron todas las comprobaciones, leídas contra el códig
 - `drop_client` atribuida a `providers/ollama_provider.py`, donde solo se importa y se llama; está en `ollama_models.py` (3 de 4).
 - El resumen "cada 3 segundos": sale de `DEFAULT_SUMMARY_IDLE = 3`, que es esperar 3 s de inactividad, no repetir cada 3 s. Número real, frase falsa.
 
+Python 3.12 (`bfd4812c`, `eedf73ab`): el zip oficial de texto (4 067 636 bytes, `python-3.12-docs-text.zip`, del 2026-10-29, sin suma publicada) en `C:\AsiaDocs\python312`, solo `library/`, `tutorial/`, `reference/` y `howto/`: 372 archivos, 8,2 MB. Los `.txt` son el texto de Sphinx, con los títulos subrayados como en rst: un `.txt` así se trocea por secciones, como un `.rst`, y uno sin títulos sigue por bloques (ningún `.txt` ya indexado tiene títulos así). `/indexar python C:\AsiaDocs\python312 documentacion https://docs.python.org/3.12/{}.html PSF-2.0 idioma=en` y `/publica python sí`: 8515 fragmentos en 1436 s con la GPU (169 ms/fragmento).
+- Sin modelo, sin traducción: el archivo esperado sale 1.º en venv, json y dataclasses; en try/except gana `reference/compound_stmts.txt` (4.º `tutorial/errors.txt`). La trampa (pygame) tiene cobertura 0.
+- Con el 7B, una vez: venv (63 s, una línea verificada que no responde: la de `ensurepip`), try/except (171 s, de `compound_stmts`, no del tutorial), dataclass (89 s) con líneas; JSON sin respuesta directa (21 s) y la trampa sin responder (15 s).
+- Las líneas verificadas de un archivo repiten la cabecera en cada grupo separado por una línea en blanco: en prosa salen 8 cabeceras iguales seguidas. Sin arreglar.
+- `check_rag` tiene ahora 4 preguntas de Python y una trampa más: el punta a punta pasa de 20 a 24 preguntas y de 8 a 9 trampas.
+
 Pendientes de la capa 2:
-- Python 3.12: sin descargar. Es `.txt`, hay que decidir cómo trocearlo.
 - QoS y casos parecidos: el glosario lo resuelve pregunta a pregunta; el arreglo general por títulos empeoró el ranking y no se aplicó (abajo). Con otra pregunta sin líneas, mirar el puesto del fragmento correcto antes de culpar a la extracción.
-- Al indexar Python 3.12: `/publica python sí`.
 - "No lo encontré en tus proyectos" suena raro con documentación.
 
 Una pregunta con "en <fuente>" que el filtro rechaza enseña los fragmentos en lugar de negar, sin pasar por el modelo. Sin fuente nombrada, sigue negando.
@@ -502,7 +578,8 @@ Después (`898cb349`, `79adf514`, `3ae753b0`):
 Medición real, sin hacer (2026-11-03): había 5,69 GB de RAM libres al empezar, más de los 3 GB pedidos. La primera pregunta ("cuál es la capital de Australia en wikipedia") bajó a 0,94 GB libres al cargar el 7B (unos 6 GB) y se cortó sin respuesta, por la regla de parar por debajo de 1 GB. No se lanzaron la segunda ni `check_rag --wikipedia 1`. Anotado, sin ajustar límites. Estimación, sin medir: con el 7B en CPU harían falta unos 7 GB libres antes de empezar, o la GPU.
 
 Falta:
-- La medición real: las dos preguntas, una por una, y `check_rag --wikipedia 1`, con más RAM libre o la GPU.
+- ~~La medición real: las dos preguntas.~~ Hecho con la GPU (ver "Mediciones con la GPU"). Falta `check_rag --wikipedia 1` entero: se cortó por RAM.
+- "Capital: Camberra" en el primer fragmento y la extracción no la copió; la frase de Fleming se corta en "St." (abreviatura tomada por fin de frase).
 - Para después: cuando una pregunta no se encuentra en los proyectos, Asia ofrece buscar en Wikipedia ("¿Busco en Wikipedia?") en lugar de hacerlo sola, medido aparte en `check_rag`.
 - Wikipedia completa (`maxi`, 13,3 GB): pedir permiso aparte antes de descargarla.
 
@@ -526,11 +603,11 @@ Alcance en 1.0 (hecho): solo dentro de la sesión, sin proceso en segundo plano 
 - Resumen de la sesión: 2–3 frases con el Ollama local, a partir de lo pedido, el principio de cada respuesta, las acciones y los envíos de la bitácora. Se actualiza en segundo plano tras cada respuesta (`SessionSummarizer`): espera `reflection.summary_idle_s` (3 s), a que acabe la lectura en voz y a que el modelo en uso sea el suyo, y un mensaje nuevo lo cancela. Al salir, si está al día, sale al instante; si no, muestra "Guardando resumen… (Ctrl+C para saltar)" hasta `reflection.summary_timeout_s` (30 s). Si no llega o se pulsa Ctrl+C, se guarda la lista de acciones. Nunca va a un proveedor externo ni a un Ollama en otra máquina. Los comandos de sesión no cuentan; una sesión sin mensajes conserva el resumen anterior.
 - `/revisar memoria`: propone cada caso, y solo se borra con 1 o 2; cualquier otra respuesta deja las dos. Por defecto, solo reglas (claves casi iguales, valores iguales); con "a fondo", también el modelo local, del que solo valen claves que existen.
 
-Tiempos con el 7B al 100 % en CPU, solo como referencia (repetir con la GPU; `summary_timeout_s` y los topes no se ajustaron con ellos): `/revisar memoria a fondo` 14,6–24 s con la memoria de prueba de 8 entradas. Resumen en segundo plano: al día 17,5 s después de la última respuesta, y salir tarda 0,0 s (antes 8,8–21,1 s). Cancelar un resumen en marcha añade ~3 s al mensaje siguiente (5,3 s frente a 2,4 s): cerrar la conexión no recupera lo que Ollama tenía en caché.
+Tiempos con el 7B al 100 % en CPU, solo como referencia (con la GPU, en "Mediciones con la GPU"; `summary_timeout_s` y los topes no se ajustaron con ellos): `/revisar memoria a fondo` 14,6–24 s con la memoria de prueba de 8 entradas. Resumen en segundo plano: al día 17,5 s después de la última respuesta, y salir tarda 0,0 s (antes 8,8–21,1 s). Cancelar un resumen en marcha añade ~3 s al mensaje siguiente (5,3 s frente a 2,4 s): cerrar la conexión no recupera lo que Ollama tenía en caché.
 
 Por eso `/revisar memoria` usa solo reglas y el modelo queda en `/revisar memoria a fondo`: las reglas encontraron los 2 casos que les tocaban; el 7B encontró `ciudad`/`vivo_en` (contradicción que las reglas no ven) en 1 de 4 intentos y llamó "duplicada" a UAM/UNAM.
 
-Pendiente: medir de nuevo `/revisar memoria a fondo` con la GPU (`check_reflexion.py`) antes de decidir si se queda.
+Con la GPU, `/revisar memoria a fondo` tarda 10,0 s, pero en esa corrida no añadió nada a las reglas. Decidir si se queda con más corridas.
 
 El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Posibles pendientes sin fecha").
 
@@ -547,7 +624,15 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 - Perfil por modelo en la configuración: contexto, si razona, si ve imágenes y ajustes de prompt propios (por ejemplo, el recordatorio de brevedad al final). Asia lee el perfil en vez de suponer.
 - Comando de evaluación: corre con un modelo candidato los intents (`check_intents`), el benchmark de revisión (`check_review_quality`) y las pruebas de velocidad (`check_speed`), y da una tabla contra el modelo actual: aciertos, errores, velocidad.
 - Los modelos abiertos (Gemma, Qwen, Llama, etc.) entran por Ollama; Claude y otros, solo por API, con un proveedor nuevo de una clase y siempre pasando por el modo confidencial.
-- Opción de un modelo chico (3–4B) que quepa entero en la GPU para tareas simples (IntentEngine, charla corta), solo si pasa `check_intents` y `check_rag`. El 7B sigue como referencia de calidad y de pruebas.
+- Opción de un modelo chico (3–4B) que quepa entero en la GPU para tareas simples (IntentEngine, charla corta), solo si pasa `check_intents` y `check_rag`. El 7B sigue como referencia de calidad y de pruebas. Candidatos (tamaños de ollama.com, Q4_K_M; sin descargar):
+
+| Modelo | Tamaño | Licencia | Nota |
+|---|---|---|---|
+| `qwen3:4b-instruct-2507-q4_K_M` | 2,5 GB | Apache 2.0 | Ya descargado. Descartado antes para el IntentEngine porque rompía `open_app` (`71521ad3`); repetir `check_intents`, que desde entonces tiene atajos para "abre X". |
+| `phi4-mini` (3,8B) | 2,5 GB | MIT | Contexto de 128K. Español menos probado que Qwen. |
+| `llama3.2:3b` | 2,0 GB | Llama 3.2 Community License | El más chico: más margen para el contexto en 4 GB. |
+
+  Fuera: `gemma3:4b` (3,4 GB con visión, no deja sitio al contexto en 4 GB) y `qwen2.5:3b` (Qwen Research License, no comercial). Con 16384 de contexto, la caché del contexto se suma al tamaño: cabría entero solo con menos contexto para el IntentEngine, y cambiarlo pide confirmación.
 
 **Especialistas internos** (no varios asistentes separados).
 - Un orquestador manda cada mensaje a un especialista (prompt + modelo + herramientas), todos con la misma memoria, biblioteca de conocimiento y barrera de confidencialidad. `models_by_domain` es la primera versión.
