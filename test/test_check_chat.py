@@ -20,8 +20,10 @@ def test_hablar_del_usuario_no_es_atribucion():
 
 
 def test_fuga_es_un_dato_que_no_venia_al_caso():
-    assert leaks("Que tengas un día lleno de energía amarilla", ["amarill"]) == ["amarill"]
+    assert leaks("Que tengas un día lleno de energía amarilla", ["amarillo"]) == ["amarillo"]
     assert leaks("De nada, Santiago", ["amarillo", "uam"]) == []
+    assert leaks("dos grupos mutuamente excluyentes", ["uam"]) == []
+    assert leaks("Estudias en la UAM.", ["uam"]) == ["uam"]
 
 
 def test_aciertos():

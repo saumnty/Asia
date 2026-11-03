@@ -82,8 +82,9 @@ def attributions(answer: str) -> list:
 
 
 def leaks(answer: str, forbidden) -> list:
-    text = plain(answer)
-    return [value for value in forbidden if plain(value) in text]
+    # Por el principio de cada palabra: "amarilla" es fuga de "amarillo", "mutuamente" no lo es de "uam".
+    words = set(re.findall(r"\w+", plain(answer)))
+    return [value for value in forbidden if any(word.startswith(plain(value)[:max(3, len(value) - 2)]) for word in words)]
 
 
 def correct(answer: str, expected) -> bool:
