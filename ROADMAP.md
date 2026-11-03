@@ -275,7 +275,7 @@ Antes "Wikipedia offline". Va por capas, y cada fuente lleva su etiqueta para po
 
 1. Proyectos propios (repos, reportes, notas) con el RAG actual: primera capa, la más útil. Hecha, ver abajo.
 2. Documentación técnica offline: ROS 2 Jazzy y Gazebo Harmonic (hecho, ver abajo), Python 3.12 pendiente. Fuentes directas, sin Kiwix, zimit ni Docker.
-3. Wikipedia en español: un `.zim` leído con libzim, separado del RAG de proyectos. A medias, ver abajo. Inglés, sin decidir.
+3. Wikipedia en español: un `.zim` leído con libzim, separado del RAG de proyectos. Código hecho, medición con el modelo pendiente, ver abajo. Inglés: el código lo admite, sin archivo descargado.
 4. Preguntas y respuestas (Stack Overflow, Robotics Stack Exchange).
 
 - Búsqueda: la de texto de Kiwix encuentra los artículos y los embeddings se usan solo dentro de ellos, sin indexar todo.
@@ -480,11 +480,15 @@ El ranking es determinista y empeora, y además bajan las coberturas de "filtrar
 - Memoria: dos `/buscar ... en wikipedia` reales con el 7B (capital de Australia, penicilina) pasaron de 10 minutos sin terminar y se detuvieron sin resultado. Durante la corrida quedaban 0,30 GB de RAM libres de 15,3; `llama-server` con 5,55 GB y el 7B a 16384 de contexto. La estimación era de 70–110 s. Anotado, sin ajustar límites.
 - Pruebas: `test/test_rag_article.py` y `test/test_rag_wikipedia.py`, con un `.zim` pequeño hecho con `libzim.writer` y embeddings simulados.
 
+Después (`898cb349`, `79adf514`, `3ae753b0`):
+- `check_rag` cuenta como negada cualquier negativa del código (`prompts.NOTHING_TO_ANSWER`), también "No lo encontré en Wikipedia".
+- Una enciclopedia con `idioma=en` busca los artículos con la pregunta traducida, con raíces del inglés, y ordena los fragmentos con las dos preguntas, como las colecciones en inglés. Probado solo con un `.zim` en inglés pequeño: no hay ninguno real descargado.
+- `check_rag --wikipedia CORRIDAS`, aparte de lo demás. Con 0 corridas, sin modelo: si el artículo esperado está entre los 3 que elige la búsqueda del `.zim`. Con corridas: si la respuesta esperada sale en las líneas verificadas (no en el resumen ni en los fragmentos de respaldo) y si se responde alguna trampa, que se imprime entera. Caché de embeddings temporal: la corrida 1 es en frío. 12 preguntas con respuesta conocida y 11 trampas con artículos que no están en el top; quedaron fuera la laguna de Bacalar y Copán Ruinas porque "Bacalar" y "Departamento_de_Copán" sí están. Base en `check_rag_base.json`: 9 de 12 encontrados y 0 trampas. Fallan las tres de la búsqueda floja: Yen (sale "Máquina_expendedora"), Everest ("Huascarán", "Prominencia", "Montaña") y la Luna ("Viaje_a_la_Luna", "Hombre_lobo").
+
+Medición real, sin hacer (2026-11-03): había 5,69 GB de RAM libres al empezar, más de los 3 GB pedidos. La primera pregunta ("cuál es la capital de Australia en wikipedia") bajó a 0,94 GB libres al cargar el 7B (unos 6 GB) y se cortó sin respuesta, por la regla de parar por debajo de 1 GB. No se lanzaron la segunda ni `check_rag --wikipedia 1`. Anotado, sin ajustar límites. Estimación, sin medir: con el 7B en CPU harían falta unos 7 GB libres antes de empezar, o la GPU.
+
 Falta:
-- Repetir las dos preguntas reales con más RAM libre (o la GPU) y anotar respuesta y tiempo.
-- `check_rag --wikipedia CORRIDAS`, aparte, para que no cambien las bases de lo demás: caché temporal (corrida 1 en frío, 2 con caché), una parte determinista (el artículo esperado entre los encontrados) y otra con el modelo. Preguntas con respuesta conocida y la expresión que tiene que salir en las líneas verificadas: capital de Australia (Camberra), penicilina (Fleming), Don Quijote (Cervantes), Mona Lisa (Leonardo), muro de Berlín (1989), hierve el agua (100), huesos (206), moneda de Japón (yen), montaña más alta (Everest), Cien años de soledad (García Márquez), fotosíntesis (luz), Luna (1969). Trampas con artículos que no están en el top (comprobado con `has_entry_by_path`): Villarrubia de los Ojos, Tlacolula de Matamoros, Río Ulúa, Real del Monte, Purmamarca, Salento (Quindío), Barichara, Vilcabamba (Ecuador), Concepción de Ataco, Copán Ruinas, Salto del Laja, Parque nacional Conguillío, Laguna de Bacalar. Base en `check_rag_base.json` tras la primera medición real. Sin escribir.
-- `check_rag`: `answer_row` compara con `prompts.NOT_FOUND`; tiene que usar `prompts.NOTHING_TO_ANSWER`.
-- Una fuente `enciclopedia` con `idioma=en` todavía no busca con la pregunta traducida.
+- La medición real: las dos preguntas, una por una, y `check_rag --wikipedia 1`, con más RAM libre o la GPU.
 - Para después: cuando una pregunta no se encuentra en los proyectos, Asia ofrece buscar en Wikipedia ("¿Busco en Wikipedia?") en lugar de hacerlo sola, medido aparte en `check_rag`.
 - Wikipedia completa (`maxi`, 13,3 GB): pedir permiso aparte antes de descargarla.
 
