@@ -12,9 +12,9 @@ También mira las preguntas que no tienen respuesta en C:\\Asia: lo que ayuda a
 decidir cuándo decir "no lo encontré".
 
 Punta a punta, con el modelo real y el índice real (data/chroma, solo lectura):
-cuántas de 20 preguntas responde (8 de C:\\Asia, 3 de Bolitabot y 9 de documentación), cuántas citan el archivo correcto en las líneas
+cuántas de 24 preguntas responde (8 de C:\\Asia, 3 de Bolitabot y 13 de documentación, 4 de ellas de Python), cuántas citan el archivo correcto en las líneas
 verificadas, cuántas frases de la redacción quedan limpias, se eliminan o se marcan "(sin cita)" y por qué, si dice sin
-marca una de las tres frases falsas conocidas (el límite conocido, aparte) y a cuántas de 8 trampas responde. "Con resumen" es que quedó alguna frase. Las trampas pasan
+marca una de las tres frases falsas conocidas (el límite conocido, aparte) y a cuántas de 9 trampas responde. "Con resumen" es que quedó alguna frase. Las trampas pasan
 el filtro de cobertura pero no tienen respuesta en C:\\Asia: una cita verificada
 prueba que la línea existe, no que responda, así que su respuesta se imprime entera
 para leerla. Mide sobre una copia del índice sin este archivo ni los fragmentos que
@@ -121,6 +121,10 @@ DOCS = [
     ("cómo se crea un mundo en SDF en gazebo", "sdf_worlds"),
     ("a qué tipo de Gazebo corresponde geometry_msgs/msg/Twist en ros_gz_bridge", "README"),
     ("cómo se configura el puente con un archivo YAML en ros_gz_bridge", "README"),
+    ("cómo se crea un entorno virtual con venv en python", "venv"),
+    ("cómo se lee un archivo JSON en python", "json"),
+    ("cómo se captura una excepción con try y except en python", "errors"),
+    ("cómo se define una clase de datos con dataclass en python", "dataclasses"),
 ]
 
 # Sobre esas fuentes, sin respuesta en ellas.
@@ -129,6 +133,7 @@ DOC_TRAPS = [
     "cómo se entrena una red neuronal en gazebo",
     "cómo se programa una Raspberry Pi Pico en ros2",
     "cuál es el precio del robot Spot en gazebo",
+    "cómo se dibuja un sprite con pygame en python",
 ]
 
 # El de la medición: el real lo mantiene el usuario en data/biblioteca/.
