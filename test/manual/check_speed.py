@@ -8,6 +8,9 @@ Ollama) de un mensaje al siguiente.
     .venv\\Scripts\\python.exe test\\manual\\check_speed.py --sin-archivo
 
 --sin-archivo omite "explica @ROADMAP.md" (la más larga: unos 3 minutos).
+--escritura S simula S segundos tecleando cada mensaje: se le pasa el texto a
+la precarga anticipada del modelo de código (core/early_load.py), como hace
+prompt_toolkit mientras se escribe, y se espera S antes de mandarlo.
 Al final imprime una tabla con la línea de tiempos de cada mensaje.
 """
 import argparse
@@ -50,6 +53,8 @@ def main():
                         help="descarga el modelo del IntentEngine antes de empezar (ollama stop), como al encender")
     parser.add_argument("--espera", type=float, default=0,
                         help="segundos antes del primer mensaje (lo que tarda en escribirse)")
+    parser.add_argument("--escritura", type=float, default=0,
+                        help="segundos tecleando cada mensaje, con la precarga anticipada viéndolo")
     args = parser.parse_args()
 
     messages = args.mensajes or [m for m in MESSAGES if not (args.sin_archivo and m.startswith("explica @"))]
@@ -61,6 +66,7 @@ def main():
     lines = iter([*messages, "salir"])
     first = [True]
     err = Tee()
+    brain = Brain()
 
     def read(prompt):
         print(prompt, end="")
@@ -69,10 +75,16 @@ def main():
             time.sleep(args.espera)
 
         first[0] = False
-        return next(lines)
+        line = next(lines)
+
+        if args.escritura and line != "salir":
+            brain.early_load.typing(line)
+            time.sleep(args.escritura)
+
+        return line
 
     with redirect_stderr(err):
-        launcher.interactive_mode(Brain(), read=read)
+        launcher.interactive_mode(brain, read=read)
 
     timings = [line for line in err.getvalue().splitlines() if line.startswith("[tiempos]")]
 

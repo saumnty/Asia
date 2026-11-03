@@ -256,13 +256,15 @@ class IntentEngine:
         """Ctrl+C: cierra la conexión para que Ollama deje de generar."""
         drop_client(self)
 
-    def preload(self):
-        """Carga intent_model en Ollama sin prompt, para que el primer mensaje no espere la carga.
+    def preload(self, model=None):
+        """Carga intent_model (o model) en Ollama sin prompt, para que el primer mensaje no espere la carga.
+
+        Con model, la precarga anticipada del modelo de código (core/early_load.py).
 
         No envía contenido. Si Ollama no responde no pasa nada; otro error
         (p. ej. el modelo no está descargado) se avisa por stderr.
         """
-        model = self.settings.get("intent_model")
+        model = model or self.settings.get("intent_model")
 
         # Aquí, en el hilo de la precarga: la librería carga mientras se
         # escribe el primer mensaje. Si ese mensaje llega antes, espera a que termine.
@@ -279,7 +281,8 @@ class IntentEngine:
         except Exception as e:
             print(f"[Aviso] No pude precargar {model} en Ollama: {e}", file=sys.stderr)
 
-    def detect(self, text: str) -> dict:
+    def detect(self, text: str, model=None) -> dict:
+        """model: otro que intent_model para este mensaje (el precargado, core/early_load.py)."""
         system_prompt = INTENT_PROMPT
 
         # Si Ollama no responde, se trata como chat: el provider configurado
@@ -303,10 +306,10 @@ class IntentEngine:
 
             messages, secrets = redact_messages(messages)
             authorization = "modo abierto" if open_mode else "exportable"
-            log_external_send("ollama", self.settings.get("intent_model"), labels, messages, authorization, len(secrets))
+            log_external_send("ollama", model or self.settings.get("intent_model"), labels, messages, authorization, len(secrets))
 
         try:
-            model = self.settings.get("intent_model")
+            model = model or self.settings.get("intent_model")
 
             def ask_model(emit):
                 unload_others(self.client, model, self.settings)

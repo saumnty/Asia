@@ -280,10 +280,12 @@ def prepare_message(brain, text, files=(), block=None, block_label=STDIN_LABEL, 
     return text, attachments, use_actions, text_label
 
 
-def make_reader():
+def make_reader(on_text=None):
     """input() con autocompletado de @ruta si prompt_toolkit está disponible.
 
     Sin terminal (p. ej. salida redirigida) o sin prompt_toolkit, input().
+    on_text(texto) recibe lo que se va escribiendo (la precarga anticipada,
+    core/early_load.py); con input() no hay forma de verlo.
     """
     if not sys.stdin.isatty():
         return input
@@ -297,6 +299,9 @@ def make_reader():
         )
     except Exception:
         return input
+
+    if on_text:
+        session.default_buffer.on_text_changed += lambda buffer: on_text(buffer.text)
 
     return session.prompt
 
@@ -534,7 +539,8 @@ def calibration_message(result) -> str:
 def interactive_mode(brain=None, read=None, voice=None):
     """voice: la sesión de voz (core/voice/session.py); se crea al primer uso."""
     brain = brain or Brain()
-    read = read or make_reader()
+    early = getattr(brain, "early_load", None)
+    read = read or make_reader(early.typing if early else None)
 
     print(startup_message(brain.settings))
 

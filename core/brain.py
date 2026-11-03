@@ -17,6 +17,7 @@ from core import timing
 from core.commands import is_launcher_command, options_text, resolve as resolve_command, unknown_message as unknown_command
 from core.session import Session
 from core.chat_memory import is_recall
+from core.early_load import EarlyLoad
 from core.fast_chat import is_clear_chat
 from core.fixed_intents import fixed_intent
 from tools.app_tool import AppTool
@@ -176,6 +177,8 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         self.tool_registry = ToolRegistry(self.provider_router)
         self.project_memory = ProjectMemory()
         self.settings = SettingsManager()
+        # El launcher le pasa lo que se va escribiendo (core/early_load.py).
+        self.early_load = EarlyLoad(self.settings, self.intent_engine.preload)
         self.last_debug_report = None
         self.pending_run = PendingRun()
         # Qué hizo el último mensaje (resumen de la sesión): una acción, "chat" o
@@ -221,6 +224,10 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
     def process_labeled(self, text):
         self.last_action = None
+        # Si mientras se escribía empezó a cargarse el modelo de código, la
+        # intención de este mensaje va con él (core/early_load.py).
+        early = getattr(self, "early_load", None)
+        preloaded = early.take() if early else None
 
         # Comandos "/" (core/commands.py): se traducen a su frase, que se
         # atiende abajo como siempre.
@@ -302,7 +309,7 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
         if intent is None:
             with timing.intent_stage():
-                intent = self.intent_engine.detect(text)
+                intent = self.intent_engine.detect(text, model=preloaded) if preloaded else self.intent_engine.detect(text)
 
         action = intent.get("action")
         params = intent.get("params")
