@@ -314,15 +314,15 @@ def check_draft(answer: str, quotes: list, question: str = "") -> tuple:
     return shown, uncited, removed
 
 
-def block_of(run: list) -> str:
-    """Un tramo de líneas seguidas: "core/brain.py:40-45 (Brain.process)" y su texto."""
+def block_of(run: list) -> list:
+    """Un tramo de líneas seguidas: ["core/brain.py:40-45 (Brain.process)", su texto]."""
     first, last = run[0], run[-1]
     cite = first.cite if first.line == last.line else f"{first.cite}-{last.line}"
     # En una página web, los números de línea no significan nada para quien lee.
     cite = first.origin or cite
     label = f" ({first.label})" if first.label else ""
     text = textwrap.dedent("\n".join(quote.text for quote in run))
-    return f"{cite}{label}\n{textwrap.indent(text, '  ')}"
+    return [f"{cite}{label}", textwrap.indent(text, '  ')]
 
 
 def verified_lines(quotes: list) -> str:
@@ -346,11 +346,17 @@ def verified_lines(quotes: list) -> str:
             else:
                 runs.append([quote])
 
-        blocks += [block_of(run) for run in runs]
+        for header, text in map(block_of, runs):
+            # Sin números de línea (una página web), los tramos de una sección tendrían la
+            # misma cabecera: va una vez, y "…" marca lo que se salta entre ellos.
+            if blocks and blocks[-1][0] == header:
+                blocks[-1][1] += f"\n  …\n{text}"
+            else:
+                blocks.append([header, text])
 
     # Lo que viene de fuera no se puede confundir con lo que hay en sus proyectos.
     from_wikipedia = [prompts.FROM_WIKIPEDIA] if any(quote.path.endswith(WIKI_SUFFIX) for quote in quotes) else []
-    return f"{prompts.VERIFIED_LINES}\n\n" + "\n\n".join(from_wikipedia + blocks)
+    return f"{prompts.VERIFIED_LINES}\n\n" + "\n\n".join(from_wikipedia + [f"{h}\n{t}" for h, t in blocks])
 
 
 def best_fragments(context: str) -> str:

@@ -179,6 +179,24 @@ def test_las_lineas_salteadas_van_en_tramos_aparte():
     assert "a.py:40 (f)\n  uno\n\na.py:45 (f)\n  dos" in shown
 
 
+def test_los_tramos_de_una_pagina_con_la_misma_seccion_van_bajo_una_cabecera():
+    page = "https://docs.python.org/3.12/reference/compound_stmts.html · PSF-2.0"
+    quotes = [Quote("c.txt", line, "try > except", text, page) for line, text in ((10, "uno"), (11, "dos"), (14, "tres"), (20, "cuatro"))]
+
+    shown = verified_lines(quotes)
+
+    assert shown == f"{prompts.VERIFIED_LINES}\n\n{page} (try > except)\n  uno\n  dos\n  …\n  tres\n  …\n  cuatro"
+
+
+def test_otra_seccion_de_la_misma_pagina_lleva_su_cabecera():
+    page = "https://docs.python.org/3.12/library/dataclasses.html · PSF-2.0"
+    quotes = [Quote("d.txt", 5, "Data Classes", "uno", page), Quote("d.txt", 9, "Module contents", "dos", page)]
+
+    shown = verified_lines(quotes)
+
+    assert f"{page} (Data Classes)\n  uno\n\n{page} (Module contents)\n  dos" in shown
+
+
 def test_agrupa_por_archivo():
     shown = verified_lines([quote("a.py", 1, "uno"), quote("b.py", 1, "otro"), quote("a.py", 2, "dos")])
 
