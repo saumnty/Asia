@@ -3,7 +3,7 @@ from pathlib import Path
 
 from core import prompts
 from core.rag.glossary import expand
-from core.rag.instructions import source_notes
+from core.rag.instructions import source_notes, with_project_notes
 from core.rag.library import Library, clean_translation, is_refusal, named_in_question, needs_translation, without_source
 from core.rag.quotes import (
     best_fragments,
@@ -179,6 +179,8 @@ class ExploreActions:
         else:
             prompt = prompts.explain_file(file_path, content)
 
+        # El ASIA.md de su fuente, si tiene (core/rag/instructions.py).
+        prompt = with_project_notes(prompt, file_path, Library().all())
         return self.provider_router.ask(prompt, max_tokens=limits["tokens"])
 
     def is_document(self, file_path):

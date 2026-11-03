@@ -37,6 +37,45 @@ def read_notes(source) -> str:
     return text
 
 
+def source_of(path, sources: list):
+    """La fuente cuya carpeta contiene path (la más interna, p. ej. asia-pruebas dentro de asia); o None."""
+    target = Path(path)
+
+    if not target.is_absolute():
+        from core.session import Session
+
+        target = Path(Session.get_user_cwd()) / target
+
+    target = target.resolve()
+    best = None
+
+    for source in sources:
+        try:
+            folder = Path(source.path).resolve()
+        except (OSError, ValueError):
+            continue
+
+        if folder.is_dir() and target.is_relative_to(folder) and (best is None or len(folder.parts) > len(best[1].parts)):
+            best = (source, folder)
+
+    return best[0] if best else None
+
+
+def with_project_notes(prompt: str, path, sources: list) -> str:
+    """prompt con el ASIA.md de la fuente que contiene path al principio (explicar, revisar, generar código).
+
+    Se anota con la etiqueta de la fuente, como en /buscar.
+    """
+    source = source_of(path, sources)
+    notes = read_notes(source)
+
+    if not notes:
+        return prompt
+
+    record(Fragment(PUBLICA if source.publica else RAG, notes))
+    return f"Notas del usuario sobre el proyecto {source.name} (su {FILE_NAME}; contexto, no las copies):\n{notes}\n\n{prompt}"
+
+
 def source_notes(context: str, sources: list) -> str:
     """Las notas de las fuentes que aparecen en el contexto, una vez cada una.
 

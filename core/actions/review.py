@@ -1,5 +1,7 @@
 """Revisión de archivos y proyectos, código muerto y depuración."""
 from core import prompts
+from core.rag.instructions import with_project_notes
+from core.rag.library import Library
 
 
 NO_SYNTHESIS_PHRASES = ("sin síntesis", "sin sintesis", "por archivo")
@@ -58,7 +60,9 @@ class ReviewActions:
             max_chars=self.limit("review_file")
         )
 
-        return self.provider_router.ask(prompts.review_file(file_path, content), review=True)
+        # El ASIA.md de su fuente, si tiene (core/rag/instructions.py).
+        prompt = with_project_notes(prompts.review_file(file_path, content), file_path, Library().all())
+        return self.provider_router.ask(prompt, review=True)
 
     def handle_review_project(self, text, params):
         folder_path = params.get("folder_path", ".")

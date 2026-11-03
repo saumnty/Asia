@@ -5,6 +5,8 @@ from pathlib import Path
 
 from core import prompts
 from core.paths import PROJECT_ROOT
+from core.rag.instructions import with_project_notes
+from core.rag.library import Library
 from tools.import_check import ImportPolicy, check_imports, refusal_message, rewrite_note, rewrite_request
 
 
@@ -253,6 +255,8 @@ class CodeActions:
             request, target_file, target_file_content, project_context, debug_context,
             self.import_policy(target_file).describe()
         )
+        # El ASIA.md de la fuente del archivo (o de la carpeta actual), si tiene.
+        prompt = with_project_notes(prompt, target_file or ".", Library().all())
 
         response = self.provider_router.ask(prompt)
 
