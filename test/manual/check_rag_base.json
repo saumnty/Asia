@@ -4,5 +4,9 @@
     "concepto": [4, 6, 12],
     "documento": [2, 2, 2],
     "nombre": [6, 6, 6]
+  },
+  "wikipedia": {
+    "encontrados": 9,
+    "trampas": 0
   }
 }

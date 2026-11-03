@@ -31,6 +31,14 @@ Para calibrar el filtro, la cobertura y la distancia de cada pregunta, sin el mo
 
     .venv\\Scripts\\python.exe test\\manual\\check_rag.py --calibrar
 
+Wikipedia offline, aparte para que no cambien las bases de lo demás: si el artículo
+esperado está entre los que elige la búsqueda del .zim (sin modelo, con 0 corridas) y,
+con corridas, si la respuesta esperada sale en las líneas verificadas y si se responde
+alguna trampa (preguntas cuyo artículo no está en el top). Usa la fuente "wikipedia" de
+la biblioteca y una caché de embeddings temporal: la corrida 1 es en frío.
+
+    .venv\\Scripts\\python.exe test\\manual\\check_rag.py --wikipedia 1
+
 Sale con código 1 si el ranking baja de check_rag_base.json, si se responde una trampa
 o una ajena, o si alguna corrida supera el límite conocido de ese archivo. Lo demás
 del punta a punta varía con el azar del 7B: se lee, no se comprueba.
@@ -173,6 +181,41 @@ FORBIDDEN = {
     "drop_client": r'(?:defin|se encuentra)[^.\n]*ollama_provider',
     "cómo se resume la sesión en segundo plano": r'cada\s+3\s*(?:s\b|seg)',
 }
+
+WIKIPEDIA = "wikipedia"
+
+# (pregunta, artículos que la responden, lo que tiene que salir en las líneas verificadas).
+WIKIPEDIA_QUESTIONS = [
+    ("cuál es la capital de Australia en wikipedia", ("Camberra",), r"Camberra|Canberra"),
+    ("quién descubrió la penicilina en wikipedia", ("Alexander_Fleming", "Penicilina"), r"Fleming"),
+    ("quién escribió Don Quijote de la Mancha en wikipedia", ("Don_Quijote_de_la_Mancha", "Miguel_de_Cervantes"), r"Cervantes"),
+    ("quién pintó la Mona Lisa en wikipedia", ("La_Gioconda", "Leonardo_da_Vinci"), r"Leonardo"),
+    ("en qué año cayó el muro de Berlín en wikipedia", ("Muro_de_Berlín", "Caída_del_Muro_de_Berlín"), r"1989"),
+    ("a qué temperatura hierve el agua en wikipedia", ("Agua", "Punto_de_ebullición"), r"\b100\b"),
+    ("cuántos huesos tiene el cuerpo humano en wikipedia", ("Esqueleto_humano",), r"\b206\b"),
+    ("qué moneda se usa en Japón en wikipedia", ("Yen", "Japón"), r"\byen"),
+    ("cuál es la montaña más alta del mundo en wikipedia", ("Monte_Everest",), r"Everest"),
+    ("quién escribió Cien años de soledad en wikipedia", ("Cien_años_de_soledad", "Gabriel_García_Márquez"), r"García Márquez"),
+    ("qué necesita una planta para hacer la fotosíntesis en wikipedia", ("Fotosíntesis",), r"\bluz\b"),
+    ("en qué año llegó el hombre a la Luna en wikipedia", ("Apolo_11", "Programa_Apolo", "Luna"), r"1969"),
+]
+
+# Sus artículos no están en el top (has_entry_by_path, con el .zim de 2026-10): un dato
+# así de concreto no debería estar en otro. Si se responde, se lee entera. Fuera la
+# laguna de Bacalar y Copán Ruinas: "Bacalar" y "Departamento_de_Copán" sí están.
+WIKIPEDIA_TRAPS = [
+    "cuántos habitantes tiene Villarrubia de los Ojos en wikipedia",
+    "en qué año se fundó Tlacolula de Matamoros en wikipedia",
+    "dónde nace el río Ulúa en wikipedia",
+    "qué minas había en Real del Monte en wikipedia",
+    "cuántos habitantes tiene Purmamarca en wikipedia",
+    "cuántos habitantes tiene Salento en el Quindío en wikipedia",
+    "en qué año se fundó Barichara en wikipedia",
+    "cuántos habitantes tiene Vilcabamba en Ecuador en wikipedia",
+    "en qué año se fundó Concepción de Ataco en wikipedia",
+    "qué altura tiene el Salto del Laja en wikipedia",
+    "en qué año se creó el Parque nacional Conguillío en wikipedia",
+]
 
 
 def release_chroma():
@@ -523,6 +566,114 @@ def end_to_end(runs, glossary_dir, base):
     return finished(end_to_end_failures(known_limit, all_fell, all_strayed, base))
 
 
+def wikipedia_correct(shown, pattern) -> bool:
+    """True si la respuesta esperada está en las líneas verificadas, no en el resumen ni en el respaldo."""
+    if prompts.VERIFIED_LINES not in shown:
+        return False
+
+    lines = shown.partition(prompts.VERIFIED_LINES)[2].partition(prompts.UNVERIFIED_SUMMARY)[0]
+    return bool(re.search(pattern, lines, re.IGNORECASE))
+
+
+def wikipedia_failures(found, traps, base) -> list:
+    """found: preguntas con su artículo entre los encontrados. traps: las respondidas, en total."""
+    failures = []
+    expected = base[WIKIPEDIA]
+
+    if found < expected["encontrados"]:
+        failures.append(f"Wikipedia, artículo encontrado: {found}, base {expected['encontrados']}")
+
+    if traps > expected["trampas"]:
+        failures.append(f"Wikipedia, trampas respondidas: {traps}, base {expected['trampas']}")
+
+    return failures
+
+
+def wikipedia(runs, base):
+    """La búsqueda en el .zim (sin modelo) y, con runs, las respuestas del modelo real."""
+    from libzim.reader import Archive
+
+    from core import paths
+    from core.rag.wikipedia import found_articles
+
+    source = Library().get(WIKIPEDIA)
+
+    if source is None or not Path(source.path).is_file():
+        print(f"Falta la fuente {WIKIPEDIA}: /indexar {WIKIPEDIA} <ruta del .zim> enciclopedia")
+        return 1
+
+    archive = Archive(source.path)
+    found = 0
+
+    for question, expected, _ in WIKIPEDIA_QUESTIONS:
+        paths_found = [path for path, _, _ in found_articles(archive, without_source(question, source))]
+        hit = bool(set(expected) & set(paths_found))
+        found += hit
+        print(f"{'sí' if hit else 'no'}: {question} -> {', '.join(paths_found) or 'nada'}", flush=True)
+
+    for question in WIKIPEDIA_TRAPS:
+        paths_found = [path for path, _, _ in found_articles(archive, without_source(question, source))]
+        print(f"trampa: {question} -> {', '.join(paths_found) or 'nada'}", flush=True)
+
+    print(f"\nArtículo esperado entre los encontrados: {found}/{len(WIKIPEDIA_QUESTIONS)}, "
+          f"base {base[WIKIPEDIA]['encontrados']}.\n", flush=True)
+
+    if not runs:
+        return finished(wikipedia_failures(found, 0, base))
+
+    from core.brain import Brain
+    from core.session import Session
+
+    Session.set_paths(project_root=paths.PROJECT_ROOT, user_cwd=ROOT)
+    scratch = temp_folder()
+    # Caché aparte: la corrida 1 embebe en frío y la 2 ya la tiene.
+    paths.WIKIPEDIA_CACHE_FILE = scratch / "embeddings.sqlite3"
+    brain = Brain()
+    summary = [
+        "| Corrida | Correctas | Respondió | Solo líneas | Sin respuesta directa | No lo encontré "
+        "| Trampas respondidas | Segundos por pregunta |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    all_fell = 0
+
+    try:
+        for run in range(1, runs + 1):
+            rows, traps = [], []
+
+            for question, _, pattern in WIKIPEDIA_QUESTIONS:
+                state, _, seconds, shown = answer_row(brain, question)
+                correct = wikipedia_correct(shown, pattern)
+                rows.append((state, correct, seconds))
+                opening = " ".join((shown.partition(prompts.UNVERIFIED_SUMMARY)[2] or shown).split())[:300]
+                print(f"[{run}] {state}, {'correcta' if correct else 'no'}, {seconds:.0f} s: {question} -> {opening}",
+                      flush=True)
+
+            for question in WIKIPEDIA_TRAPS:
+                state, _, seconds, shown = answer_row(brain, question)
+                traps.append((state, seconds))
+                print(f"\n[{run}] TRAMPA {state}, {seconds:.0f} s: {question}", flush=True)
+
+                # Una línea verificada prueba que existe, no que responda: se lee entera.
+                if state in ANSWERED:
+                    print(shown, flush=True)
+
+            states = Counter(state for state, _, _ in rows)
+            fell = sum(1 for state, _ in traps if state in ANSWERED)
+            all_fell += fell
+            seconds = (sum(r[2] for r in rows) + sum(t[1] for t in traps)) / (len(rows) + len(traps))
+            summary.append(
+                f"| {run} | {sum(1 for r in rows if r[1])}/{len(rows)} | {states['respondió']} "
+                f"| {states['solo líneas'] + states['redacción inválida']} | {states['sin respuesta directa']} "
+                f"| {states['el código negó']} | {fell}/{len(traps)} | {seconds:.0f} |"
+            )
+            print()
+    finally:
+        remove_tree(scratch)
+
+    print("\n".join(summary))
+    return finished(wikipedia_failures(found, all_fell, base))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--indice", help="carpeta del índice: se conserva y solo se reindexa lo que cambió")
@@ -531,9 +682,13 @@ def main():
     parser.add_argument("--sin-glosario", action="store_true", help="punta a punta sin el glosario de la medición")
     parser.add_argument("--calibrar", action="store_true", help="cobertura y distancia de cada pregunta")
     parser.add_argument("--fragmentos", type=int, help="fragmentos que recibe el modelo, en vez del valor del código")
+    parser.add_argument("--wikipedia", type=int, metavar="CORRIDAS", help="Wikipedia offline; con 0, solo la búsqueda")
     args = parser.parse_args()
     base = load_base()
     sweep_leftovers()
+
+    if args.wikipedia is not None:
+        return wikipedia(args.wikipedia, base)
 
     if args.fragmentos:
         explore.RAG_FRAGMENTS = args.fragmentos

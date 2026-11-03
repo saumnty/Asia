@@ -10,6 +10,7 @@ sys.path.insert(0, str(ROOT / "test" / "manual"))
 
 import check_rag  # noqa: E402
 from core.rag.vector_store import VectorStore  # noqa: E402
+from test_rag_wikipedia import zim  # noqa: E402, F401
 
 
 @pytest.fixture(autouse=True)
@@ -261,3 +262,57 @@ def test_la_base_guardada_cubre_cada_tipo_y_cada_top():
     assert set(base["ranking"]) == set(check_rag.KINDS)
     assert all(len(found) == len(check_rag.TOPS) for found in base["ranking"].values())
     assert base["limite_conocido"] >= 0
+    assert 0 <= base["wikipedia"]["encontrados"] <= len(check_rag.WIKIPEDIA_QUESTIONS)
+    assert base["wikipedia"]["trampas"] >= 0
+
+
+WIKI_BASE = {"wikipedia": {"encontrados": 1, "trampas": 0}}
+WIKI_LINES = f"{check_rag.prompts.FROM_WIKIPEDIA}\n{check_rag.prompts.VERIFIED_LINES}\n\nCamberra\n  Camberra es la capital."
+
+
+def test_wikipedia_correcta_si_esta_en_las_lineas():
+    assert check_rag.wikipedia_correct(WIKI_LINES, r"Camberra")
+
+
+def test_wikipedia_no_cuenta_lo_que_solo_dice_el_resumen():
+    shown = f"{WIKI_LINES}\n\n{check_rag.prompts.UNVERIFIED_SUMMARY}\n\nFue fundada en 1913 [Camberra.wiki:3]."
+
+    assert not check_rag.wikipedia_correct(shown, r"1913")
+
+
+def test_wikipedia_no_cuenta_los_fragmentos_de_respaldo():
+    shown = f"{check_rag.prompts.NO_DIRECT_ANSWER}\n\nCamberra es la capital."
+
+    assert not check_rag.wikipedia_correct(shown, r"Camberra")
+
+
+def test_wikipedia_igual_que_la_base_no_falla():
+    assert check_rag.wikipedia_failures(1, 0, WIKI_BASE) == []
+
+
+@pytest.mark.parametrize("found, traps, name", [(0, 0, "encontrado"), (1, 1, "trampas")])
+def test_wikipedia_por_debajo_de_la_base_o_con_trampas_falla(found, traps, name):
+    assert name in check_rag.wikipedia_failures(found, traps, WIKI_BASE)[0]
+
+
+def test_las_preguntas_de_wikipedia_la_nombran():
+    questions = [q for q, _, _ in check_rag.WIKIPEDIA_QUESTIONS] + check_rag.WIKIPEDIA_TRAPS
+
+    assert all(question.endswith(" en wikipedia") for question in questions)
+
+
+def test_sin_la_fuente_de_wikipedia_lo_dice_y_sale_con_1(capsys):
+    assert check_rag.wikipedia(0, WIKI_BASE) == 1
+    assert "/indexar wikipedia" in capsys.readouterr().out
+
+
+def test_sin_corridas_solo_mira_los_articulos(zim, monkeypatch, capsys):
+    from tools.rag_tool import RagTool
+
+    RagTool().index_project("wikipedia", str(zim), "enciclopedia")
+    monkeypatch.setattr(check_rag, "WIKIPEDIA_QUESTIONS", [("capital de Australia en wikipedia", ("Camberra",), "x")])
+    monkeypatch.setattr(check_rag, "WIKIPEDIA_TRAPS", ["zzzyyyxxx en wikipedia"])
+
+    assert check_rag.wikipedia(0, WIKI_BASE) == 0
+    assert "1/1" in capsys.readouterr().out
+    assert check_rag.wikipedia(0, {"wikipedia": {"encontrados": 2, "trampas": 0}}) == 1
