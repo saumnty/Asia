@@ -5,6 +5,7 @@ import launcher
 from config.settings_manager import SettingsManager
 from core.brain import Brain
 from core.intent_engine import IntentEngine
+from providers.ollama_provider import model_options
 
 # Antes de que el fixture de conftest la desactive.
 REAL_PRELOAD = Brain.preload_in_background
@@ -44,7 +45,9 @@ def test_precarga_sin_prompt_ni_keep_alive_con_el_mismo_num_ctx():
     engine(client).preload()
 
     settings = SettingsManager()
-    assert client.generated == [{"model": settings.get("intent_model"), "options": {"num_ctx": settings.get("ollama_num_ctx")}}]
+    model = settings.get("intent_model")
+    assert client.generated == [{"model": model, "options": model_options(settings, model)}]
+    assert client.generated[0]["options"]["num_ctx"] == settings.get("ollama_num_ctx")
 
 
 def test_ollama_apagado_no_muestra_nada(capsys):

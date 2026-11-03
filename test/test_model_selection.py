@@ -8,7 +8,7 @@ from core.intent_engine import IntentEngine
 from core.model_selection import StickyModel, classify_domain, model_for
 from core.paths import DEFAULTS_FILE
 from providers.ollama_models import unload_others
-from providers.ollama_provider import OllamaProvider
+from providers.ollama_provider import OllamaProvider, model_options, ollama_options
 from providers.provider_router import ProviderRouter
 
 
@@ -155,6 +155,7 @@ class FakeClient:
 
     def chat(self, model, messages, options=None, stream=False):
         self.chats.append(model)
+        self.options = getattr(self, "options", []) + [options]
         return {"message": {"content": '{"action": "chat", "params": {}}'}}
 
 
@@ -194,6 +195,59 @@ def test_intent_engine_descarga_otros_antes_de_clasificar():
 
     assert engine.detect("hola") == {"action": "chat", "params": {}}
     assert engine.client.unloaded == ["general"] and engine.client.chats == ["coder"]
+
+
+PER_MODEL = {"coder": {"num_gpu": 16}, "chico": {"num_ctx": 4096, "num_gpu": 37}}
+
+
+def test_cada_modelo_lleva_sus_opciones_y_el_contexto_comun():
+    settings = Settings(ollama_model_options=PER_MODEL)
+
+    assert model_options(settings, "coder") == {"num_ctx": 16384, "num_gpu": 16}
+    assert model_options(settings, "chico") == {"num_ctx": 4096, "num_gpu": 37}
+    assert model_options(settings, "otro") == {"num_ctx": 16384}
+    assert model_options(Settings(), "coder") == {"num_ctx": 16384}
+
+
+def test_el_provider_pasa_las_opciones_del_modelo_de_la_llamada():
+    provider = OllamaProvider.__new__(OllamaProvider)
+    provider.settings = Settings(ollama_model="coder", ollama_model_options=PER_MODEL)
+    provider.client = FakeClient()
+
+    provider.complete([{"role": "user", "content": "hola"}])
+    provider.complete([{"role": "user", "content": "hola"}], model="chico", max_tokens=50)
+
+    assert provider.client.options == [
+        {"num_ctx": 16384, "num_gpu": 16},
+        {"num_ctx": 4096, "num_gpu": 37, "num_predict": 50},
+    ]
+
+
+def test_el_intent_engine_pasa_las_opciones_de_su_modelo():
+    engine = IntentEngine.__new__(IntentEngine)
+    engine.settings = Settings(intent_model="chico", ollama_model_options=PER_MODEL)
+    engine.client = FakeClient()
+
+    engine.detect("hola")
+
+    assert engine.client.options == [{"num_ctx": 4096, "num_gpu": 37, "temperature": 0}]
+
+
+def test_el_aviso_de_contexto_usa_el_del_modelo(capsys):
+    settings = Settings(ollama_model_options=PER_MODEL)
+    messages = [{"role": "user", "content": "x" * 12000}]
+
+    ollama_options(settings, messages, "coder")
+    assert capsys.readouterr().err == ""
+
+    ollama_options(settings, messages, "chico")
+    assert "ollama_num_ctx=4096" in capsys.readouterr().err
+
+
+def test_defaults_el_7b_sube_16_capas_a_la_gpu():
+    defaults = read_json(DEFAULTS_FILE)
+
+    assert defaults["ollama_model_options"][defaults["ollama_model"]] == {"num_gpu": 16}
 
 
 # --- Flag --model ---------------------------------------------------------------

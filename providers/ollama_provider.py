@@ -17,14 +17,25 @@ def estimate_tokens(messages: list[dict]) -> int:
     return int(sum(len(message["content"]) for message in messages) / CHARS_PER_TOKEN)
 
 
-def ollama_options(settings, messages: list[dict], **extra) -> dict:
-    """Opciones de Ollama con la ventana de contexto configurada (ollama_num_ctx).
+def model_options(settings, model: str) -> dict:
+    """num_ctx (ollama_num_ctx) y lo propio del modelo (ollama_model_options, p. ej. num_gpu).
+
+    Todas las llamadas que cargan un modelo las llevan iguales: si una cambia
+    num_ctx o num_gpu, Ollama lo vuelve a cargar.
+    """
+    own = (settings.get("ollama_model_options") or {}).get(model) or {}
+    return {"num_ctx": settings.get("ollama_num_ctx"), **own}
+
+
+def ollama_options(settings, messages: list[dict], model: str = None, **extra) -> dict:
+    """Opciones de Ollama para model (sin él, ollama_model), con su ventana de contexto.
 
     Si el prompt más la respuesta no caben, Ollama recorta el principio del
     prompt sin avisar (p. ej. la petición del usuario en generate_code), así
     que se avisa por stderr para que el resultado no se tome como fiable.
     """
-    num_ctx = settings.get("ollama_num_ctx")
+    options = model_options(settings, model or settings.get("ollama_model"))
+    num_ctx = options["num_ctx"]
     estimated = estimate_tokens(messages)
 
     if estimated + RESPONSE_RESERVE_TOKENS > num_ctx:
@@ -35,7 +46,7 @@ def ollama_options(settings, messages: list[dict], **extra) -> dict:
             file=sys.stderr
         )
 
-    return {"num_ctx": num_ctx, **extra}
+    return {**options, **extra}
 
 
 def review_options(settings) -> dict:
@@ -103,7 +114,7 @@ class OllamaProvider:
         if max_tokens:
             extra["num_predict"] = max_tokens
 
-        options = ollama_options(self.settings, messages, **extra)
+        options = ollama_options(self.settings, messages, model, **extra)
         thinking = think_kwargs(self.client, model, think)
 
         if on_chunk is None:

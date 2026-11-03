@@ -21,6 +21,9 @@
     "external_secret_policy": "redact",
     "open_mode_default": false,
     "ollama_num_ctx": 16384,
+    "ollama_model_options": {
+        "qwen2.5-coder:7b": {"num_gpu": 16}
+    },
     "ollama_temperature": 0.1,
     "ollama_repeat_penalty": 1.15,
     "embedding_model": "nomic-embed-text",

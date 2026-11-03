@@ -10,7 +10,7 @@ from core.provenance import NEVER_EXPORT, current_fragments, labels_of, local_la
 from core.audit import log_external_send
 from core.secrets_filter import redact_messages
 from providers.ollama_models import drop_client, strip_think, think_kwargs, unload_others
-from providers.ollama_provider import ollama_options
+from providers.ollama_provider import model_options, ollama_options
 
 
 # Prompt del IntentEngine. Texto fijo: Ollama reutiliza su caché entre mensajes.
@@ -271,9 +271,9 @@ class IntentEngine:
         try:
             unload_others(self.client, model, self.settings)
             # Una llamada sin prompt solo carga el modelo (keep_alive no se toca).
-            # Con el mismo num_ctx que las llamadas reales: sin él Ollama lo
-            # carga con 4096 y la primera llamada lo vuelve a cargar (~20 s).
-            self.client.generate(model=model, options={"num_ctx": self.settings.get("ollama_num_ctx")})
+            # Con el mismo num_ctx (y num_gpu) que las llamadas reales: sin él Ollama
+            # lo carga con 4096 y la primera llamada lo vuelve a cargar (~20 s).
+            self.client.generate(model=model, options=model_options(self.settings, model))
         except (ConnectionError, httpx.HTTPError):
             return
         except Exception as e:
@@ -315,7 +315,7 @@ class IntentEngine:
                 return self.client.chat(
                     model=model,
                     messages=messages,
-                    options=ollama_options(self.settings, messages, temperature=0),
+                    options=ollama_options(self.settings, messages, model, temperature=0),
                     **think_kwargs(self.client, model, False)
                 )
 
