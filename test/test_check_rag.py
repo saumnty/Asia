@@ -180,6 +180,89 @@ def test_el_indice_del_ranking_quita_las_lineas_del_roadmap(tmp_path, monkeypatc
     assert store.all_documents()["documents"] == ["ROADMAP.md\nqueda"]
 
 
+def git(repo, *args):
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout.strip()
+
+
+@pytest.fixture
+def repo(tmp_path):
+    """Un repo con dos commits: el primero es el congelado."""
+    repo = tmp_path / "repo"
+    (repo / "core").mkdir(parents=True)
+    git(repo, "init", "-q")
+    git(repo, "config", "user.email", "prueba@example.com")
+    git(repo, "config", "user.name", "Prueba")
+    (repo / "core" / "a.py").write_text("x = 1\n", encoding="utf-8")
+    (repo / "ROADMAP.md").write_text("# Antes\n", encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "primero")
+    first = git(repo, "rev-parse", "HEAD")
+    (repo / "ROADMAP.md").write_text("# Después\n", encoding="utf-8")
+    (repo / "nuevo.py").write_text("y = 2\n", encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "segundo")
+    (repo / "sin_commit.py").write_text("z = 3\n", encoding="utf-8")
+    return repo, first
+
+
+def test_la_copia_congelada_tiene_el_repo_de_ese_commit(tmp_path, repo):
+    repo, first = repo
+
+    corpus = check_rag.frozen_copy(first, tmp_path / "indice", repo=repo)
+
+    assert (corpus / "ROADMAP.md").read_text(encoding="utf-8") == "# Antes\n"
+    assert (corpus / "core" / "a.py").exists()
+    assert not (corpus / "nuevo.py").exists() and not (corpus / "sin_commit.py").exists()
+
+
+def test_la_copia_congelada_se_reutiliza(tmp_path, repo):
+    repo, first = repo
+    corpus = check_rag.frozen_copy(first, tmp_path / "indice", repo=repo)
+    (corpus / "marca.txt").write_text("sigue", encoding="utf-8")
+
+    assert check_rag.frozen_copy(first, tmp_path / "indice", repo=repo) == corpus
+    assert (corpus / "marca.txt").exists()
+
+
+def test_el_ranking_indexa_la_copia_del_commit_de_la_base(tmp_path, monkeypatch, repo):
+    repo, first = repo
+    indexed = []
+
+    class Indexer:
+        def __init__(self, root, collection, persist_dir):
+            indexed.append(Path(root))
+            self.store = indexed_roadmap(persist_dir, "ROADMAP.md\nqueda")
+
+        def index_project(self):
+            return self.store.collection.count()
+
+    real_copy = check_rag.frozen_copy
+    monkeypatch.setattr(check_rag, "frozen_copy", lambda commit, folder: real_copy(commit, folder, repo=repo))
+    monkeypatch.setattr(check_rag, "ProjectIndexer", Indexer)
+    monkeypatch.setattr(check_rag, "unload_chat_models", lambda: None)
+
+    check_rag.build_index(tmp_path / "indice", first)
+
+    assert indexed == [tmp_path / "indice" / f"repo-{first[:12]}"]
+
+
+def test_la_base_congela_el_ranking_en_un_commit_que_existe():
+    commit = check_rag.load_base()["ranking_commit"]
+
+    assert len(commit) == 40
+    assert git(check_rag.ROOT, "cat-file", "-t", commit) == "commit"
+
+
+def test_el_ranking_usa_la_ruta_relativa_de_lo_indexado(tmp_path, monkeypatch):
+    hit = type("Hit", (), {"metadata": {"file_path": "C:/otra/core/a.py", "relative_path": "core/a.py"}, "distance": 1.0, "coverage": 1.0})()
+    monkeypatch.setattr(check_rag, "QUESTIONS", [("pregunta", "core/a.py", "concepto")])
+    monkeypatch.setattr(check_rag, "search_collections", lambda *args, **kwargs: [hit])
+
+    rows, _ = check_rag.measure(tmp_path)
+
+    assert rows[0][1] == 1
+
+
 def test_reintenta_si_windows_la_bloquea(tmp_path, monkeypatch, no_wait):
     folder = tmp_path / "indice"
     folder.mkdir()

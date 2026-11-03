@@ -1,7 +1,9 @@
 """Benchmark del RAG: ¿el archivo correcto sale entre los primeros resultados?
 
-Indexa C:\\Asia en una carpeta temporal con el código real, sin tocar
-data/chroma, y hace preguntas cuyo archivo correcto se conoce. Mide en qué puesto
+Indexa en una carpeta temporal, con el código real y sin tocar data/chroma, una
+copia de C:\\Asia congelada en un commit (ranking_commit de check_rag_base.json),
+y hace preguntas cuyo archivo correcto se conoce. Congelada para que un cambio del
+ROADMAP no mueva el ranking: el commit se cambia a propósito, junto con su base. Mide en qué puesto
 sale ese archivo (1.º, top 3, top 5) por tipo de pregunta: concepto, documento y
 nombre exacto. Usa nomic-embed-text; descarga antes los demás modelos.
 
@@ -46,10 +48,13 @@ del punta a punta varía con el azar del 7B: se lee, no se comprueba.
 """
 import argparse
 import gc
+import io
 import json
 import re
 import shutil
+import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 from collections import Counter
@@ -355,9 +360,30 @@ def relative(path: str) -> str:
     return path.replace("\\", "/").removeprefix(ROOT.as_posix() + "/")
 
 
-def build_index(folder):
+def frozen_copy(commit, folder, repo=ROOT) -> Path:
+    """Los archivos versionados de repo en commit, en folder/repo-<commit>. Si ya está, la reutiliza.
+
+    El ranking se mide sobre esta copia y no sobre el repo vivo: si no, cada cambio del
+    ROADMAP mueve el ranking sin que cambie el código de búsqueda.
+    """
+    corpus = Path(folder) / f"repo-{commit[:12]}"
+
+    if not corpus.exists():
+        archive = subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", commit], capture_output=True, check=True)
+        corpus.mkdir(parents=True)
+
+        with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
+            tar.extractall(corpus, filter="data")
+
+    return corpus
+
+
+def build_index(folder, commit=None):
+    """El índice del ranking: la copia de commit (ranking_commit de la base) o, sin él, el repo vivo."""
     unload_chat_models()
-    indexer = ProjectIndexer(str(ROOT), COLLECTION, persist_dir=folder)
+    corpus = frozen_copy(commit, folder) if commit else ROOT
+    print(f"Corpus del ranking: {f'commit {commit[:12]}' if commit else 'el repo vivo'}.", flush=True)
+    indexer = ProjectIndexer(str(corpus), COLLECTION, persist_dir=folder)
     start = time.perf_counter()
     count = indexer.index_project()
     seconds = time.perf_counter() - start
@@ -376,7 +402,8 @@ def measure(folder):
         start = time.perf_counter()
         hits = search_collections(question, [COLLECTION], n_results=max(TOPS), persist_dir=folder)
         seconds += time.perf_counter() - start
-        files = [relative(hit.metadata["file_path"]) for hit in hits]
+        # Relativa a lo indexado: con la copia congelada, file_path no está en ROOT.
+        files = [hit.metadata.get("relative_path") or relative(hit.metadata["file_path"]) for hit in hits]
         best = hits[0] if hits else None
         rows.append((kind, rank_of(expected, files), question, files[:3], best, hits))
 
@@ -769,7 +796,7 @@ def main():
     folder = Path(args.indice) if args.indice else temp_folder()
 
     try:
-        count, seconds = build_index(folder)
+        count, seconds = build_index(folder, base.get("ranking_commit"))
         print(f"Índice: {count} fragmentos en {seconds:.0f} s ({seconds / max(count, 1) * 1000:.0f} ms/fragmento).")
 
         rows, query_seconds = measure(folder)
