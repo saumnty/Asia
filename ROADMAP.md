@@ -156,11 +156,74 @@ Wikipedia (capa 3), la medición que faltaba:
 - `check_rag --wikipedia 1`: búsqueda 9/12 (la base). Con el modelo, cortada en la pregunta 10 de 12 (RAM a 0,90 GB): 4 correctas de 9 (penicilina, muro de Berlín, 206 huesos, Everest, este por el artículo "Montaña" aunque la búsqueda no trajo "Monte_Everest") y 5 sin respuesta directa (Australia, Quijote, Mona Lisa, agua, Japón); 38 s por pregunta, de 17 a 79. Las trampas no llegaron a correr.
 
 Faltan, o quedaron a medias:
-- `check_rag --punta-a-punta` entero (se cortó en la 15 de 20) y su segunda corrida.
-- `check_rag --wikipedia 1` entero, con las 11 trampas.
+- ~~`check_rag --punta-a-punta` entero (se cortó en la 15 de 20) y su segunda corrida.~~ Entero una vez con `num_gpu` 16 (ver "Memoria de Ollama"); la segunda se atascó en la pregunta 24 de 24.
+- ~~`check_rag --wikipedia 1` entero, con las 11 trampas.~~ Hecho (ver "Memoria de Ollama").
 - `check_speed --descargar --espera 15` (la segunda tanda) y `jarvis.exe` hasta el primer prompt.
 - La primera frase con voz precargada (9,2 → 1,8 s en CPU) y el corte de Ctrl+C con un prompt en proceso.
-- Con 1–2 GB de RAM libres y el 7B cargado, las mediciones largas no terminan: hace falta cerrar programas o un modelo que quepa en la GPU (ver "Cambio de modelo seguro").
+- Con 1–2 GB de RAM libres y el 7B cargado, las mediciones largas no terminan: hace falta cerrar programas o un modelo que quepa en la GPU (ver "Cambio de modelo seguro"). La causa principal resultó ser la caché de prompts del llama-server (ver "Memoria de Ollama").
+
+### Memoria de Ollama (2026-11-03, tarde)
+
+Lo que limitaba con la GPU, según el log de Ollama (`server.log`):
+- **Margen de VRAM:** el ajuste automático del llama-server deja 1024 MiB de VRAM libres a propósito ("will leave … >= 1024 MiB"). Por eso el 7B sube 11 de 29 capas y quedaban ~1,7 GB sin usar.
+- **Flash Attention:** ya venía activado por defecto (`flash_attn = auto` → "Flash Attention enabled"), aunque `OLLAMA_FLASH_ATTENTION` diga false.
+- **Caché de prompts en RAM:** el llama-server guarda el estado de cada prompt anterior, hasta 8192 MiB ("prompt cache is enabled, size limit: 8192 MiB"). Su RAM privada sube ~85 MB por cada prompt distinto de ~3000 tokens (con KV en q8_0; el doble en f16). Un punta a punta hace ~90 llamadas al modelo, y eso, no Chroma, es lo que lo cortaba: buscar en la colección `python` (8515 fragmentos) suma solo 0,7 GB, nomic incluido.
+
+Reparto con el 7B a 16384 (`memoria.py`: dos generaciones de 200 tokens a temperatura 0; RAM libre antes de cargar, de 5,4 a 5,9 GB):
+
+| Configuración | Capas en GPU | Caché KV | `ollama ps` | VRAM | RAM libre con el 7B | t/s |
+|---|---|---|---|---|---|---|
+| Sin variables | 11/29 | 896 MiB f16 (576 CPU, 320 GPU) | 5,43 GiB, 59/41 | 2347 MiB | 1,91–2,29 GB | 7,9–8,3 |
+| `OLLAMA_FLASH_ATTENTION=1` | 11/29 | igual | igual | 2347 MiB | 1,97 GB | 7,7–8,2 |
+| `OLLAMA_KV_CACHE_TYPE=q8_0` | 11/29 | 476 MiB q8_0 (306 CPU, 170 GPU) | 5,07 GiB, 58/42 | 2251 MiB | 2,49 GB | 7,9 |
+| Las dos | 11/29 | 476 MiB | 5,07 GiB, 58/42 | 2251 MiB | 2,58 GB | 8,3–8,9 |
+| q8_0 y `num_gpu` 14 | 14/29 | 476 MiB | 50/50 | 2695 MiB | 3,44 GB | 8,7–9,7 |
+| q8_0 y `num_gpu` 16 | 16/29 | 476 MiB | 44/56 | 2995 MiB (3397 con nomic) | 3,47 GB | 9,6–10,7 |
+| q8_0 y `num_gpu` 17 | 17/29 | 476 MiB | 41/59 | 3137 MiB | 3,60 GB | 11,4–12,2, pero al cargar nomic se descarga el 7B |
+
+`check_speed` (total, tokens y t/s; la primera carga del 7B, 10–12 s, va en "hola"):
+
+| Mensaje | Sin variables | FA | q8_0 | Las dos | q8_0 y `num_gpu` 16 |
+|---|---|---|---|---|---|
+| "hola" | 19,9 s, 10,8 t/s | 20,7 s, 9,2 | 19,7 s, 10,1 | 20,1 s, 10,8 | 15,3 s, 13,3 |
+| "qué es un grafo bipartito" | 14,2 s (117 tok), 8,6 | 12,4 s (95), 8,1 | 10,4 s (81), 8,2 | 10,7 s (89), 8,8 | 10,5 s (115), 11,4 |
+| "si" | 2,5 s, 10,9 | 2,3 s, 10,3 | 3,1 s, 8,7 | 3,5 s, 10,3 | 2,8 s, 12,9 |
+| "explica @ROADMAP.md" | 63,6 s (324 tok), 6,7 | 81,5 s (384), 5,8 | 50,7 s (234), 6,6 | 37,5 s (162), 7,2 | 46,9 s (299), 8,9 |
+
+`check_rag`, ranking: igual en todas (no usa el modelo de chat; las distancias coinciden a 0,1). 11/15/20 en total, concepto 3/7/12, "no lo encontré" 3 de 5 (antes 2 de 5) y 1179 fragmentos en 196–198 s. Sigue con código 1 (concepto en 1.º, 3 frente a 4), también con el filtro nuevo (`41c7e9ea`), que quita 12 líneas del ROADMAP que citaban preguntas del benchmark. Ahora lo que le gana a `core/audit.py` en "dónde se guarda la bitácora de envíos externos" (350,7 frente a 353,1) es `ROADMAP.md:314-324`, el diseño del guardián de envíos externos (`f05b560b`). No cita ninguna pregunta: es contenido real. La base no se cambió.
+
+`check_rag`, punta a punta (una corrida cada una; respondidas por grupo, de las preguntas a las que llegó):
+
+| | Sin variables | q8_0 (y FA) | q8_0 y `num_gpu` 16 | Ídem, segunda corrida |
+|---|---|---|---|---|
+| Preguntas | 13 de 24 (RAM a 0,99 GB) | 23 de 24 (RAM a 0,79 GB) | 24 de 24, con 9 trampas y 5 ajenas | 23 de 24 (atascada) |
+| Asia | 7/8 | 7/8 | 5/8 | 6/8 |
+| Bolitabot | 2/3 | 2/3 | 2/3 | 0/3 |
+| Docs | 2/2 | 7/12 | 10/13 | 7/12 |
+| Citan el archivo | 8 | 13 | 15 | 10 |
+| Límite conocido | — | — | 1 (base 2) | — |
+| Trampas, ajenas | — | — | 0/9, 0/5 | — |
+| s/pregunta | 35 | 46 | 34 (24 con trampas y ajenas) | 32 |
+
+La de `num_gpu` 16 es la primera completa con la GPU: código 0. Las diferencias de calidad entre columnas (Asia 5–7/8, Bolitabot 0–2/3) son del orden de la variación entre dos corridas iguales, así que no se ve un efecto de la configuración. La segunda corrida se atascó en "cómo se define una clase de datos con dataclass en python": la extracción (`prompts.extract_quotes`, sin `max_tokens`) generó sin parar, llenó los 16384 de contexto, el llama-server lo desplazó tres veces ("slot context shift") y siguió casi 2 h hasta que la RAM bajó de 1 GB. Ni la extracción ni la redacción (`answer_from_quotes`) tienen tope de tokens; la traducción sí.
+
+`check_rag --wikipedia 1`, entero (búsqueda 9/12, la base):
+
+| | Correctas | Sin respuesta directa | Trampas respondidas | s/pregunta |
+|---|---|---|---|---|
+| q8_0 | 6/12 (Mona Lisa, 1989, 206, Everest, García Márquez, luz) | 6 | 3/11 | 27 |
+| q8_0 y `num_gpu` 16 | 4/12 | 8 | 3/11 | 24 |
+
+Sale con código 1 por las trampas (base 0). Son las mismas 3 en las dos corridas y ninguna inventa un dato:
+- Villarrubia de los Ojos: 9667 habitantes, de una línea real de la tabla de "Provincia de Ciudad Real". Es verdad, solo que la trampa suponía que no estaba.
+- Río Ulúa y Salento: el resumen dice que el dato no está, pero cuentan como "respondió" porque hay resumen y una línea verificada que no viene al caso.
+
+Quedó: `OLLAMA_KV_CACHE_TYPE=q8_0` como variable de usuario. Libera ~420 MiB de caché, ~0,4 GB de RAM con el 7B cargado y la mitad de RAM por prompt en la caché de prompts, y la velocidad no cambia. `OLLAMA_FLASH_ATTENTION` se quitó: ya estaba activado. Para deshacer: `[Environment]::SetEnvironmentVariable("OLLAMA_KV_CACHE_TYPE", $null, "User")`, cerrar Ollama desde la bandeja y volver a abrirlo.
+
+Sin aplicar, porque piden permiso:
+- **`num_gpu` 16:** RAM libre de 2,5 a 3,5 GB y t/s de ~8 a ~10. No es una variable de entorno: hace falta un ajuste nuevo (`ollama_num_gpu`, pasado en las opciones de cada llamada) en `settings.json`. 17 capas no conviven con nomic.
+- **Bajar la caché de prompts del llama-server:** `--cache-ram`, probablemente `LLAMA_ARG_CACHE_RAM` en el entorno de Ollama, que ya lista las `LLAMA_ARG_FIT*`. Sería otra variable y un límite.
+- **Un tope de tokens para la extracción y la redacción de `/buscar`:** evitaría el atasco.
 
 ## Fases futuras (diseño pendiente)
 
@@ -628,7 +691,7 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 
 | Modelo | Tamaño | Licencia | Nota |
 |---|---|---|---|
-| `qwen3:4b-instruct-2507-q4_K_M` | 2,5 GB | Apache 2.0 | Ya descargado. Descartado antes para el IntentEngine porque rompía `open_app` (`71521ad3`); repetir `check_intents`, que desde entonces tiene atajos para "abre X". |
+| `qwen3:4b-instruct-2507-q4_K_M` | 2,5 GB | Apache 2.0 | Ya descargado. Descartado antes para el IntentEngine porque rompía `open_app` (`71521ad3`). Repetido (2026-11-03): `check_intents` 44 de 44, a 0,52 s por mensaje, con contexto 4096 y `num_gpu` 37 (100 % en GPU, 2,7 GiB, 52 t/s frente a ~8 del 7B; nomic cabe al lado). Con 8192 ya no conviven. Sin `num_gpu`, el margen de 1 GB de VRAM lo deja en 28/72 incluso con 4096. Frente al 7B (`intents_qwen7b.json`): 27 de 28 con la misma acción ("cómo me llamo?" pasa de `chat` a `recall`, la esperada) y 4 parámetros con otras palabras (`bloc de notas` en minúsculas, que `open_app` acepta). Falta `check_rag` con él. |
 | `phi4-mini` (3,8B) | 2,5 GB | MIT | Contexto de 128K. Español menos probado que Qwen. |
 | `llama3.2:3b` | 2,0 GB | Llama 3.2 Community License | El más chico: más margen para el contexto en 4 GB. |
 
