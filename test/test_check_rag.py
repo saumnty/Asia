@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "test" / "manual"))
 
 import check_rag  # noqa: E402
+from core import prompts  # noqa: E402
 from core.rag.vector_store import VectorStore  # noqa: E402
 from test_rag_wikipedia import zim  # noqa: E402, F401
 
@@ -465,6 +466,43 @@ def test_wikipedia_igual_que_la_base_no_falla():
 @pytest.mark.parametrize("found, traps, name", [(0, 0, "encontrado"), (1, 1, "trampas")])
 def test_wikipedia_por_debajo_de_la_base_o_con_trampas_falla(found, traps, name):
     assert name in check_rag.wikipedia_failures(found, traps, WIKI_BASE)[0]
+
+
+def shown_with(summary):
+    lines = f"{prompts.VERIFIED_LINES}\n\nWikipedia · x (Armenia)\n  Armenia cuenta con 325 056 habitantes."
+    return f"{lines}\n\n{prompts.UNVERIFIED_SUMMARY}\n\n{summary}"
+
+
+@pytest.mark.parametrize("summary", [
+    # Los dos de la corrida del 2026-11-03.
+    "La información sobre la población de Salento no está disponible en las líneas proporcionadas [Armenia_Quindío.wiki:48].",
+    f"El río Ulúa no nace en las fuentes consultadas. {prompts.UNCITED}\nLa información proporcionada se refiere a la cuenca.",
+    "Ese dato no se menciona en los fragmentos.",
+])
+def test_un_resumen_que_dice_que_no_esta_es_una_negativa(summary):
+    assert check_rag.wikipedia_state("respondió", shown_with(summary)) == "el modelo negó"
+
+
+@pytest.mark.parametrize("summary", [
+    "Villarrubia de los Ojos tiene 9,667 habitantes [Provincia_de_Ciudad_Real.wiki:60].",
+    "El Muro de Berlín cayó en 1989; no hubo enfrentamientos.",
+])
+def test_una_respuesta_no_es_una_negativa(summary):
+    assert check_rag.wikipedia_state("respondió", shown_with(summary)) == "respondió"
+
+
+def test_la_negativa_solo_mira_el_resumen():
+    shown = f"{prompts.VERIFIED_LINES}\n\nWikipedia · x\n  Esto no está disponible en las líneas.\n\n{prompts.UNVERIFIED_SUMMARY}\n\nSon 5."
+
+    assert check_rag.wikipedia_state("respondió", shown) == "respondió"
+    assert check_rag.wikipedia_state("sin respuesta directa", shown_with("no está en las fuentes")) == "sin respuesta directa"
+
+
+def test_las_trampas_de_wikipedia_no_tienen_el_dato_en_otro_articulo():
+    removed = ("Villarrubia", "Salento", "Vilcabamba", "Salto del Laja", "Real del Monte")
+
+    assert len(check_rag.WIKIPEDIA_TRAPS) == 6
+    assert not [trap for trap in check_rag.WIKIPEDIA_TRAPS if any(name in trap for name in removed)]
 
 
 def test_las_preguntas_de_wikipedia_la_nombran():

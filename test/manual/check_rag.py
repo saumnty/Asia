@@ -37,7 +37,8 @@ Para calibrar el filtro, la cobertura y la distancia de cada pregunta, sin el mo
 Wikipedia offline, aparte para que no cambien las bases de lo demás: si el artículo
 esperado está entre los que elige la búsqueda del .zim (sin modelo, con 0 corridas) y,
 con corridas, si la respuesta esperada sale en las líneas verificadas y si se responde
-alguna trampa (preguntas cuyo artículo no está en el top). Usa la fuente "wikipedia" de
+alguna trampa (preguntas cuyo dato no está en ningún artículo). Un resumen que dice que
+el dato no está cuenta como "el modelo negó", no como respuesta. Usa la fuente "wikipedia" de
 la biblioteca y una caché de embeddings temporal: la corrida 1 es en frío.
 
     .venv\\Scripts\\python.exe test\\manual\\check_rag.py --wikipedia 1
@@ -218,20 +219,36 @@ WIKIPEDIA_QUESTIONS = [
 
 # Sus artículos no están en el top (has_entry_by_path, con el .zim de 2026-10): un dato
 # así de concreto no debería estar en otro. Si se responde, se lee entera. Fuera la
-# laguna de Bacalar y Copán Ruinas: "Bacalar" y "Departamento_de_Copán" sí están.
+# laguna de Bacalar y Copán Ruinas: "Bacalar" y "Departamento_de_Copán" sí están. Y
+# fuera las que el dato sí está en otro artículo (búsqueda de texto completo, 2026-11-03):
+# Villarrubia de los Ojos (tabla de Provincia_de_Ciudad_Real), Salento (tabla de Quindío),
+# Vilcabamba ("menos de mil", Provincia_de_Loja), Salto del Laja (Cascada) y Real del
+# Monte (Mina de Acosta, Minas de Pachuca).
 WIKIPEDIA_TRAPS = [
-    "cuántos habitantes tiene Villarrubia de los Ojos en wikipedia",
     "en qué año se fundó Tlacolula de Matamoros en wikipedia",
     "dónde nace el río Ulúa en wikipedia",
-    "qué minas había en Real del Monte en wikipedia",
     "cuántos habitantes tiene Purmamarca en wikipedia",
-    "cuántos habitantes tiene Salento en el Quindío en wikipedia",
     "en qué año se fundó Barichara en wikipedia",
-    "cuántos habitantes tiene Vilcabamba en Ecuador en wikipedia",
     "en qué año se fundó Concepción de Ataco en wikipedia",
-    "qué altura tiene el Salto del Laja en wikipedia",
     "en qué año se creó el Parque nacional Conguillío en wikipedia",
 ]
+
+# Un resumen que dice que el dato no está en lo que se le dio: es una negativa, no una respuesta.
+DENIAL = re.compile(
+    r"\bno\b[^.\n]{0,60}\b(?:est[áa]n?|aparecen?|figuran?|hay|se (?:mencionan?|encuentran?|indican?|especifican?|proporcionan?))\b"
+    r"[^.\n]{0,60}\b(?:disponibles?|l[íi]neas|fragmentos|fuentes|informaci[óo]n|texto|proporcionad[ao]s?|consultad[ao]s?)"
+    r"|\bno\b[^.\n]{0,40}\ben (?:las|los) (?:fuentes|l[íi]neas|fragmentos)",
+    re.IGNORECASE,
+)
+
+
+def model_denied(shown) -> bool:
+    """True si alguna frase del resumen dice que el dato no está."""
+    return bool(DENIAL.search(shown.partition(prompts.UNVERIFIED_SUMMARY)[2]))
+
+
+def wikipedia_state(state, shown) -> str:
+    return "el modelo negó" if state in ANSWERED and model_denied(shown) else state
 
 
 def release_chroma():
@@ -713,9 +730,9 @@ def wikipedia(runs, base):
     paths.WIKIPEDIA_CACHE_FILE = scratch / "embeddings.sqlite3"
     brain = Brain()
     summary = [
-        "| Corrida | Correctas | Respondió | Solo líneas | Sin respuesta directa | No lo encontré "
-        "| Trampas respondidas | Segundos por pregunta |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Corrida | Correctas | Respondió | Solo líneas | Sin respuesta directa | No lo encontré | El modelo negó "
+        "| Trampas respondidas | Trampas que el modelo negó | Segundos por pregunta |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     all_fell = 0
 
@@ -725,6 +742,7 @@ def wikipedia(runs, base):
 
             for question, _, pattern in WIKIPEDIA_QUESTIONS:
                 state, _, seconds, shown = answer_row(brain, question)
+                state = wikipedia_state(state, shown)
                 correct = wikipedia_correct(shown, pattern)
                 rows.append((state, correct, seconds))
                 opening = " ".join((shown.partition(prompts.UNVERIFIED_SUMMARY)[2] or shown).split())[:300]
@@ -733,11 +751,12 @@ def wikipedia(runs, base):
 
             for question in WIKIPEDIA_TRAPS:
                 state, _, seconds, shown = answer_row(brain, question)
+                state = wikipedia_state(state, shown)
                 traps.append((state, seconds))
                 print(f"\n[{run}] TRAMPA {state}, {seconds:.0f} s: {question}", flush=True)
 
                 # Una línea verificada prueba que existe, no que responda: se lee entera.
-                if state in ANSWERED:
+                if state in ANSWERED + ("el modelo negó",):
                     print(shown, flush=True)
 
             states = Counter(state for state, _, _ in rows)
@@ -747,7 +766,8 @@ def wikipedia(runs, base):
             summary.append(
                 f"| {run} | {sum(1 for r in rows if r[1])}/{len(rows)} | {states['respondió']} "
                 f"| {states['solo líneas'] + states['redacción inválida']} | {states['sin respuesta directa']} "
-                f"| {states['el código negó']} | {fell}/{len(traps)} | {seconds:.0f} |"
+                f"| {states['el código negó']} | {states['el modelo negó']} | {fell}/{len(traps)} "
+                f"| {sum(1 for state, _ in traps if state == 'el modelo negó')} | {seconds:.0f} |"
             )
             print()
     finally:
