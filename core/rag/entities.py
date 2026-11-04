@@ -1,5 +1,8 @@
 """La regla de la entidad: si la pregunta nombra un nombre propio, la cita tiene que nombrarlo.
 
+Y la de los nombres técnicos: un comando, programa o paquete de la pregunta tiene que
+salir en algún fragmento o título encontrado ("cómo configuro flopctl" traía swanctl).
+
 El 7B cambiaba el sujeto: "el puente de Valdecierzo se inauguró en 1929" con una línea
 del Puente de Hierro de Soria, "la capital de Australia es Camberra" con un JSON de
 ejemplo de un hilo de Javascript. Una cita de fuera (Wikipedia, Stack Exchange) solo
@@ -57,8 +60,13 @@ def mentions(entity: str, text: str) -> bool:
     return all(name in found for name in names(entity))
 
 
+def outside_tag(tag: str) -> bool:
+    """True si la etiqueta es de Wikipedia o de Stack Exchange, no de un proyecto."""
+    return WIKI_SUFFIX in tag or QA_SUFFIX in tag
+
+
 def outside(quote) -> bool:
-    return WIKI_SUFFIX in quote.path or QA_SUFFIX in quote.path
+    return outside_tag(quote.path)
 
 
 def about_entities(quotes: list, question: str, skip=()) -> tuple:
@@ -78,3 +86,55 @@ def about_entities(quotes: list, question: str, skip=()) -> tuple:
         return kept, []
 
     return kept, [e for e in entities if not any(says(q, e) for q in quotes)] or entities
+
+
+# Comandos, programas y paquetes, aunque vayan en minúsculas: con punto, guion, guion bajo o
+# cifras ("tar.gz", "brezalmonte-daemon", "QX7741Z"), con mayúsculas en medio ("exFAT"), con
+# terminación de comando ("flopctl") o detrás de "comando", "programa", "paquete"…
+TOKEN = re.compile(r"[\wáéíóúñü][\wáéíóúñü.+_-]*[\wáéíóúñü]|[\wáéíóúñü]", re.IGNORECASE)
+COMMAND_ENDING = re.compile(r"\w{2,}(?:ctl|adm|exe)$", re.IGNORECASE)
+INNER_MARK = re.compile(r"\w[._+-]\w|_")
+TECHNICAL_NOUNS = {
+    "comando", "programa", "paquete", "herramienta", "utilidad", "librería", "biblioteca", "módulo",
+    "servicio", "demonio", "daemon", "script", "sensor", "transistor", "chip", "controlador",
+}
+COMMON = {"de", "del", "el", "la", "los", "las", "un", "una", "que", "para", "en", "y", "o", "con", "se"}
+
+
+def technical_shape(word: str, before: str = "") -> bool:
+    if word.isupper() and word.isalpha():
+        return False
+
+    has_letters = any(c.isalpha() for c in word)
+    return has_letters and (
+        any(c.isdigit() for c in word) or bool(INNER_MARK.search(word)) or bool(re.search(r"[a-z][A-Z]", word))
+        or bool(COMMAND_ENDING.match(word)) or before.lower() in TECHNICAL_NOUNS and word.lower() not in COMMON
+    )
+
+
+def technical_names(question: str, skip=()) -> list:
+    """Los nombres de comando, programa o paquete de question, sin las fuentes de skip."""
+    words = TOKEN.findall(question)
+    skipped = {plain(name) for name in skip}
+    found = [
+        word for before, word in zip([""] + words, words)
+        if technical_shape(word, before) and plain(word) not in skipped
+    ]
+    return list(dict.fromkeys(found))
+
+
+def missing_names(question: str, fragments: list, skip=()) -> list:
+    """Los nombres técnicos de question que no dice ningún fragmento de fuera, ni su título.
+
+    Con algún fragmento de los proyectos no se mira: allí los nombres son de código.
+    """
+    if not fragments or not all(outside_tag(fragment.tag) for fragment in fragments):
+        return []
+
+    text = squashed(" ".join(f"{fragment.label}\n{fragment.text}" for fragment in fragments))
+    return [name for name in technical_names(question, skip) if squashed(name) not in text]
+
+
+def squashed(text: str) -> str:
+    """plain sin signos: "pull-up" encuentra "pullup" y "pull up"."""
+    return re.sub(r"[\W_]+", "", plain(text))

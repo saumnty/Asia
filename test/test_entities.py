@@ -1,7 +1,9 @@
 """La regla de la entidad: una cita de Wikipedia o Stack Exchange tiene que nombrar lo que se pregunta."""
+import pytest
+
 from core import prompts
-from core.rag.entities import about_entities, mentions, question_entities
-from core.rag.quotes import Quote
+from core.rag.entities import about_entities, mentions, missing_names, question_entities, technical_names
+from core.rag.quotes import Fragment, Quote
 from test_rag_answer import brain_with
 
 WIKI_CONTEXT = """
@@ -68,3 +70,59 @@ def test_buscar_dice_que_no_encontro_el_nombre():
 
     assert answer == f"{prompts.NO_INFO_ABOUT} Valdecierzo."
     assert len(brain.provider_router.prompts) == 1
+
+
+# --- Nombres técnicos -----------------------------------------------------------
+
+QA_CONTEXT = """
+--- [unix_557101.qa:71-76] How to start a swanctl.conf configured tunnel automatically > Respuesta ---
+Fuente: unix
+Contenido:
+How to start a swanctl.conf configured tunnel automatically > Respuesta
+start_action = start   # on boot
+"""
+
+
+@pytest.mark.parametrize("question, names", [
+    ("cómo configuro flopctl para que arranque solo", ["flopctl"]),
+    ("qué hace el comando zarnquist", ["zarnquist"]),
+    ("cómo instalo el paquete brezalmonte-daemon", ["brezalmonte-daemon"]),
+    ("qué tensión máxima soporta el transistor QX7741Z", ["QX7741Z"]),
+    ("qué es mejor para un disco externo, NTFS o exFAT", ["exFAT"]),
+    ("qué diferencia hay entre un MOSFET y un BJT", []),
+    ("cómo hago un commit en git", []),
+    ("en qué año se fundó Brezalmonte de Arriba", []),
+])
+def test_los_nombres_tecnicos_de_la_pregunta(question, names):
+    assert technical_names(question) == names
+
+
+def fragment(tag, label, text):
+    return Fragment(tag, label, f"{label}\n{text}")
+
+
+def test_falta_el_nombre_si_ningun_fragmento_lo_dice():
+    found = [fragment("unix_557101.qa:71-76", "How to start a swanctl.conf tunnel", "start_action = start")]
+
+    assert missing_names("cómo configuro flopctl para que arranque solo", found) == ["flopctl"]
+
+
+def test_vale_aunque_el_fragmento_lo_escriba_sin_guion():
+    found = [fragment("electronics_1.qa:1-3", "What is a pullup resistor?", "A pull up resistor...")]
+
+    assert missing_names("qué es una resistencia pull-up", found) == []
+
+
+def test_con_fragmentos_de_los_proyectos_no_se_mira():
+    found = [fragment("control/pid.py:40-55", "Pid.salida", "self.kp = 2.5")]
+
+    assert missing_names("qué hace el comando flopctl", found) == []
+
+
+def test_buscar_no_llama_al_modelo_si_falta_el_comando():
+    brain = brain_with("no debería llamarse", context=QA_CONTEXT)
+
+    answer = brain.process("/buscar cómo configuro flopctl para que arranque solo")
+
+    assert answer == f"{prompts.NO_INFO_ABOUT} flopctl."
+    assert brain.provider_router.prompts == []

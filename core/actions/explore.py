@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from core import prompts
-from core.rag.entities import about_entities
+from core.rag.entities import about_entities, missing_names
 from core.rag.glossary import expand
 from core.rag.instructions import source_notes, with_project_notes
 from core.rag.keywords import (
@@ -27,6 +27,7 @@ from core.rag.quotes import (
     best_fragments,
     check_draft,
     is_thin,
+    parse_fragments,
     quotes_text,
     verified_lines,
     verify_quotes,
@@ -131,6 +132,12 @@ class ExploreActions:
         if rag_context in prompts.NOTHING_TO_ANSWER or rag_context.startswith(prompts.NO_DIRECT_ANSWER):
             return rag_context
 
+        # Un comando o paquete que no sale en ningún fragmento de fuera: lo que se encontró es de otro.
+        missing = missing_names(asked, parse_fragments(rag_context), self.source_names())
+
+        if missing:
+            return f"{prompts.NO_INFO_ABOUT} {' ni '.join(missing)}."
+
         # Sin subrayados ni separadores: ni el modelo los copia ni valen como cita.
         rag_context = without_decoration(rag_context)
 
@@ -144,7 +151,7 @@ class ExploreActions:
 
         # Si la pregunta nombra un lugar, una persona o una obra, la línea o su artículo tiene que
         # nombrarlo: el 7B contestaba por el puente de Valdecierzo con el Puente de Hierro de Soria.
-        quotes, missing = about_entities(quotes, asked, [source.name for source in Library().all()] + ["Wikipedia"])
+        quotes, missing = about_entities(quotes, asked, self.source_names())
 
         if missing:
             return f"{prompts.NO_INFO_ABOUT} {' ni '.join(missing)}."
@@ -170,6 +177,10 @@ class ExploreActions:
             return f"{lines}\n\n{prompts.UNVERIFIED_SUMMARY}\n\n{summary}"
 
         return f"{prompts.INVALID_DRAFT}\n\n{lines}"
+
+    def source_names(self):
+        """Los nombres de las fuentes, que no son nombres de la pregunta (core/rag/entities.py)."""
+        return [source.name for source in Library().all()] + ["Wikipedia"]
 
     def zim_search_inputs(self, question):
         """(pregunta, traducida, palabras clave) con que /buscar busca; check_rag mide con lo mismo."""
