@@ -8,7 +8,7 @@ import pytest
 import launcher
 from core import timing
 from core.timing import Timings, summary
-from core.voice.reading import Reading, SentenceSplitter
+from core.voice.reading import END, Reading, SentenceSplitter
 from test_launcher import FakeBrain, reader
 from test_voice_input import FakeSpeaker, FakeTTS, session, silence, speech
 from test_voice_output import patient
@@ -21,26 +21,31 @@ def split(*chunks):
 
 
 class BlockingSpeaker(FakeSpeaker):
-    """Cada frase "suena" hasta stop(); con blocking=False, al momento."""
+    """Cada frase "suena" hasta stop(); con blocking=False, al momento.
+
+    stop() deja el evento puesto y play() lo consume: si stop() llega antes de que empiece
+    la frase, no se pierde (con un evento nuevo por frase, esa esperaba los 5 s del tope),
+    y la frase siguiente vuelve a sonar hasta otro stop().
+    """
 
     def __init__(self, blocking=True):
         super().__init__()
         self.blocking = blocking
         self.playing = threading.Event()
-        self.current = threading.Event()
+        self.released = threading.Event()
         self.stops = 0
 
     def play(self, audio, rate):
         self.played.append((len(audio), rate))
-        self.current = threading.Event()
         self.playing.set()
 
         if self.blocking:
-            self.current.wait(5)
+            self.released.wait(5)
+            self.released.clear()
 
     def stop(self):
         self.stops += 1
-        self.current.set()
+        self.released.set()
 
 
 class StreamingRouter:
@@ -136,8 +141,23 @@ def test_stop_corta_y_vacia_la_cola():
     reading.finish()
 
     assert reading.wait(5) and not reading.active
+    # Se espera a que acaben los dos hilos, no un tiempo: stop() y finish() dejan cada uno
+    # su marca de fin, y la de la síntesis puede seguir en la cola cuando acaba el altavoz.
+    for thread in reading.threads:
+        thread.join(5)
+
+    assert not any(thread.is_alive() for thread in reading.threads)
     assert speaker.stops >= 1 and len(speaker.played) == 1
-    assert reading.texts.qsize() <= 1 and "Cinco." not in tts.texts
+    assert all(item is END for item in drained(reading.texts)) and "Cinco." not in tts.texts
+
+
+def drained(pending) -> list:
+    items = []
+
+    while not pending.empty():
+        items.append(pending.get_nowait())
+
+    return items
 
 
 def test_primer_audio_en_la_linea_de_tiempos():
