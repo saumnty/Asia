@@ -43,7 +43,8 @@ def test_breve_por_defecto():
     system = messages[0]["content"]
     assert system.startswith(SYSTEM_PROMPT + "\n\n" + CHAT_RULES)
     assert "2 a 5 frases" in system
-    assert "No inventes ejemplos, datos, nombres" in system and "no estoy seguro" in system
+    assert "No inventes datos concretos: cifras, fechas, nombres propios ni citas." in system
+    assert "no estoy seguro" in system and "Explicar un tema a fondo o poner un ejemplo ilustrativo no es inventar" in system
 
 
 @pytest.mark.parametrize(
@@ -117,3 +118,41 @@ def test_sin_recordatorio_si_se_pide_detalle():
     messages, _ = chat("explica a fondo qué es un grafo")
 
     assert BRIEF_REMINDER not in messages[-1]["content"]
+
+
+def test_un_si_a_la_oferta_de_explicar_a_fondo_sube_el_tope():
+    SettingsManager.set_overrides({})
+    brain = make_brain()
+    provider = Recording()
+    router = brain.provider_router
+    router.providers["ollama"] = provider
+    router.history = [
+        {"role": "user", "content": "qué es un nodo en ROS 2"},
+        {"role": "assistant", "content": "Un nodo es un proceso. ¿Quieres que te lo explique a fondo?"},
+    ]
+    router.history_labels = [USUARIO, USUARIO]
+
+    with request_sources(Fragment(USUARIO, "sí")):
+        router.chat("sí")
+
+    messages, kwargs = provider.calls[0]
+    assert kwargs["max_tokens"] == LIMITS["detail_tokens"]
+    assert not messages[-1]["content"].endswith("(Responde en 2 a 5 frases.)")
+
+
+def test_un_si_sin_oferta_sigue_breve():
+    brain = make_brain()
+    provider = Recording()
+    router = brain.provider_router
+    router.providers["ollama"] = provider
+    router.history = [{"role": "user", "content": "hola"}, {"role": "assistant", "content": "¿En qué te ayudo?"}]
+    router.history_labels = [USUARIO, USUARIO]
+
+    with request_sources(Fragment(USUARIO, "sí")):
+        router.chat("sí")
+
+    assert provider.calls[0][1]["max_tokens"] == LIMITS["tokens"]
+
+
+def test_explicamelo_a_fondo_es_detalle():
+    assert wants_detail("Explícamelo a fondo")

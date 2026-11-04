@@ -46,8 +46,9 @@ SYSTEM_PROMPT = (
 CHAT_RULES = (
     "Responde en 2 a 5 frases, salvo que el usuario pida más detalle (a fondo, con detalle, "
     "ejemplos, paso a paso): entonces extiéndete lo necesario.\n"
-    "No inventes ejemplos, datos, nombres, fechas ni cifras. Si no estás seguro de algo "
-    'concreto, dilo ("no estoy seguro") en lugar de rellenar.\n'
+    "No inventes datos concretos: cifras, fechas, nombres propios ni citas. Si no estás seguro de "
+    'uno, dilo ("no estoy seguro") en lugar de rellenar. Explicar un tema a fondo o poner un '
+    "ejemplo ilustrativo no es inventar: hazlo cuando te lo pidan.\n"
     "Si te preguntan por un hecho que puede ser posterior a tu entrenamiento (resultados, campeones, "
     "elecciones, noticias), di que no lo sabes; no lo adivines."
 )
@@ -73,6 +74,21 @@ DETAIL_REQUEST = re.compile(
 def wants_detail(text: str) -> bool:
     """El usuario pide una respuesta larga ("explica a fondo", "dame ejemplos")."""
     return bool(DETAIL_REQUEST.search(command_text(text)))
+
+
+# "¿Quieres que te lo explique a fondo?" en la respuesta anterior: un "sí" pide el detalle.
+DETAIL_OFFER = re.compile(
+    r"\b(a fondo|en detalle|con (mas )?detalle|mas detalle|profundizar|ampliar|ejemplos|paso a paso"
+    r"|quieres que te (lo )?explique|explicarte)\b"
+)
+
+
+def accepts_detail(text: str, history: list) -> bool:
+    """text es un "sí" a una oferta de explicar más de la última respuesta."""
+    from core.recent_facts import is_affirmative
+
+    last = next((m["content"] for m in reversed(history) if m["role"] == "assistant"), "")
+    return is_affirmative(text) and bool(DETAIL_OFFER.search(command_text(last)))
 
 
 # Mensajes (usuario + asistente) que se conservan del chat con el usuario.
@@ -218,7 +234,7 @@ Contexto del proyecto:
         # mensaje. No se guarda en el historial.
         reminder = ""
 
-        if max_tokens and not wants_detail(typed):
+        if max_tokens and not self.detail_requested(typed):
             reminder = VOICE_REMINDER if self.voice_mode() else BRIEF_REMINDER
 
         plain_message = {"role": "user", "content": prompt + reminder}
@@ -338,10 +354,14 @@ Contexto del proyecto:
 
         limits = {**DEFAULT_CHAT_LIMITS, **((self.settings.get("answer_limits") or {}).get("chat") or {})}
 
-        if wants_detail(text):
+        if self.detail_requested(text):
             return limits["detail_tokens"]
 
         return limits["voice_tokens"] if self.voice_mode() else limits["tokens"]
+
+    def detail_requested(self, text):
+        """"a fondo", "dame ejemplos"... o un "sí" a "¿quieres que te lo explique a fondo?"."""
+        return wants_detail(text) or accepts_detail(text, getattr(self, "history", []))
 
     def voice_mode(self):
         """"/voz" o --voz: la respuesta se lee en voz alta."""
