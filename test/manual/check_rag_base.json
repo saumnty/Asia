@@ -7,11 +7,15 @@
     "nombre": [6, 6, 6]
   },
   "wikipedia": {
-    "encontrados": 9,
+    "encontrados": 11,
     "trampas": 0
   },
   "preguntas": {
-    "robotics": {"encontrados": 4, "trampas": 0},
-    "stackoverflow_es": {"encontrados": 2, "trampas": 0}
+    "robotics": {"encontrados": 3, "trampas": 0},
+    "stackoverflow_es": {"encontrados": 2, "trampas": 0},
+    "unix": {"encontrados": 4, "trampas": 0},
+    "askubuntu": {"encontrados": 4, "trampas": 0},
+    "electronics": {"encontrados": 2, "trampas": 0},
+    "superuser": {"encontrados": 3, "trampas": 0}
   }
 }
