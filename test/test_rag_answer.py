@@ -84,6 +84,17 @@ def test_la_extraccion_no_copia_la_linea_de_titulo():
     assert "La primera línea de cada Contenido dice de dónde es el fragmento" in prompts.extract_quotes("pid", CONTEXT)
 
 
+@pytest.mark.parametrize("question", ["vale la pena usar un filtro de Kalman extendido", "¿Qué es mejor, vim o emacs?"])
+def test_una_pregunta_de_opinion_pide_lo_que_dicen_las_respuestas(question):
+    assert prompts.OPINION_QUOTES in prompts.extract_quotes(question, CONTEXT)
+    assert prompts.OPINION_ANSWER in prompts.answer_from_quotes(question, "[a.py:1] kp = 2")
+
+
+def test_las_demas_preguntas_no_llevan_la_regla_de_opinion():
+    assert prompts.OPINION_QUOTES not in prompts.extract_quotes("cómo sintonizo un PID", CONTEXT)
+    assert prompts.OPINION_ANSWER not in prompts.answer_from_quotes("cómo sintonizo un PID", "[a.py:1] kp = 2")
+
+
 def test_la_respuesta_solo_ve_las_lineas():
     prompt = prompts.answer_from_quotes("qué ganancia", "[a.py:1] kp = 2")
 

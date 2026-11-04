@@ -5,6 +5,7 @@ incluidos los saltos de línea y la indentación de algunos (que llegan así al
 modelo). test/test_brain_golden.py compara cada prompt con el que se enviaba
 antes: cambiar uno es un cambio de comportamiento.
 """
+import re
 
 
 # Lo que responde Asia cuando la biblioteca no tiene la respuesta (fase H).
@@ -173,6 +174,26 @@ Question:
 """
 
 
+# "¿Vale la pena…?", "¿qué es mejor…?": no hay una línea que lo responda, sino lo que opinan las respuestas.
+OPINION = re.compile(
+    r"\b(?:vale la pena|merece la pena|qu[eé] es mejor|cu[aá]l es mejor|conviene|me recomiendas|"
+    r"recomendar[ií]as|es buena idea)\b",
+    re.IGNORECASE,
+)
+OPINION_QUOTES = (
+    "- La pregunta pide una opinión: copia las líneas donde las respuestas opinan o recomiendan, "
+    "con sus razones a favor y en contra.\n"
+)
+OPINION_ANSWER = (
+    "- La pregunta pide una opinión: resume lo que dicen las respuestas (a favor, en contra y en qué casos), "
+    "sin dar la tuya ni decidir por ellas.\n"
+)
+
+
+def is_opinion(question: str) -> bool:
+    return bool(OPINION.search(question))
+
+
 def extract_quotes(question, rag_context, translated="", notes=""):
     """notes: los ASIA.md de las fuentes (core/rag/instructions.py), que no se citan."""
     in_english = f"\n\nLa misma pregunta en inglés, porque los fragmentos pueden estar en inglés:\n{translated}" if translated else ""
@@ -196,7 +217,7 @@ Instrucciones:
 - Una línea por renglón, con este formato:
 [archivo:líneas] línea copiada
 - Si la pregunta es solo un nombre de función, clase o variable, copia las líneas donde se define y las que explican qué hace.
-- Si lo que se pregunta no aparece en los fragmentos, escribe solo: NINGUNA
+{OPINION_QUOTES if is_opinion(question) else ""}- Si lo que se pregunta no aparece en los fragmentos, escribe solo: NINGUNA
 - No expliques nada.
 """
 
@@ -216,7 +237,7 @@ Instrucciones:
 - Después de cada frase, pon entre corchetes la etiqueta de la línea en que se basa, como [archivo:línea]. Las frases sin etiqueta se marcan como sin cita.
 - Cada frase solo puede usar los nombres y los números de la línea que cita.
 - Si las líneas responden solo una parte, di qué parte falta.
-- Responde claro y breve.
+{OPINION_ANSWER if is_opinion(question) else ""}- Responde claro y breve.
 """
 
 
