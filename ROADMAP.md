@@ -339,6 +339,26 @@ Se recuperan ~5 de los ~9,5 s. El resto lo pone la intención con el 7B (prompt 
 - `check_intents`: 44 de 44.
 - `check_speed`: hola 10,5 s (carga 5,4), grafo 1,9 s, si 0,6 s, explica @ROADMAP.md 30,1 s (intención 1,7, carga 8,7, 144 tokens). Sin `--escritura` la precarga anticipada no actúa: nadie teclea.
 
+### Prueba manual de la charla con B (2026-11-03, noche)
+
+| Problema | Arreglo | Commit |
+|---|---|---|
+| "¿Quién ganó el mundial de 2026?" → "Estados Unidos ante México" | Un hecho con un año posterior a `knowledge_until_year` (2024), o "actual/último/hoy" con un resultado, campeón, elecciones o noticia: no va al modelo. Asia dice que no lo sabe y ofrece la Wikipedia offline (2026-10); un "sí" la busca. `CHAT_RULES` lo pide también, solo para resultados, campeones, elecciones o noticias | `37a9cec9`, `947d1be2` |
+| "¿Qué hicimos en la sesión anterior?" → resumen del proyecto de junio | Responde con el resumen de sesión que había al abrir Asia. El resumen del proyecto lleva su fecha (en `ask_project_memory` y en el contexto del chat) y, con más de 30 días, el aviso y cómo rehacerlo. El de `asia` es del 2026-06-05 | `4edbd591` |
+| Pérdida del hilo ("empezamos" → "sensores") | No era el historial: qwen3 recibía los 8 mensajes y contestaba con el último tema. A una pregunta sobre la propia charla se le añaden los mensajes del usuario numerados, solo hacia el modelo local | `ca2de1f9` |
+| Tras `/buscar`, "¿y eso para qué sirve?" | El resultado de cada acción queda en el historial (hasta 1500 caracteres) con la etiqueta más restrictiva de lo que leyó | `b51caad7` |
+| "Explícamelo a fondo" se negaba | La regla de no inventar queda para datos concretos y dice que explicar no es inventar; un "sí" a "¿te lo explico a fondo?" sube el tope. En `check_chat` volvió a negarse por la regla de hechos recientes ("no tengo datos de tiempo real"): se acotó | `1f89275b`, `947d1be2` |
+| recall "nombre: Santiago" | "Te llamas Santiago."; "¿qué sabes de mí?" sale de la memoria, sin modelo (qwen3 escribió "conoces mi nombre" e inventó intereses) | `0c2ab9bc`, `d3e9af78` |
+| "Abriendo blocknote" | "Abriendo bloc de notas." | `e6b50557` |
+| "salior" | "¿Quieres salir? (s/N)" | `5ea61404` |
+| `/buscar`: x_front detrás de hoja_cuadrante | Los términos del glosario son una lista más del RRF. Con el índice real: los 2 fragmentos con x_front pasan de fuera del top 10 a 1.º y 2.º. Punta a punta: Bolitabot 2/3 → 3/3; las 3 preguntas que bajaron no tienen glosario (azar del 7B) | `8be79a55` |
+
+`check_chat` (`a6a1d5a0`): 26 mensajes con estos casos. Con qwen3:
+- Antes de los dos últimos arreglos: 0 atribuciones, 20/21 correctas ("a fondo" se negó; "empezamos" pasó con "Empezamos con los tópicos", que la regla nueva ya no acepta). Después de acotar la regla: 21/21 correctas y 1 atribución ("conoces mi nombre y tu proyecto" en "¿qué sabes de mí?"), que quedó resuelta al contestarla desde la memoria.
+- Última corrida: cortada por el vigilante en el mensaje 21 (el "sí" de Wikipedia con el 7B, 0,71 GB libres). Al empezar había 4,4 GB libres en vez de los ~6,7 de antes: otros programas abiertos (Discord, Chrome, WhatsApp). En los 20 que corrieron: 0 atribuciones, 0 fugas, 15/15 correctas; "empezamos" → "Empezamos a hablar de ROS 2"; "a fondo" → "Claro, te explico a fondo…".
+- `check_rag --preguntas 1`, con el cuerpo de la pregunta fuera del contexto: también cortado por RAM (0,99 GB) en la pregunta 3 de robotics; las 2 de 3 que respondieron, una correcta (odometría, 174 s). Antes del cambio, entera: robotics 0/6 y stackoverflow_es 1/6 correctas, 10 de 12 sin respuesta directa (el 7B contestaba NINGUNA), trampas 0/6.
+- Pendiente: repetir las dos con más RAM libre.
+
 ## Fases futuras (diseño pendiente)
 
 ### Multi-modelo según tipo de tarea
@@ -760,11 +780,16 @@ Falta:
 - Para después: cuando una pregunta no se encuentra en los proyectos, Asia ofrece buscar en Wikipedia ("¿Busco en Wikipedia?") en lugar de hacerlo sola, medido aparte en `check_rag`.
 - Wikipedia completa (`maxi`, 13,3 GB): pedir permiso aparte antes de descargarla.
 
-**Capa 4, preguntas y respuestas (Asia 1.0, diseño pendiente):** un conjunto de sitios de Stack Exchange en `.zim`, cada uno como fuente pública, con la cadena de la capa 3.
-- Sitios: Stack Overflow en español, Ask Ubuntu, Unix & Linux, Super User, Robotics Stack Exchange y Electrical Engineering. Stack Overflow en inglés solo si hay espacio en disco y los demás se quedan cortos.
-- Medir el tamaño de cada uno antes de descargar, y pedir permiso con esa cifra, uno por uno.
-- Respuesta: priorizar la aceptada o, si no hay, la más votada; mostrar la fecha y preferir lo reciente; citar la pregunta y el autor (CC BY-SA).
-- Traducción de la pregunta solo para los sitios en inglés, como `idioma=en`.
+**Capa 4, preguntas y respuestas (Asia 1.0, hecha con dos sitios):** sitios de Stack Exchange en `.zim`, cada uno como fuente pública, con la cadena de la capa 3 (`549f15a2`, `11c48627`, `9455d5b8`).
+- Catálogo de Kiwix (2026-11-03, OPDS), todos con índice de búsqueda y solo en variante `_all` (con imágenes): Stack Overflow en español 1,44 GB (2026-10-19), Ask Ubuntu 2,77 GB, Unix & Linux 1,32 GB, Super User 4,01 GB, Robotics 0,24 GB (2026-10-20), Electrical Engineering 4,26 GB; Stack Overflow en inglés 114,86 GB (2026-07-02), descartado.
+- Descargados, con su `.sha256` comprobado, en `data/zim/`: `robotics.stackexchange.com_en_all_2026-10.zim` (243 MB, 57 109 páginas, incluye las preguntas que vinieron de ROS Answers) y `es.stackoverflow.com_mul_all_2026-10.zim` (1,44 GB, 284 665 páginas). Metadato License: "CC-BY-SA" sin versión; Scraper: sotoki 3.1.1. Ask Ubuntu, Unix & Linux, Electrical Engineering y Super User: con permiso aparte.
+- Registrados como `robotics` (idioma en) y `stackoverflow_es` (idioma es, del metadato Language "eng,spa"): `/indexar <nombre> <ruta.zim> preguntas`. Públicos y solo nombrados ("en robotics").
+- `core/rag/qa_page.py`: la pregunta y cada respuesta aparte, con `data-score`, `accepted-answer`, el cuerpo de `.js-post-body` y la fecha y el autor de `.s-user-card` ("answered Oct 21 '25 at 06:37"; la interfaz va en inglés en los dos). Las migradas de ROS Answers no tienen cuenta: el autor sale de "Originally posted by".
+- Orden: la aceptada, luego las más votadas y, a igual voto, la más reciente; 3 por pregunta. Al modelo van solo las respuestas: con el cuerpo de la pregunta delante, el 7B contestaba NINGUNA.
+- Se muestra «pregunta» · enlace `/q/<id>` o `/a/<id>` · autor y votos · fecha · CC BY-SA 2.5, 3.0 o 4.0 según la fecha (cortes 2011-04-08 y 2018-05-02), con "(puede estar desactualizada)" si tiene más de 5 años frente a la edición del `.zim`. Bajo "De preguntas y respuestas de Stack Exchange, no de tus proyectos:".
+- La búsqueda trae también listas de etiquetas (`questions/tagged/...`) y usuarios: solo cuentan las rutas `questions/<número>/`.
+- `check_rag --preguntas CORRIDAS`, con base en "preguntas": página encontrada robotics 4/6 y stackoverflow_es 2/6, trampas 0. La búsqueda del `.zim` exige todas las palabras y las preguntas naturales encuentran poco, como en Wikipedia.
+- Pendiente: el nombre de grupo "en preguntas" (todos los sitios a la vez), y mejorar la búsqueda natural del `.zim` (también la de Wikipedia).
 
 Conocimiento, pendientes generales:
 
