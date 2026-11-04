@@ -357,7 +357,37 @@ Se recuperan ~5 de los ~9,5 s. El resto lo pone la intención con el 7B (prompt 
 - Antes de los dos últimos arreglos: 0 atribuciones, 20/21 correctas ("a fondo" se negó; "empezamos" pasó con "Empezamos con los tópicos", que la regla nueva ya no acepta). Después de acotar la regla: 21/21 correctas y 1 atribución ("conoces mi nombre y tu proyecto" en "¿qué sabes de mí?"), que quedó resuelta al contestarla desde la memoria.
 - Última corrida: cortada por el vigilante en el mensaje 21 (el "sí" de Wikipedia con el 7B, 0,71 GB libres). Al empezar había 4,4 GB libres en vez de los ~6,7 de antes: otros programas abiertos (Discord, Chrome, WhatsApp). En los 20 que corrieron: 0 atribuciones, 0 fugas, 15/15 correctas; "empezamos" → "Empezamos a hablar de ROS 2"; "a fondo" → "Claro, te explico a fondo…".
 - `check_rag --preguntas 1`, con el cuerpo de la pregunta fuera del contexto: también cortado por RAM (0,99 GB) en la pregunta 3 de robotics; las 2 de 3 que respondieron, una correcta (odometría, 174 s). Antes del cambio, entera: robotics 0/6 y stackoverflow_es 1/6 correctas, 10 de 12 sin respuesta directa (el 7B contestaba NINGUNA), trampas 0/6.
-- Pendiente: repetir las dos con más RAM libre.
+- Pendiente: repetir las dos con más RAM libre. Hecho el 2026-11-04 (abajo).
+
+### Wikipedia completa y palabras clave (2026-11-04, noche)
+
+`wikipedia_es_all_nopic_2026-10.zim` (13,3 GB, sha256 OK) registrada como fuente `wikipedia`: 4.232.654 artículos frente a 348.403 de `top_nopic`, que sigue en `data/zim/`. Cada medición, sola, con al menos 6 GB libres al empezar y el vigilante.
+
+Palabras clave de qwen3 antes de buscar en el `.zim` (títulos con SuggestionSearcher, texto completo, la pregunta original de respaldo; `e6e3c65f`, `30c1cb97`), artículo o página esperada entre los encontrados:
+
+| Medición | Sin palabras clave | Con palabras clave |
+|---|---|---|
+| `--wikipedia 0`, top_nopic | 9/12 | 10/12 |
+| `--wikipedia 0`, completa | 6/12 | 10/12 |
+| `--preguntas 0` robotics | 4/6 | 2/6 |
+| `--preguntas 0` stackoverflow_es | 2/6 | 2/6 |
+
+Con 4,2 millones de artículos, el texto completo con la pregunta entera trae artículos laterales ("Hierve el Agua" para el punto de ebullición, viajes ficticios a la Luna). En Stack Exchange los títulos son preguntas enteras y las palabras sueltas llevan a otros hilos. Queda encendido solo para la enciclopedia: `rag.zim_keywords: ["enciclopedia"]` (`7be5d182`).
+
+`--wikipedia 1`, punta a punta con el 7B:
+
+| Versión | Correctas | Sin respuesta directa | El modelo negó | Trampas respondidas | De ellas, falsas | s/pregunta |
+|---|---|---|---|---|---|---|
+| top_nopic, sin palabras clave (medición anterior) | 5/12 | — | — | 0/6 | 0 | 31 |
+| completa, sin palabras clave | 6/12 | 5 | 1 | 2/6 | 1 (Conguillío "1987"; es de 1950) | 23 |
+| completa, con palabras clave | 6/12 | 4 | 0 | 2/6 | 1 (el Ulúa "nace al oriente del Chamalecón") | 44 |
+
+- La completa sí tiene Purmamarca, Concepción de Ataco y Conguillío: "891 habitantes (Indec, 2010)" es correcto y ya no es trampa. Pendiente: cambiar las trampas por lugares que no estén en la completa (comprobarlo con el título en el `.zim`) y revisar las bases de `check_rag --wikipedia` (la de 9 falla con la completa sin palabras clave).
+- Con palabras clave, las correctas son otras (hierve el agua, 206 huesos), pero el total es el mismo; el Yen aparece en las líneas sin que el 7B lo diga. Los 44 s incluyen el cambio entre qwen3 y el 7B en cada pregunta.
+- `check_chat` con la completa: 21/21 correctas, 0 atribuciones, 0 fugas, 183 s en total, RAM mínima 2,08 GB.
+- `check_rag --preguntas 1`, entera por primera vez sin el cuerpo de la pregunta: robotics 0/6 y stackoverflow_es 1/6 correctas, trampas 0/6, 18 y 16 s; 10 de 12 sin respuesta directa. Igual que antes de `11c48627`: el problema no era el cuerpo de la pregunta. Pendiente.
+- Resumen del proyecto `asia` rehecho con la acción de siempre: del 2026-06-05 al 2026-11-04 (`77dc4a38`). Es genérico: no nombra la biblioteca, el RAG ni la estrategia B.
+- Propuesta: borrar `wikipedia_es_top_nopic_2026-10.zim` (1,2 GB). Con palabras clave, la completa encuentra lo mismo (10/12), contesta una más y cubre lugares pequeños. En contra: una respuesta falsa en las trampas, frente a ninguna. No se borró.
 
 ## Fases futuras (diseño pendiente)
 
