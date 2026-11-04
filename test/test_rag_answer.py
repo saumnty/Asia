@@ -79,6 +79,11 @@ def test_la_extraccion_sabe_que_hacer_con_un_nombre_suelto():
     assert "solo un nombre de función, clase o variable" in prompts.extract_quotes("SentenceSplitter", CONTEXT)
 
 
+def test_la_extraccion_no_copia_la_linea_de_titulo():
+    # El 7B copiaba «What are good strategies for tuning PID loops? > Respuesta aceptada» y nada más.
+    assert "La primera línea de cada Contenido dice de dónde es el fragmento" in prompts.extract_quotes("pid", CONTEXT)
+
+
 def test_la_respuesta_solo_ve_las_lineas():
     prompt = prompts.answer_from_quotes("qué ganancia", "[a.py:1] kp = 2")
 

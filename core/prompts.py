@@ -190,6 +190,7 @@ Fragmentos encontrados:
 
 Instrucciones:
 - Copia cada línea textualmente, sin cambiar ni una palabra, con la etiqueta de su fragmento.
+- La primera línea de cada Contenido dice de dónde es el fragmento (título > sección): no la copies; copia las de debajo.
 - Una línea por renglón, con este formato:
 [archivo:líneas] línea copiada
 - Si la pregunta es solo un nombre de función, clase o variable, copia las líneas donde se define y las que explican qué hace.
