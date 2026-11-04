@@ -416,7 +416,7 @@ Trampas de `check_rag --wikipedia` inventadas (Brezalmonte de Arriba, río Tumba
 | stackoverflow_es | 1/6 | 3/6 | 1/6 |
 | Trampas | 0/6 | 0/6 | 1/6 (Camberra en un JSON de ejemplo) |
 
-El PID ya contesta con los pasos de a/174, pero en español ("ganancia P"): la regex en inglés lo cuenta como incorrecto.
+El PID ya contesta con los pasos de a/174, pero traducidos ("ganhos P y D"): la regex en inglés lo cuenta como incorrecto.
 
 Stack Exchange en inglés: `unix` (1,32 GB), `askubuntu` (2,77 GB), `electronics` (4,26 GB) y `superuser` (4,01 GB) de 2026-10, sha256 y licencia CC BY-SA en los metadatos, registrados como fuentes `preguntas` públicas en inglés. En `check_rag` con 5–6 preguntas de hilo conocido y 3 trampas inventadas por sitio (`99f30e5a`).
 
