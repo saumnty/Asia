@@ -541,3 +541,7 @@ def test_preguntas_fallan_por_sitio_si_bajan_o_responden_trampas():
 def test_el_banco_de_preguntas_nombra_su_fuente():
     for name, bench in check_rag.QA_BENCH.items():
         assert all(question.endswith(f" en {name}") for question, *_ in bench["preguntas"] + bench["trampas"])
+
+
+def test_sin_palabras_clave_no_llama_al_modelo():
+    assert check_rag.keywords_for("qué moneda se usa en Japón", None, False) == []

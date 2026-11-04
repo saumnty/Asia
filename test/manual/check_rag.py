@@ -725,6 +725,28 @@ def end_to_end(runs, glossary_dir, base):
     return finished(end_to_end_failures(known_limit, all_fell, all_strayed, base))
 
 
+_router = []
+
+
+def keywords_for(question, source, enabled) -> list:
+    """Las palabras clave de qwen3 para question (core/rag/keywords.py); [] sin --palabras-clave.
+
+    Con corridas, además, rag.zim_keywords se enciende para /buscar (main).
+    """
+    if not enabled:
+        return []
+
+    from core.rag.keywords import zim_keywords
+    from providers.provider_router import ProviderRouter
+
+    if not _router:
+        _router.append(ProviderRouter())
+
+    found = zim_keywords(question, source, _router[0].ask)
+    print(f"    palabras clave: {found}", flush=True)
+    return found
+
+
 def wikipedia_correct(shown, pattern) -> bool:
     """True si la respuesta esperada está en las líneas verificadas, no en el resumen ni en el respaldo."""
     if prompts.VERIFIED_LINES not in shown:
@@ -748,7 +770,7 @@ def wikipedia_failures(found, traps, base) -> list:
     return failures
 
 
-def wikipedia(runs, base):
+def wikipedia(runs, base, keywords=False):
     """La búsqueda en el .zim (sin modelo) y, con runs, las respuestas del modelo real."""
     from libzim.reader import Archive
 
@@ -765,13 +787,15 @@ def wikipedia(runs, base):
     found = 0
 
     for question, expected, _ in WIKIPEDIA_QUESTIONS:
-        paths_found = [path for path, _, _ in found_articles(archive, without_source(question, source))]
+        text = without_source(question, source)
+        paths_found = [path for path, _, _ in found_articles(archive, text, keywords=keywords_for(text, source, keywords))]
         hit = bool(set(expected) & set(paths_found))
         found += hit
         print(f"{'sí' if hit else 'no'}: {question} -> {', '.join(paths_found) or 'nada'}", flush=True)
 
     for question in WIKIPEDIA_TRAPS:
-        paths_found = [path for path, _, _ in found_articles(archive, without_source(question, source))]
+        text = without_source(question, source)
+        paths_found = [path for path, _, _ in found_articles(archive, text, keywords=keywords_for(text, source, keywords))]
         print(f"trampa: {question} -> {', '.join(paths_found) or 'nada'}", flush=True)
 
     print(f"\nArtículo esperado entre los encontrados: {found}/{len(WIKIPEDIA_QUESTIONS)}, "
@@ -853,7 +877,7 @@ def questions_failures(found, traps, base) -> list:
     return failures
 
 
-def questions(runs, base):
+def questions(runs, base, keywords=False):
     """Los sitios de Stack Exchange: la búsqueda en el .zim (sin modelo) y, con runs, las respuestas del modelo."""
     from libzim.reader import Archive
 
@@ -878,7 +902,10 @@ def questions(runs, base):
 
         for question, english, expected, _ in QA_BENCH[name]["preguntas"]:
             query = english if source.language == "en" else without_source(question, source)
-            ids = [QA_PAGE_ID.match(path).group(1) for path, _, _ in found_articles(archive, query, 3, QUESTION_PATHS)]
+            # Las palabras clave, de la pregunta en español: el modelo las da en el idioma del sitio.
+            found_kw = keywords_for(without_source(question, source), source, keywords)
+            pages = found_articles(archive, query, 3, QUESTION_PATHS, keywords=found_kw)
+            ids = [QA_PAGE_ID.match(path).group(1) for path, _, _ in pages]
             hit = bool(set(expected) & set(ids))
             found[name] += hit
             print(f"{name} {'sí' if hit else 'no'}: {query} -> {', '.join(ids) or 'nada'}", flush=True)
@@ -952,17 +979,25 @@ def main():
     parser.add_argument("--calibrar", action="store_true", help="cobertura y distancia de cada pregunta")
     parser.add_argument("--fragmentos", type=int, help="fragmentos que recibe el modelo, en vez del valor del código")
     parser.add_argument("--wikipedia", type=int, metavar="CORRIDAS", help="Wikipedia offline; con 0, solo la búsqueda")
+    parser.add_argument("--palabras-clave", action="store_true",
+                        help="con --wikipedia o --preguntas: búsqueda con palabras clave de qwen3 (rag.zim_keywords)")
     parser.add_argument("--preguntas", type=int, metavar="CORRIDAS",
                         help="sitios de Stack Exchange en .zim; con 0, solo la búsqueda")
     args = parser.parse_args()
     base = load_base()
     sweep_leftovers()
 
+    if args.palabras_clave:
+        from config.settings_manager import SettingsManager
+
+        rag = {**(SettingsManager().get("rag") or {}), "zim_keywords": True}
+        SettingsManager.set_overrides({**SettingsManager.overrides, "rag": rag})
+
     if args.wikipedia is not None:
-        return wikipedia(args.wikipedia, base)
+        return wikipedia(args.wikipedia, base, args.palabras_clave)
 
     if args.preguntas is not None:
-        return questions(args.preguntas, base)
+        return questions(args.preguntas, base, args.palabras_clave)
 
     if args.fragmentos:
         explore.RAG_FRAGMENTS = args.fragmentos
