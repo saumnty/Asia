@@ -7,7 +7,7 @@ from config.settings_manager import SettingsManager
 from core.actions.code import CodeActions
 from core.actions.explore import ExploreActions
 from core.actions.library import LibraryActions
-from core.actions.memory import MemoryActions
+from core.actions.memory import MemoryActions, whole_memory_text
 from core.actions.models import ModelActions, model_command
 from core.actions.confidential import ConfidentialActions, confidential_command
 from core.actions.tasks import TaskActions
@@ -16,7 +16,7 @@ from core.actions.voice import VoiceActions, voice_command
 from core import timing
 from core.commands import is_launcher_command, options_text, resolve as resolve_command, unknown_message as unknown_command
 from core.session import Session
-from core.chat_memory import is_recall
+from core.chat_memory import asks_whole_memory, is_recall
 from core.early_load import EarlyLoad
 from core.fast_chat import is_clear_chat
 from core.fixed_intents import fixed_intent
@@ -336,6 +336,10 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
         # "¿Qué hicimos en la sesión anterior?": el resumen de sesión (fase R), no
         # el del proyecto, que iba por ask_project_memory y podía ser de hace meses.
+        if asks_whole_memory(text) and hasattr(getattr(self, "memory", None), "load"):
+            self.last_action = "recall"
+            return whole_memory_text(self.memory.load())
+
         if asks_previous_session(text):
             self.last_action = "chat"
             return previous_session_text(getattr(self, "previous_session", None) or load_summary())

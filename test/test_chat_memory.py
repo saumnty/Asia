@@ -232,3 +232,21 @@ def test_recall_con_una_frase_natural(key, value, sentence):
     from core.actions.memory import recall_sentence
 
     assert recall_sentence(key, value) == sentence
+
+
+@pytest.mark.parametrize("text", ["¿qué sabes de mí?", "háblame sobre mí", "¿quién soy?"])
+def test_que_sabes_de_mi_sale_de_la_memoria_sin_modelo(text):
+    brain = make_brain()
+    brain.intent_engine = RecallIntent()
+    brain.memory = type("M", (), {"load": lambda self: {"nombre": "Santiago", "color_favorito": "amarillo"}})()
+
+    answer = brain.process(text)
+
+    assert answer == "Esto es lo que tengo guardado sobre ti:\n- Te llamas Santiago.\n- Tu color favorito es amarillo."
+    assert brain.last_action == "recall"
+
+
+def test_sin_memoria_lo_dice():
+    from core.actions.memory import whole_memory_text
+
+    assert whole_memory_text({}) == "No tengo nada guardado sobre ti."

@@ -90,6 +90,11 @@ def relevant_memory(text: str, data: dict) -> dict:
     return dict(list(chosen.items())[:MAX_ENTRIES])
 
 
+def asks_whole_memory(text: str) -> bool:
+    """"¿Qué sabes de mí?", "háblame sobre mí", "¿quién soy?"."""
+    return bool(WHOLE_MEMORY.search(command_text(text or "")))
+
+
 def is_recall(text: str) -> bool:
     """False si recall no es la acción: una pregunta a Asia o una por toda la memoria.
 

@@ -181,3 +181,12 @@ def recall_sentence(key: str, value) -> str:
         return template.format(value)
 
     return f"Tu {key.replace('_', ' ')} es {value}."
+
+
+def whole_memory_text(data: dict) -> str:
+    """"¿Qué sabes de mí?" desde la memoria, sin modelo: qwen3 escribía "conoces mi nombre" e inventaba intereses."""
+    if not data:
+        return "No tengo nada guardado sobre ti."
+
+    lines = [f"- {recall_sentence(key, value)}" for key, value in data.items()]
+    return "\n".join(["Esto es lo que tengo guardado sobre ti:", *lines])
