@@ -389,6 +389,47 @@ Con 4,2 millones de artículos, el texto completo con la pregunta entera trae ar
 - Resumen del proyecto `asia` rehecho con la acción de siempre: del 2026-06-05 al 2026-11-04 (`77dc4a38`). Es genérico: no nombra la biblioteca, el RAG ni la estrategia B.
 - Propuesta: borrar `wikipedia_es_top_nopic_2026-10.zim` (1,2 GB). Con palabras clave, la completa encuentra lo mismo (10/12), contesta una más y cubre lugares pequeños. En contra: una respuesta falsa en las trampas, frente a ninguna. Borrada el 2026-11-04, archivo y `.sha256`; el registro ya apuntaba a la completa.
 
+### Trampas nuevas, palabras clave con el 7B y Stack Exchange en inglés (2026-11-04, mañana)
+
+Trampas de `check_rag --wikipedia` inventadas (Brezalmonte de Arriba, río Tumbarrayo, puente de Valdecierzo, Premio Orzaluna, Eulalio Quirsaga, laguna Quetzacoya), sin título ni texto en la completa (`749abf6d`). Palabras clave con el modelo de `rag.zim_keywords_domain` (`9ce6dda2`). Una medición a la vez, cada una con al menos 6 GB libres al empezar (la tanda esperó 2 horas, de 05:46 a 07:46).
+
+| `--wikipedia`, completa | Artículo encontrado (0) | Correctas (1) | Trampas respondidas | s/pregunta |
+|---|---|---|---|---|
+| Sin palabras clave | 6/12 | 6/12 | 2/6 | 22 |
+| Palabras clave de qwen3 (`general`) | 8/12 | 7/12 | 2/6 | 43 |
+| Palabras clave del 7B (`code`) | 7/12 | 3/12 | 2/6 | 26 |
+
+- Se queda qwen3 (`general`, ya por defecto). El 7B ahorra la recarga (26 s frente a 43 s), pero sus palabras clave se van de tema ("Energía solar", "Dióxido de carbono", "James Watson descubrió la penicilina") y las correctas caen a 3/12.
+- Las palabras clave varían entre corridas: qwen3 encontró 10/12 anoche y 8/12 ahora.
+- Las trampas respondidas cambian el sujeto: "el puente de Valdecierzo se inauguró en 1929" con una línea del Puente de Hierro de Soria, "Misery ganó el Premio Orzaluna" con el Bram Stoker. Idea: si el nombre propio de la pregunta no sale en ninguna línea verificada, contestar "no lo encontré".
+- Bases propuestas, sin cambiar: `wikipedia.encontrados` 9 → 6 y `wikipedia.trampas` 0 → 2 (la completa sin palabras clave, que es lo que mide `check_rag`).
+
+`--preguntas 1`: qué recibe el 7B (captura de los prompts de extracción: 3.500–5.300 caracteres, 5 fragmentos, `max_tokens` 1024):
+
+- PID: la respuesta aceptada correcta (a/174, 90 votos) está en el contexto; el 7B copió solo las líneas de título ("[robotics_167.qa:2-15] What are good strategies for tuning PID loops? > Respuesta aceptada"), que no verifican nada. Arreglo: la regla "la primera línea de cada Contenido dice de dónde es el fragmento: no la copies" (`ddb650bb`).
+- EKF: la aceptada está y el 7B dijo NINGUNA; es de opinión ("vale la pena"). Propuesta sin aplicar: una regla para preguntas de opinión o recomendación.
+- CSV con pandas: la búsqueda no trae ningún hilo de `read_csv`; NINGUNA es lo correcto. Es de búsqueda.
+
+| `--preguntas 1` | Antes del arreglo | Después, corrida 1 | Después, corrida 2 |
+|---|---|---|---|
+| robotics | 0/6 | 1/6 | 1/6 |
+| stackoverflow_es | 1/6 | 3/6 | 1/6 |
+| Trampas | 0/6 | 0/6 | 1/6 (Camberra en un JSON de ejemplo) |
+
+El PID ya contesta con los pasos de a/174, pero en español ("ganancia P"): la regex en inglés lo cuenta como incorrecto.
+
+Stack Exchange en inglés: `unix` (1,32 GB), `askubuntu` (2,77 GB), `electronics` (4,26 GB) y `superuser` (4,01 GB) de 2026-10, sha256 y licencia CC BY-SA en los metadatos, registrados como fuentes `preguntas` públicas en inglés. En `check_rag` con 5–6 preguntas de hilo conocido y 3 trampas inventadas por sitio (`99f30e5a`).
+
+| Sitio | Página encontrada (0) | Correctas (1) | Sin respuesta directa | Trampas respondidas | s/pregunta |
+|---|---|---|---|---|---|
+| unix | 2/6 | 3/6 | 3 | 1/3 (flopctl: líneas de swanctl) | 27 |
+| askubuntu | 5/5 | 1/5 | 4 | 0/3 | 19 |
+| electronics | 3/5 | 2/5 | 3 | 0/3 | 20 |
+| superuser | 4/5 | 0/5 | 5 | 0/3 | 14 |
+
+- En askubuntu y superuser, el fragmento "más relevante" suele ser el hilo correcto ("How do I install a .deb file via the command line?", "How can I create a symbolic link on Windows 10?"), y aun así el 7B dice NINGUNA. Siguiente paso: ver qué recibe en esas preguntas; quizá le cuesta casar una pregunta en español con fragmentos en inglés (probar a darle también la pregunta traducida).
+- Bases propuestas para los sitios nuevos, sin cambiar: encontrados unix 2, askubuntu 5, electronics 3, superuser 4.
+
 ## Fases futuras (diseño pendiente)
 
 ### Multi-modelo según tipo de tarea
