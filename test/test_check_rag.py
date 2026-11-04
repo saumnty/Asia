@@ -543,5 +543,18 @@ def test_el_banco_de_preguntas_nombra_su_fuente():
         assert all(question.endswith(f" en {name}") for question, *_ in bench["preguntas"] + bench["trampas"])
 
 
-def test_sin_palabras_clave_no_llama_al_modelo():
-    assert check_rag.keywords_for("qué moneda se usa en Japón", None, False) == []
+def test_las_palabras_clave_siguen_la_configuracion_real(monkeypatch):
+    from types import SimpleNamespace
+
+    from config.settings_manager import SettingsManager
+
+    asked = []
+    monkeypatch.setattr(check_rag, "_router", [SimpleNamespace(
+        ask=lambda prompt, domain, max_tokens: asked.append(domain) or "Yen")])
+    SettingsManager.set_overrides({"rag": {"zim_keywords": ["enciclopedia"], "zim_keywords_domain": "general"}})
+    wiki = SimpleNamespace(kind="enciclopedia", language="es")
+    site = SimpleNamespace(kind="preguntas", language="en")
+
+    assert check_rag.keywords_for("qué moneda se usa en Japón", site) == []
+    assert check_rag.keywords_for("qué moneda se usa en Japón", wiki) == ["Yen"]
+    assert asked == ["general"]

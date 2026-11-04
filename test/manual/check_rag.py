@@ -810,24 +810,24 @@ def end_to_end(runs, glossary_dir, base):
 _router = []
 
 
-def keywords_for(question, source, enabled) -> list:
-    """Las palabras clave para question (core/rag/keywords.py); [] sin --palabras-clave.
+def keywords_for(question, source) -> list:
+    """Las palabras clave para question (core/rag/keywords.py); [] si rag.zim_keywords no las pide para source.
 
-    El modelo, el de --palabras-clave (general: qwen3; code: el 7B). Con corridas, además,
-    rag.zim_keywords se enciende o se apaga para /buscar (main), con ese dominio.
+    Como /buscar: la configuración real (enciclopedia, qwen3), o la de --palabras-clave (main).
     """
-    if not enabled:
-        return []
-
     from config.settings_manager import SettingsManager
-    from core.rag.keywords import DEFAULT_DOMAIN, DOMAIN_SETTING, zim_keywords
+    from core.rag.keywords import DEFAULT_DOMAIN, DOMAIN_SETTING, SETTING, enabled_for, zim_keywords
     from providers.provider_router import ProviderRouter
+
+    rag = SettingsManager().get("rag") or {}
+
+    if not enabled_for(rag.get(SETTING), source):
+        return []
 
     if not _router:
         _router.append(ProviderRouter())
 
-    domain = (SettingsManager().get("rag") or {}).get(DOMAIN_SETTING, DEFAULT_DOMAIN)
-    found = zim_keywords(question, source, _router[0].ask, domain)
+    found = zim_keywords(question, source, _router[0].ask, rag.get(DOMAIN_SETTING, DEFAULT_DOMAIN))
     print(f"    palabras clave: {found}", flush=True)
     return found
 
@@ -855,7 +855,7 @@ def wikipedia_failures(found, traps, base) -> list:
     return failures
 
 
-def wikipedia(runs, base, keywords=False):
+def wikipedia(runs, base):
     """La búsqueda en el .zim (sin modelo) y, con runs, las respuestas del modelo real."""
     from libzim.reader import Archive
 
@@ -873,14 +873,14 @@ def wikipedia(runs, base, keywords=False):
 
     for question, expected, _ in WIKIPEDIA_QUESTIONS:
         text = without_source(question, source)
-        paths_found = [path for path, _, _ in found_articles(archive, text, keywords=keywords_for(text, source, keywords))]
+        paths_found = [path for path, _, _ in found_articles(archive, text, keywords=keywords_for(text, source))]
         hit = bool(set(expected) & set(paths_found))
         found += hit
         print(f"{'sí' if hit else 'no'}: {question} -> {', '.join(paths_found) or 'nada'}", flush=True)
 
     for question in WIKIPEDIA_TRAPS:
         text = without_source(question, source)
-        paths_found = [path for path, _, _ in found_articles(archive, text, keywords=keywords_for(text, source, keywords))]
+        paths_found = [path for path, _, _ in found_articles(archive, text, keywords=keywords_for(text, source))]
         print(f"trampa: {question} -> {', '.join(paths_found) or 'nada'}", flush=True)
 
     print(f"\nArtículo esperado entre los encontrados: {found}/{len(WIKIPEDIA_QUESTIONS)}, "
@@ -962,7 +962,7 @@ def questions_failures(found, traps, base) -> list:
     return failures
 
 
-def questions(runs, base, keywords=False):
+def questions(runs, base):
     """Los sitios de Stack Exchange: la búsqueda en el .zim (sin modelo) y, con runs, las respuestas del modelo."""
     from libzim.reader import Archive
 
@@ -988,7 +988,7 @@ def questions(runs, base, keywords=False):
         for question, english, expected, _ in QA_BENCH[name]["preguntas"]:
             query = english if source.language == "en" else without_source(question, source)
             # Las palabras clave, de la pregunta en español: el modelo las da en el idioma del sitio.
-            found_kw = keywords_for(without_source(question, source), source, keywords)
+            found_kw = keywords_for(without_source(question, source), source)
             pages = found_articles(archive, query, 3, QUESTION_PATHS, keywords=found_kw)
             ids = [QA_PAGE_ID.match(path).group(1) for path, _, _ in pages]
             hit = bool(set(expected) & set(ids))
@@ -1064,9 +1064,9 @@ def main():
     parser.add_argument("--calibrar", action="store_true", help="cobertura y distancia de cada pregunta")
     parser.add_argument("--fragmentos", type=int, help="fragmentos que recibe el modelo, en vez del valor del código")
     parser.add_argument("--wikipedia", type=int, metavar="CORRIDAS", help="Wikipedia offline; con 0, solo la búsqueda")
-    parser.add_argument("--palabras-clave", nargs="?", const="general", choices=("general", "code"),
-                        help="con --wikipedia o --preguntas: búsqueda con palabras clave (rag.zim_keywords) de "
-                             "qwen3 (general, sin valor) o del 7B (code); sin la opción, apagadas")
+    parser.add_argument("--palabras-clave", choices=("no", "general", "code"),
+                        help="con --wikipedia o --preguntas: sin palabras clave (no) o con ellas en todos los "
+                             ".zim, de qwen3 (general) o del 7B (code); sin la opción, la configuración real")
     parser.add_argument("--preguntas", type=int, metavar="CORRIDAS",
                         help="sitios de Stack Exchange en .zim; con 0, solo la búsqueda")
     args = parser.parse_args()
@@ -1074,22 +1074,21 @@ def main():
     base = load_base()
     sweep_leftovers()
 
-    if args.wikipedia is not None or args.preguntas is not None:
+    if args.palabras_clave:
         from config.settings_manager import SettingsManager
 
-        # Explícito: por defecto la enciclopedia ya las usa, y sin la opción se mide sin ellas.
-        rag = {**(SettingsManager().get("rag") or {}), "zim_keywords": bool(args.palabras_clave)}
+        rag = {**(SettingsManager().get("rag") or {}), "zim_keywords": args.palabras_clave != "no"}
 
-        if args.palabras_clave:
+        if args.palabras_clave != "no":
             rag["zim_keywords_domain"] = args.palabras_clave
 
         SettingsManager.set_overrides({**SettingsManager.overrides, "rag": rag})
 
     if args.wikipedia is not None:
-        return wikipedia(args.wikipedia, base, args.palabras_clave)
+        return wikipedia(args.wikipedia, base)
 
     if args.preguntas is not None:
-        return questions(args.preguntas, base, args.palabras_clave)
+        return questions(args.preguntas, base)
 
     if args.fragmentos:
         explore.RAG_FRAGMENTS = args.fragmentos
