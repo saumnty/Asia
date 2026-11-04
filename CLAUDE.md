@@ -23,7 +23,7 @@
 - No cambies `ollama_num_ctx` por defecto sin confirmación (se queda en 16384).
 - No cambies el modelo por defecto del chat sin confirmación.
 - No toques `keep_alive`.
-- La GPU sigue sin detectarse: anota tiempos, no ajustes límites por ellos.
+- La GPU se detecta desde Ollama 0.40.14: el 7B va con 16 capas en GPU (`num_gpu` 16). Anota tiempos, no ajustes límites por ellos.
 
 ## Secretos
 - La clave de Gemini nunca debe aparecer en logs ni en prompts.
