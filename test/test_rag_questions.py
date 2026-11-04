@@ -137,12 +137,19 @@ def test_fragmentos_de_la_pregunta_y_de_tres_respuestas_con_las_lineas_de_toda_l
     assert chunks[1][1].label == "How to publish a capital topic > Respuesta aceptada"
 
 
-def test_siempre_entran_la_pregunta_y_la_mejor_respuesta():
+def test_siempre_entra_la_mejor_respuesta_y_no_el_cuerpo_de_la_pregunta():
     chunks = page_chunks(page())
 
     chosen = closest_posts(chunks, "newer way", count=2)
 
-    assert [post.post_id for post, _ in chosen] == ["42", "51"]
+    assert [post.post_id for post, _ in chosen] == ["51", "52"]
+
+
+def test_sin_respuestas_va_la_pregunta():
+    parsed = page()
+    parsed.answers = []
+
+    assert [post.post_id for post, _ in closest_posts(page_chunks(parsed), "topic")] == ["42"]
 
 
 def test_metadatos_del_zim(qa_zim):

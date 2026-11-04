@@ -46,18 +46,21 @@ def zim_language(archive) -> str:
 
 
 def closest_posts(chunks: list, question: str, language: str = SPANISH, count: int = ARTICLE_FRAGMENTS) -> list:
-    """El principio de la pregunta, el de la mejor respuesta y los que más palabras comparten.
+    """El principio de la mejor respuesta y los fragmentos de respuesta que más palabras comparten.
 
     page_chunks ya pone las respuestas en orden (aceptada, más votadas): la primera
-    respuesta es la que se prioriza.
+    es la que se prioriza. El cuerpo de la pregunta queda fuera si hay respuestas:
+    con él delante ("Tengo una gran duda..."), el 7B contestaba NINGUNA a "qué son
+    los punteros en C". La pregunta sigue en la etiqueta (su título) y en el origen
+    (su enlace). Sin respuestas, va la pregunta.
     """
     if not chunks:
         return []
 
-    first_answer = next((pair for pair in chunks if pair[0].kind == "respuesta"), None)
-    fixed = [chunks[0]] + ([first_answer] if first_answer else [])
+    pool = [pair for pair in chunks if pair[0].kind == "respuesta"] or chunks
+    fixed = pool[:1]
     wanted = set(tokenize(question, language))
-    rest = [pair for pair in chunks if pair not in fixed]
+    rest = [pair for pair in pool if pair not in fixed]
     rest.sort(key=lambda pair: -len(wanted.intersection(tokenize(pair[1].text, language))))
     return fixed + rest[:count - len(fixed)]
 
