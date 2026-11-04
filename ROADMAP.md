@@ -38,6 +38,7 @@ para poder revisar o revertir los cambios.
 | — | Modo abierto ("/modo abierto" o "modo abierto", solo la sesión; `open_mode_default` en `defaults.json`, false): sale todo lo que entra al prompt sin pedir autorización (archivos, adjuntos, RAG, proyecto, memoria e historial) y sin reemplazar rutas. Siguen el filtro de secretos y la bitácora (autorización "modo abierto"); lo emocional nunca sale. Aviso una vez al activarlo. El prompt muestra "Tú [abierto]:" (y "Tú [local]:" en modo local). | `8aa68c5f` |
 | — | Comandos de sesión con "/" en una sola tabla (`core/commands.py`), de la que salen "/opciones" y `--help`: modos, modelos (`/modelo`, `/proveedor`), archivos y adjuntos (`/carpeta`), confidencialidad, cambios y ejecución, tiempos y salir, con un ejemplo cada uno. Las frases de antes ("modo local", "vuelve al modelo normal"...) siguen como alias. Un "/algo" desconocido no va al modelo. El arranque muestra modelo, modo y "Escribe /opciones para ver los comandos". | `66b259ef` |
 | — | Aceleración con los números de `--timing` (ver "Velocidad" más abajo): la línea de tiempos muestra también el IntentEngine por dentro (tokens de prompt, `prompt_eval`, generados, carga) y `test/manual/check_speed.py` mide una sesión real; ruta rápida sin IntentEngine para la charla clara (`core/fast_chat.py`; `check_intents.py` con 12 casos de charla, 39 de 39 iguales); plantilla de documento para `explain_file`/`summarize_file` con `.md`, `.txt`, `.json`… y tope de la respuesta (`answer_limits`, `num_predict`) con aviso si se corta; "¿Quisiste decir @X?" + "sí" reenvía el mensaje corregido; `stream_output` true por defecto. | `7a65647f`, `904526ba`, `94f5787d`, `ae1a2015`, `62929ae2`, `f04bf65f` |
+| H. Biblioteca offline | Terminada el 2026-11-04: proyectos propios, documentación técnica (ROS 2, Gazebo, Python), Wikipedia completa en español y seis sitios de Stack Exchange, con citas verificadas y "no lo encontré" decidido por el código. Resultados finales y límites en "Biblioteca de conocimiento offline". | `8e0373d7`, `b520a6b3`, `f7f957a2`, `ba16e671` |
 
 ## Próximas fases
 
@@ -674,14 +675,14 @@ Extras de Asia 2.0, junto al modo confidencial:
 - Canal de estado local (Flask-SocketIO) para que el avatar reaccione a hablar, pensar y escuchar.
 - Avatar: perro bóxer.
 
-### Biblioteca de conocimiento offline (fase H, Asia 1.0)
+### Biblioteca de conocimiento offline (fase H, Asia 1.0): terminada (2026-11-04)
 
 Antes "Wikipedia offline". Va por capas, y cada fuente lleva su etiqueta para poder citarla:
 
 1. Proyectos propios (repos, reportes, notas) con el RAG actual: primera capa, la más útil. Hecha, ver abajo.
 2. Documentación técnica offline: ROS 2 Jazzy, Gazebo Harmonic y Python 3.12 (hecho, ver abajo). Fuentes directas, sin Kiwix, zimit ni Docker.
-3. Wikipedia en español: un `.zim` leído con libzim, separado del RAG de proyectos. Código hecho, medición con el modelo pendiente, ver abajo. Inglés: el código lo admite, sin archivo descargado.
-4. Preguntas y respuestas: sitios de Stack Exchange en `.zim`, cada uno como fuente pública. Diseño pendiente, ver abajo.
+3. Wikipedia en español: un `.zim` leído con libzim, separado del RAG de proyectos. Hecha con la Wikipedia completa (`all_nopic`, 4,2 millones de artículos). Inglés: el código lo admite, sin archivo descargado.
+4. Preguntas y respuestas: sitios de Stack Exchange en `.zim`, cada uno como fuente pública. Hecha con seis sitios.
 
 - Búsqueda: la de texto de Kiwix encuentra los artículos y los embeddings se usan solo dentro de ellos, sin indexar todo.
 - Regla en el prompt: responder con lo que dice la fuente y decir "no lo encontré" si no está.
@@ -880,7 +881,7 @@ Arreglo general medido y descartado: sumar a la puntuación RRF hasta 0,02 segú
 
 El ranking es determinista y empeora, y además bajan las coberturas de "filtrar secretos" (de 1,00 a 0,67) y otras cuatro preguntas. Lo punta a punta lleva el azar del 7B. Las prohibidas no bastan: el arreglo no comprueba significado y esas frases dependen de lo que escriba el modelo. Causa probable, sin comprobar: un título de una palabra que coincide por casualidad suma lo mismo que uno exacto. Medido con 1 fragmento más en el índice, por el propio cambio.
 
-**Capa 3, Wikipedia offline (a medias):** commits `c14b2cea` (HTML a fragmentos), `2faef3a1` (búsqueda en el `.zim` y caché de embeddings), `429a9f23` (fuente pública con "en wikipedia").
+**Capa 3, Wikipedia offline (hecha; ver el cierre de la fase H):** commits `c14b2cea` (HTML a fragmentos), `2faef3a1` (búsqueda en el `.zim` y caché de embeddings), `429a9f23` (fuente pública con "en wikipedia").
 - Archivo: `wikipedia_es_top_nopic_2026-10.zim` (1,21 GB, sha256 comprobado; sustituida por `all_nopic` y borrada el 2026-11-04), en `data/zim/`, que no estaba ignorada y ahora sí (también `data/wikipedia/`). libzim 4.0.0 (GPL-3.0-or-later), beautifulsoup4 y lxml en `requirements.txt`. Registrada como `wikipedia`, tipo `enciclopedia`, pública y solo nombrada: `/indexar wikipedia C:\Asia\data\zim\wikipedia_es_top_nopic_2026-10.zim enciclopedia`. No se indexa: no hay colección de Chroma.
 - Solo con "en wikipedia". Cadena: la búsqueda del `.zim` elige 3 artículos (`core/rag/wikipedia.py`), el HTML pasa a fragmentos por sección con una frase por línea (`core/rag/article.py`, sin infoboxes de navegación, referencias ni "Véase también"), se queda el principio y los 12 fragmentos que más palabras comparten por artículo, y se embeben al momento con caché por hash en `data/wikipedia/embeddings.sqlite3` (`core/rag/embedding_cache.py`, 60 000 entradas, unos 200 MB). Después, la misma fusión, filtro, extracción y verificación que las otras capas. Cita `[Camberra.wiki:12]` por dentro; se muestra el artículo con su sección, URL, CC BY-SA 4.0 y la edición, bajo "De Wikipedia, no de tus proyectos:".
 - Comprobado con el archivo real: la búsqueda del `.zim` exige todas las palabras (OR no es operador), con raíces y sin acentos, y tarda 0,01–0,09 s. Con palabras vacías no encuentra nada, así que se quitan, y si no hay resultados se va quitando la palabra más común. libzim 4.0.0 devuelve objetos `SearchResult`, no rutas como dice su documentación. El metadato dice "mejores 50 000 artículos" y `article_count` da 348 403 (cuenta redirecciones).
@@ -902,7 +903,7 @@ Falta:
 - Para después: cuando una pregunta no se encuentra en los proyectos, Asia ofrece buscar en Wikipedia ("¿Busco en Wikipedia?") en lugar de hacerlo sola, medido aparte en `check_rag`.
 - Wikipedia completa (`maxi`, 13,3 GB): pedir permiso aparte antes de descargarla.
 
-**Capa 4, preguntas y respuestas (Asia 1.0, hecha con dos sitios):** sitios de Stack Exchange en `.zim`, cada uno como fuente pública, con la cadena de la capa 3 (`549f15a2`, `11c48627`, `9455d5b8`).
+**Capa 4, preguntas y respuestas (Asia 1.0, hecha con seis sitios; ver el cierre de la fase H):** sitios de Stack Exchange en `.zim`, cada uno como fuente pública, con la cadena de la capa 3 (`549f15a2`, `11c48627`, `9455d5b8`).
 - Catálogo de Kiwix (2026-11-03, OPDS), todos con índice de búsqueda y solo en variante `_all` (con imágenes): Stack Overflow en español 1,44 GB (2026-10-19), Ask Ubuntu 2,77 GB, Unix & Linux 1,32 GB, Super User 4,01 GB, Robotics 0,24 GB (2026-10-20), Electrical Engineering 4,26 GB; Stack Overflow en inglés 114,86 GB (2026-07-02), descartado.
 - Descargados, con su `.sha256` comprobado, en `data/zim/`: `robotics.stackexchange.com_en_all_2026-10.zim` (243 MB, 57 109 páginas, incluye las preguntas que vinieron de ROS Answers) y `es.stackoverflow.com_mul_all_2026-10.zim` (1,44 GB, 284 665 páginas). Metadato License: "CC-BY-SA" sin versión; Scraper: sotoki 3.1.1. Ask Ubuntu, Unix & Linux, Electrical Engineering y Super User: con permiso aparte.
 - Registrados como `robotics` (idioma en) y `stackoverflow_es` (idioma es, del metadato Language "eng,spa"): `/indexar <nombre> <ruta.zim> preguntas`. Públicos y solo nombrados ("en robotics").
@@ -911,7 +912,32 @@ Falta:
 - Se muestra «pregunta» · enlace `/q/<id>` o `/a/<id>` · autor y votos · fecha · CC BY-SA 2.5, 3.0 o 4.0 según la fecha (cortes 2011-04-08 y 2018-05-02), con "(puede estar desactualizada)" si tiene más de 5 años frente a la edición del `.zim`. Bajo "De preguntas y respuestas de Stack Exchange, no de tus proyectos:".
 - La búsqueda trae también listas de etiquetas (`questions/tagged/...`) y usuarios: solo cuentan las rutas `questions/<número>/`.
 - `check_rag --preguntas CORRIDAS`, con base en "preguntas": página encontrada robotics 4/6 y stackoverflow_es 2/6, trampas 0. La búsqueda del `.zim` exige todas las palabras y las preguntas naturales encuentran poco, como en Wikipedia.
-- Pendiente: el nombre de grupo "en preguntas" (todos los sitios a la vez), y mejorar la búsqueda natural del `.zim` (también la de Wikipedia).
+- ~~El nombre de grupo "en preguntas" (todos los sitios a la vez).~~ Hecho. Mejorar la búsqueda natural del `.zim` (también la de Wikipedia) queda en los límites conocidos.
+
+**Cierre de la fase H (2026-11-04).** Mediciones finales con seed 42 y temperatura 0, una a la vez, con la configuración real (palabras clave de qwen3 para la enciclopedia) y el mismo camino de búsqueda que `/buscar`. `check_rag` sale con código 0 en todos sus modos con las bases de `test/manual/check_rag_base.json`, todas las trampas en 0.
+
+| Capa | Medición | Resultado |
+|---|---|---|
+| 1. Proyectos propios | Ranking, 20 preguntas sobre C:\Asia (1.º / top 3 / top 5) | 12/20, 14/20, 20/20; concepto 4/12, documento 2/2, nombre 6/6 |
+| 1. Proyectos propios | Punta a punta (`--punta-a-punta 1`) | Asia 6/8, Bolitabot 3/3; cita el archivo 19/24; límite conocido 1 (base 2) |
+| 2. Documentación técnica | Punta a punta, ROS 2, Gazebo y Python | 11/13; 2 sin respuesta directa |
+| 1 y 2 | Trampas y ajenas | 0/9 y 0/5 respondidas; 29 s por pregunta |
+| 3. Wikipedia completa | `--wikipedia 0`: artículo esperado entre los 3 | 11/12 |
+| 3. Wikipedia completa | `--wikipedia 1`: correctas, trampas | 8/12, 0/6; 39 s por pregunta |
+| 4. Stack Exchange | `--preguntas 0` / `--preguntas 1` por sitio | robotics 3/6 y 2/6, stackoverflow_es 2/6 y 1/6, unix 4/8 y 6/8, askubuntu 4/5 y 2/5, electronics 2/5 y 1/5, superuser 3/6 y 3/6 |
+| 4. Stack Exchange | Trampas | 0/18; 19–41 s por pregunta |
+
+Lo que sostiene las trampas en 0: la regla de la entidad (un lugar, persona u obra de la pregunta tiene que salir en la línea citada o en su artículo o hilo, `8e0373d7`) y la de los nombres técnicos (un comando, programa o paquete tiene que salir en algún fragmento o título encontrado, `b520a6b3`), además de "no lo encontré" decidido por el código.
+
+Límites conocidos:
+- La búsqueda del `.zim` exige todas las palabras: las preguntas naturales encuentran poco, sobre todo en Stack Exchange, y en un sitio en inglés todo depende de la traducción del 7B ("nombre del equipo" → "team name" trae un hilo de Microsoft Teams).
+- Con el hilo correcto delante, el 7B a veces dice NINGUNA (sudoers, actualizar Ubuntu): muchas preguntas acaban en "sin respuesta directa", con los mejores fragmentos.
+- Las dos reglas son de forma, no de significado: un nombre propio en minúsculas o un nombre técnico sin forma de identificador ("sudoers") no se comprueban, y una respuesta buena con otro nombre ("La Gioconda" por "Mona Lisa") vale solo si la línea nombra lo preguntado.
+- Las preguntas de opinión resumen lo que dicen las respuestas, pero no siempre con citas (NTFS o exFAT).
+- La comprobación de correctas de `check_rag` es una regex sobre las líneas verificadas: aproximada.
+- Con seed y temperatura 0 queda algo de variación de Ollama en CPU (1 de 18 respuestas entre dos corridas).
+- La GPU no se detecta: tiempos en CPU. Hace falta un modelo a la vez y unos 6 GB libres para medir.
+- Sin Wikipedia en inglés descargada; Stack Overflow en inglés, descartado.
 
 Conocimiento, pendientes generales:
 
