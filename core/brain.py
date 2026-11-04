@@ -23,7 +23,7 @@ from core.fixed_intents import fixed_intent
 from core.reflection import asks_previous_session, load_summary, previous_session_text
 from core.recent_facts import DEFAULT_KNOWN_UNTIL, asks_recent_fact, is_affirmative, offer_text
 from tools.app_tool import AppTool
-from core.provenance import USUARIO, Fragment, request_sources
+from core.provenance import USUARIO, Fragment, current_fragments, request_sources
 # wants_synthesis y wants_unverified se importan desde aquí en las pruebas.
 from core.actions.sandbox import RUN_CANCEL_PHRASES, RUN_CONFIRM_PHRASES, SandboxActions, normalized_command
 from core.actions.review import ReviewActions, wants_synthesis, wants_unverified  # noqa: F401
@@ -233,7 +233,16 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         (core/provenance.py); si el launcher ya abrió el registro, se suma.
         """
         with request_sources(Fragment(USUARIO, text)):
-            return self.process_labeled(text)
+            answer = self.process_labeled(text)
+
+            # El resultado de una acción queda en el historial de la charla: tras
+            # /buscar, "¿y eso para qué sirve?" no sabía de qué se hablaba.
+            remember = getattr(getattr(self, "provider_router", None), "remember_action", None)
+
+            if remember and isinstance(answer, str) and answer.strip() and self.last_action not in (None, "chat"):
+                remember(text, answer, current_fragments())
+
+            return answer
 
     def process_labeled(self, text):
         self.last_action = None

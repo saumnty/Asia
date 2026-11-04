@@ -78,6 +78,9 @@ def wants_detail(text: str) -> bool:
 # Mensajes (usuario + asistente) que se conservan del chat con el usuario.
 MAX_HISTORY_MESSAGES = 20
 
+# Lo que queda en el historial del resultado de una acción (Brain.process).
+ACTION_RESULT_CHARS = 1500
+
 # Proveedor al que va una autorización de una sola vez ("envía esto a Gemini").
 AUTHORIZED_PROVIDER = "gemini"
 
@@ -279,6 +282,24 @@ Contexto del proyecto:
         self.history_labels = self.history_labels[-MAX_HISTORY_MESSAGES:]
 
         return answer
+
+    def remember_action(self, text, answer, fragments):
+        """Guarda una acción y su resultado (recortado) en el historial de la charla.
+
+        El turno lleva la etiqueta más restrictiva de lo que leyó la acción
+        (un /buscar en el proyecto queda como rag): hacia fuera solo sale si es
+        exportable, como cualquier otro turno.
+        """
+        result = " ".join(answer.split()) if len(answer) > ACTION_RESULT_CHARS else answer.strip()
+
+        if len(result) > ACTION_RESULT_CHARS:
+            result = f"{result[:ACTION_RESULT_CHARS]}… [resultado recortado]"
+
+        label = most_restrictive(labels_of(fragments or [Fragment(DESCONOCIDO, text)]))
+        self.history += [{"role": "user", "content": text}, {"role": "assistant", "content": result}]
+        self.history_labels += [label, label]
+        self.history = self.history[-MAX_HISTORY_MESSAGES:]
+        self.history_labels = self.history_labels[-MAX_HISTORY_MESSAGES:]
 
     def fit_history(self, system, user_message, max_tokens, model):
         """(cuántos mensajes del historial caben, modelo) dentro del num_ctx del modelo.
