@@ -544,21 +544,22 @@ def test_el_banco_de_preguntas_nombra_su_fuente():
         assert all(question.endswith(f" en {name}") for question, *_ in bench["preguntas"] + bench["trampas"])
 
 
-def test_las_palabras_clave_siguen_la_configuracion_real(monkeypatch):
+def test_busca_en_el_zim_con_lo_que_prepara_buscar():
     from types import SimpleNamespace
 
-    from config.settings_manager import SettingsManager
+    brain = SimpleNamespace(zim_search_inputs=lambda question: (
+        question + " (equipo: computer)", "How do I change the hostname?", {"en": ["hostname"], "es": ["equipo"]}))
+    source = SimpleNamespace(name="askubuntu", language="en")
+    seen = []
 
-    asked = []
-    monkeypatch.setattr(check_rag, "_router", [SimpleNamespace(
-        ask=lambda prompt, domain, max_tokens: asked.append(domain) or "Yen")])
-    SettingsManager.set_overrides({"rag": {"zim_keywords": ["enciclopedia"], "zim_keywords_domain": "general"}})
-    wiki = SimpleNamespace(kind="enciclopedia", language="es")
-    site = SimpleNamespace(kind="preguntas", language="en")
+    def pages_of(archive, source, question, translated, keywords):
+        seen.append((question, translated, keywords))
+        return translated, "english", [("questions/87665/x", "t", "<html>")]
 
-    assert check_rag.keywords_for("qué moneda se usa en Japón", site) == []
-    assert check_rag.keywords_for("qué moneda se usa en Japón", wiki) == ["Yen"]
-    assert asked == ["general"]
+    text, paths_found = check_rag.zim_search(brain, "cómo cambio el nombre del equipo en askubuntu", source, None, pages_of)
+
+    assert (text, paths_found) == ("How do I change the hostname?", ["questions/87665/x"])
+    assert seen == [("cómo cambio el nombre del equipo (equipo: computer)", "How do I change the hostname?", ["hostname"])]
 
 
 def test_guardar_escribe_cada_pregunta_con_su_respuesta(tmp_path, monkeypatch):

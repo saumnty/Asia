@@ -824,29 +824,30 @@ def end_to_end(runs, glossary_dir, base):
     return finished(end_to_end_failures(known_limit, all_fell, all_strayed, base))
 
 
-_router = []
+def search_brain():
+    """El Brain de /buscar: check_rag busca en el .zim con su mismo camino (zim_search)."""
+    from core import paths
+    from core.brain import Brain
+    from core.session import Session
+
+    Session.set_paths(project_root=paths.PROJECT_ROOT, user_cwd=ROOT)
+    return Brain()
 
 
-def keywords_for(question, source) -> list:
-    """Las palabras clave para question (core/rag/keywords.py); [] si rag.zim_keywords no las pide para source.
+def zim_search(brain, question, source, archive, pages_of) -> tuple:
+    """(texto buscado, rutas) que /buscar lee del .zim para question.
 
-    Como /buscar: la configuración real (enciclopedia, qwen3), o la de --palabras-clave (main).
+    La misma preparación (glosario, traducción, palabras clave: zim_search_inputs) y la
+    misma búsqueda (pages_of: zim_pages o qa_pages) que /buscar.
     """
-    from config.settings_manager import SettingsManager
-    from core.rag.keywords import DEFAULT_DOMAIN, DOMAIN_SETTING, SETTING, enabled_for, zim_keywords
-    from providers.provider_router import ProviderRouter
+    asked, translated, keywords = brain.zim_search_inputs(question)
+    found = keywords.get(source.language, [])
 
-    rag = SettingsManager().get("rag") or {}
+    if found:
+        print(f"    palabras clave: {found}", flush=True)
 
-    if not enabled_for(rag.get(SETTING), source):
-        return []
-
-    if not _router:
-        _router.append(ProviderRouter())
-
-    found = zim_keywords(question, source, _router[0].ask, rag.get(DOMAIN_SETTING, DEFAULT_DOMAIN))
-    print(f"    palabras clave: {found}", flush=True)
-    return found
+    text, _, pages = pages_of(archive, source, without_source(asked, source), translated, found)
+    return text, [path for path, _, _ in pages]
 
 
 def wikipedia_correct(shown, pattern) -> bool:
@@ -877,7 +878,7 @@ def wikipedia(runs, base):
     from libzim.reader import Archive
 
     from core import paths
-    from core.rag.wikipedia import found_articles
+    from core.rag.wikipedia import zim_pages
 
     source = Library().get(WIKIPEDIA)
 
@@ -886,34 +887,29 @@ def wikipedia(runs, base):
         return 1
 
     archive = Archive(source.path)
+    scratch = temp_folder()
+    # Caché aparte: la corrida 1 embebe en frío y la 2 ya la tiene.
+    paths.WIKIPEDIA_CACHE_FILE = scratch / "embeddings.sqlite3"
+    brain = search_brain()
     found = 0
 
     for question, expected, _ in WIKIPEDIA_QUESTIONS:
-        text = without_source(question, source)
-        paths_found = [path for path, _, _ in found_articles(archive, text, keywords=keywords_for(text, source))]
+        _, paths_found = zim_search(brain, question, source, archive, zim_pages)
         hit = bool(set(expected) & set(paths_found))
         found += hit
         print(f"{'sí' if hit else 'no'}: {question} -> {', '.join(paths_found) or 'nada'}", flush=True)
 
     for question in WIKIPEDIA_TRAPS:
-        text = without_source(question, source)
-        paths_found = [path for path, _, _ in found_articles(archive, text, keywords=keywords_for(text, source))]
+        _, paths_found = zim_search(brain, question, source, archive, zim_pages)
         print(f"trampa: {question} -> {', '.join(paths_found) or 'nada'}", flush=True)
 
     print(f"\nArtículo esperado entre los encontrados: {found}/{len(WIKIPEDIA_QUESTIONS)}, "
           f"base {base[WIKIPEDIA]['encontrados']}.\n", flush=True)
 
     if not runs:
+        remove_tree(scratch)
         return finished(wikipedia_failures(found, 0, base))
 
-    from core.brain import Brain
-    from core.session import Session
-
-    Session.set_paths(project_root=paths.PROJECT_ROOT, user_cwd=ROOT)
-    scratch = temp_folder()
-    # Caché aparte: la corrida 1 embebe en frío y la 2 ya la tiene.
-    paths.WIKIPEDIA_CACHE_FILE = scratch / "embeddings.sqlite3"
-    brain = Brain()
     summary = [
         "| Corrida | Correctas | Respondió | Solo líneas | Sin respuesta directa | No lo encontré | El modelo negó "
         "| Trampas respondidas | Trampas que el modelo negó | Segundos por pregunta |",
@@ -984,8 +980,7 @@ def questions(runs, base, sites=None):
     from libzim.reader import Archive
 
     from core import paths
-    from core.rag.questions import QUESTION_PATHS
-    from core.rag.wikipedia import found_articles
+    from core.rag.questions import qa_pages
 
     sources = {name: Library().get(name) for name in sites or QA_BENCH}
     sources = {name: s for name, s in sources.items() if s is not None and Path(s.path).is_file()}
@@ -996,6 +991,9 @@ def questions(runs, base, sites=None):
     if not sources:
         return 1
 
+    scratch = temp_folder()
+    paths.WIKIPEDIA_CACHE_FILE = scratch / "embeddings.sqlite3"
+    brain = search_brain()
     found = {}
 
     for name, source in sources.items():
@@ -1003,29 +1001,22 @@ def questions(runs, base, sites=None):
         found[name] = 0
 
         for question, english, expected, _ in QA_BENCH[name]["preguntas"]:
-            query = english if source.language == "en" else without_source(question, source)
-            # Las palabras clave, de la pregunta en español: el modelo las da en el idioma del sitio.
-            found_kw = keywords_for(without_source(question, source), source)
-            pages = found_articles(archive, query, 3, QUESTION_PATHS, keywords=found_kw)
-            ids = [QA_PAGE_ID.match(path).group(1) for path, _, _ in pages]
+            # La traducción del 7B, como en /buscar; english es la de referencia, escrita a mano.
+            query, found_paths = zim_search(brain, question, source, archive, qa_pages)
+            ids = [QA_PAGE_ID.match(path).group(1) for path in found_paths]
             hit = bool(set(expected) & set(ids))
             found[name] += hit
-            print(f"{name} {'sí' if hit else 'no'}: {query} -> {', '.join(ids) or 'nada'}", flush=True)
+            reference = f" (referencia: {english})" if english and english.lower() != query.lower().rstrip("?") else ""
+            print(f"{name} {'sí' if hit else 'no'}: {query}{reference} -> {', '.join(ids) or 'nada'}", flush=True)
 
         expected_found = ((base.get(QA_KEY) or {}).get(name) or {}).get("encontrados", "—")
         print(f"{name}: página esperada entre las encontradas {found[name]}/{len(QA_BENCH[name]['preguntas'])}, "
               f"base {expected_found}.\n", flush=True)
 
     if not runs:
+        remove_tree(scratch)
         return finished(questions_failures(found, {}, base))
 
-    from core.brain import Brain
-    from core.session import Session
-
-    Session.set_paths(project_root=paths.PROJECT_ROOT, user_cwd=ROOT)
-    scratch = temp_folder()
-    paths.WIKIPEDIA_CACHE_FILE = scratch / "embeddings.sqlite3"
-    brain = Brain()
     summary = [
         "| Sitio | Corrida | Correctas | Respondió | Sin respuesta directa | No lo encontré | El modelo negó "
         "| Trampas respondidas | Segundos por pregunta |",

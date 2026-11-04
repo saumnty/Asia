@@ -147,12 +147,22 @@ def origin_of_article(source, path: str, edition: str) -> str:
     return " · ".join(part for part in parts if part)
 
 
-def article_fragments(archive, source, question: str, language: str = SPANISH, keywords=()) -> list:
-    """[(id, documento, metadatos)] de los fragmentos elegidos, listos para ordenar."""
+def zim_pages(archive, source, question: str, translated="", keywords=(), count=ARTICLES, path_pattern=None) -> tuple:
+    """(texto, idioma, [(ruta, título, html)]): lo que /buscar lee del .zim de source.
+
+    En un .zim en inglés se busca con la pregunta traducida. check_rag mide con esta
+    misma función, para que encuentre lo mismo que /buscar.
+    """
+    text, language = searches_for(question, source, translated)[-1]
+    return text, language, found_articles(archive, text, count, path_pattern, keywords)
+
+
+def article_fragments(archive, source, pages: list, question: str, language: str = SPANISH) -> list:
+    """[(id, documento, metadatos)] de los fragmentos elegidos de pages, listos para ordenar."""
     edition = edition_of(archive)
     fragments = []
 
-    for path, title, html in found_articles(archive, question, keywords=keywords):
+    for path, title, html in pages:
         slug = slug_of(path)
         metadata = {
             "file_path": slug,
@@ -180,9 +190,10 @@ def wikipedia_hits(question: str, source, n_results=5, embedder=None, translated
     """
     from libzim.reader import Archive
 
-    searches = searches_for(question, source, translated)
-    fragments = article_fragments(Archive(str(Path(source.path))), source, *searches[-1], keywords=keywords)
-    return rank_fragments(fragments, searches, n_results, embedder)
+    archive = Archive(str(Path(source.path)))
+    text, language, pages = zim_pages(archive, source, question, translated, keywords)
+    fragments = article_fragments(archive, source, pages, text, language)
+    return rank_fragments(fragments, searches_for(question, source, translated), n_results, embedder)
 
 
 def searches_for(question: str, source, translated: str) -> list:

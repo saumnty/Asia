@@ -116,10 +116,7 @@ class ExploreActions:
 
         # La regla de la entidad mira la pregunta tal cual, sin los equivalentes del glosario.
         asked = question
-        # También para el modelo: si no, no ve la relación con lo que dicen los fragmentos.
-        question = expand(question, Library().all())
-
-        translated = self.translated_question(question)
+        question, translated, keywords = self.zim_search_inputs(question)
 
         rag_context = self.tool_registry.execute(
             "search_project_rag",
@@ -127,7 +124,7 @@ class ExploreActions:
             project_name=project_name,
             n_results=RAG_FRAGMENTS,
             translated=translated,
-            keywords=self.zim_search_keywords(question)
+            keywords=keywords
         )
 
         # Sin nada relevante, ni se llama al modelo: no hay de dónde responder.
@@ -173,6 +170,13 @@ class ExploreActions:
             return f"{lines}\n\n{prompts.UNVERIFIED_SUMMARY}\n\n{summary}"
 
         return f"{prompts.INVALID_DRAFT}\n\n{lines}"
+
+    def zim_search_inputs(self, question):
+        """(pregunta, traducida, palabras clave) con que /buscar busca; check_rag mide con lo mismo."""
+        # También para el modelo: si no, no ve la relación con lo que dicen los fragmentos.
+        question = expand(question, Library().all())
+        translated = self.translated_question(question)
+        return question, translated, self.zim_search_keywords(question)
 
     def zim_search_keywords(self, question):
         """{idioma: [búsquedas]} para una pregunta a un .zim (rag.zim_keywords); {} si no toca.

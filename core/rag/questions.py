@@ -14,7 +14,7 @@ from pathlib import Path
 from core.rag.library import QA_SUFFIX
 from core.rag.qa_page import page_chunks, parse_page, post_origin
 from core.rag.tokens import tokenize
-from core.rag.wikipedia import ARTICLE_FRAGMENTS, found_articles, rank_fragments, searches_for
+from core.rag.wikipedia import ARTICLE_FRAGMENTS, rank_fragments, searches_for, zim_pages
 from core.rag.word_index import SPANISH
 
 PAGES = 3
@@ -65,13 +65,18 @@ def closest_posts(chunks: list, question: str, language: str = SPANISH, count: i
     return fixed + rest[:count - len(fixed)]
 
 
-def qa_fragments(archive, source, question: str, language: str = SPANISH, keywords=()) -> list:
+def qa_pages(archive, source, question: str, translated="", keywords=()) -> tuple:
+    """(texto, idioma, páginas de pregunta) que /buscar lee del .zim de source (zim_pages)."""
+    return zim_pages(archive, source, question, translated, keywords, PAGES, QUESTION_PATHS)
+
+
+def qa_fragments(archive, source, pages: list, question: str, language: str = SPANISH) -> list:
     """[(id, documento, metadatos)] de los fragmentos elegidos de las páginas de pregunta."""
     edition = edition_date(archive)
     domain = site_domain(archive)
     fragments = []
 
-    for _, _, html in found_articles(archive, question, PAGES, path_pattern=QUESTION_PATHS, keywords=keywords):
+    for _, _, html in pages:
         page = parse_page(html, edition)
         slug = f"{NOT_IN_TAG.sub('_', source.name)}_{page.question_id}{QA_SUFFIX}"
 
@@ -98,6 +103,7 @@ def qa_hits(question: str, source, n_results=5, embedder=None, translated="", ke
     """Los mejores fragmentos de las páginas de pregunta que encuentra question en el .zim de source."""
     from libzim.reader import Archive
 
-    searches = searches_for(question, source, translated)
-    fragments = qa_fragments(Archive(str(Path(source.path))), source, *searches[-1], keywords=keywords)
-    return rank_fragments(fragments, searches, n_results, embedder)
+    archive = Archive(str(Path(source.path)))
+    text, language, pages = qa_pages(archive, source, question, translated, keywords)
+    fragments = qa_fragments(archive, source, pages, text, language)
+    return rank_fragments(fragments, searches_for(question, source, translated), n_results, embedder)
