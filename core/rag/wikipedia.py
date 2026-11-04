@@ -70,8 +70,12 @@ def search_for(archive, question: str):
     return None
 
 
-def found_articles(archive, question: str, count: int = ARTICLES) -> list:
-    """[(ruta, título, html)] de los mejores artículos, siguiendo redirecciones."""
+def found_articles(archive, question: str, count: int = ARTICLES, path_pattern=None) -> list:
+    """[(ruta, título, html)] de los mejores artículos, siguiendo redirecciones.
+
+    path_pattern: solo rutas que encajan (una regex compilada; en un .zim de Stack
+    Exchange, las páginas de pregunta: la búsqueda también trae usuarios y etiquetas).
+    """
     found = search_for(archive, question)
     articles = {}
 
@@ -79,7 +83,9 @@ def found_articles(archive, question: str, count: int = ARTICLES) -> list:
         entry = archive.get_entry_by_path(result.path)
         entry = entry.get_redirect_entry() if entry.is_redirect else entry
 
-        if entry.path not in articles and len(articles) < count:
+        wanted = path_pattern is None or path_pattern.match(entry.path)
+
+        if wanted and entry.path not in articles and len(articles) < count:
             articles[entry.path] = (entry.path, entry.title, bytes(entry.get_item().content).decode("utf-8"))
 
     return list(articles.values())
@@ -150,10 +156,19 @@ def wikipedia_hits(question: str, source, n_results=5, embedder=None, translated
     """
     from libzim.reader import Archive
 
-    english = translated if source.language == ENGLISH_SOURCE else ""
-    searches = [(question, SPANISH)] + ([(english, ENGLISH)] if english else [])
+    searches = searches_for(question, source, translated)
     fragments = article_fragments(Archive(str(Path(source.path))), source, *searches[-1])
+    return rank_fragments(fragments, searches, n_results, embedder)
 
+
+def searches_for(question: str, source, translated: str) -> list:
+    """[(pregunta, idioma)]: la de siempre y, en una fuente en inglés, también la traducida."""
+    english = translated if source.language == ENGLISH_SOURCE else ""
+    return [(question, SPANISH)] + ([(english, ENGLISH)] if english else [])
+
+
+def rank_fragments(fragments: list, searches: list, n_results: int, embedder=None) -> list:
+    """Hit de los mejores de fragments [(id, documento, metadatos)]: embeddings con caché y palabras, por RRF."""
     if not fragments:
         return []
 
