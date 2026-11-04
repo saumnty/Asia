@@ -1,9 +1,11 @@
 """Charla con Ollama de verdad: ¿el modelo se adjudica los datos del usuario?
 
-Corre en una sola sesión interactiva (launcher, con --timing) unos 14
+Corre en una sola sesión interactiva (launcher, con --timing) unos 26
 mensajes: saludos, "¿quién eres?", "¿cuál es tu color favorito?" (trampa),
 preguntas de conocimiento, preguntas sobre el usuario y una charla de varios
-turnos. La memoria es una copia temporal con datos fijos: no se lee ni se
+turnos; y los casos de la prueba manual de la estrategia B: un hecho reciente
+y su "sí" (Wikipedia), la sesión anterior, el hilo de una charla, lo que sigue
+a un /buscar, "explícamelo a fondo", recall con una frase y el glosario. La memoria es una copia temporal con datos fijos: no se lee ni se
 toca memory/memory.json. El resumen de la sesión y los pendientes también van
 a la carpeta temporal (si no, el resumen de esta charla de prueba reemplazaría
 el de la última sesión de verdad).
@@ -39,6 +41,7 @@ Session.set_paths(project_root=PROJECT_ROOT, user_cwd=ROOT)
 
 import launcher
 from core.brain import Brain
+from core.reflection import save_summary
 from core.timing import SETTING
 from memory.memory_manager import MemoryManager
 
@@ -64,7 +67,28 @@ CASES = [
     ("¿y cuánto se tarda en aprenderlo?", NOT_NAME, r"rust|semana|mes"),
     ("gracias", NOT_NAME, None),
     ("¿qué sabes de mí?", [], "about_me"),
+    # Prueba manual de la estrategia B (2026-11-03): hecho reciente, sesión anterior, hilo,
+    # lo de después de /buscar, "a fondo", recall en una frase y el glosario.
+    ("¿quién ganó el mundial de 2026?", VALUES, r"no lo se de memoria.*wikipedia"),
+    ("sí", VALUES, r"wikipedia"),
+    ("¿qué hicimos en la sesión anterior?", VALUES, r"pid"),
+    ("hablemos de ROS 2", VALUES, None),
+    ("¿qué es un nodo?", VALUES, r"nodo"),
+    ("¿y un tópico?", VALUES, r"topico|topic|publica"),
+    ("¿de qué tema empezamos a hablar?", VALUES, r"ros"),
+    ("explícamelo a fondo", VALUES, "long"),
+    ("/buscar cómo se guardan los pendientes del usuario", VALUES, r"pendiente|task"),
+    ("¿y eso para qué sirve?", VALUES, r"pendiente|tarea"),
+    ("¿cómo me llamo?", [], r"te llamas santiago"),
+    ("/buscar cómo se calcula el punto desplazado en bolitabot", VALUES, r"x_front"),
 ]
+
+# El resumen de la "sesión anterior" que se deja en la carpeta temporal.
+PREVIOUS_SESSION = "Repasamos el controlador PID del trébol de Bolitabot y sus ganancias."
+# "a fondo": una respuesta que pase del tope breve (answer_limits.chat.tokens).
+LONG_TOKENS = 350
+# Una negativa a explicar ("no puedo", "no tengo información suficiente").
+REFUSAL = re.compile(r"\bno (puedo|podria|tengo (informacion|datos))\b")
 
 # Frase en primera persona del modelo: "mi color favorito es...", "me llamo...", "soy...", "estudio en...".
 FIRST_PERSON = re.compile(r"\b(mi|mis|me llamo|soy|estudio|trabajo en)\b[^.!?\n]{0,40}")
@@ -87,13 +111,17 @@ def leaks(answer: str, forbidden) -> list:
     return [value for value in forbidden if any(word.startswith(plain(value)[:max(3, len(value) - 2)]) for word in words)]
 
 
-def correct(answer: str, expected) -> bool:
+def correct(answer: str, expected, tokens=None) -> bool:
+    """tokens: los generados según [tiempos], para "long"."""
     text = plain(answer)
 
     if expected == "about_me":
         return sum(plain(value) in text for value in VALUES) >= 3
 
-    return bool(re.search(expected, text))
+    if expected == "long":
+        return (tokens or 0) > LONG_TOKENS and not REFUSAL.search(text)
+
+    return bool(re.search(expected, text, re.DOTALL))
 
 
 class Tee(io.StringIO):
@@ -117,6 +145,7 @@ def run(folder):
     paths.SESSION_SUMMARY_FILE = folder / "ultima_sesion.json"
     paths.TASKS_FILE = folder / "pendientes.json"
     SettingsManager.set_overrides({**SettingsManager.overrides, SETTING: True})
+    save_summary(PREVIOUS_SESSION, "modelo", 5)
     brain = Brain()
     brain.memory = brain.provider_router.memory = MemoryManager(folder / "memory.json")
     brain.memory.save(MEMORY)
@@ -151,7 +180,7 @@ def main():
     for (message, forbidden, expected), answer, line in zip(CASES, answers, timings + [None] * len(CASES)):
         found = attributions(answer)
         leaked = leaks(answer, forbidden) if not found else []
-        ok = correct(answer, expected) if expected else None
+        ok = correct(answer, expected, number(r"(\d+) tokens generados", line)) if expected else None
         total_attributions += len(found)
         total_leaks += bool(leaked)
         graded += ok is not None

@@ -36,7 +36,7 @@ def test_aciertos():
 def test_unos_doce_mensajes_con_la_trampa_y_las_preguntas_del_usuario():
     messages = [case[0] for case in CASES]
 
-    assert 12 <= len(messages) <= 16
+    assert 20 <= len(messages) <= 30
     assert "¿cuál es tu color favorito?" in messages and "¿cuál es mi color favorito?" in messages
 
 
@@ -45,3 +45,19 @@ def test_grafo_bipartito_con_grupos_o_conjuntos():
 
     assert correct("los vértices se dividen en dos grupos", expected)
     assert correct("dos conjuntos disjuntos", expected)
+
+
+def test_a_fondo_es_largo_y_sin_negarse():
+    assert correct("Un nodo es...", "long", tokens=900)
+    assert not correct("Un nodo es...", "long", tokens=200)
+    assert not correct("No puedo explicarlo sin inventar.", "long", tokens=900)
+
+
+def test_casos_de_la_prueba_manual_de_b():
+    messages = [case[0] for case in CASES]
+
+    for text in ("¿quién ganó el mundial de 2026?", "¿qué hicimos en la sesión anterior?", "¿de qué tema empezamos a hablar?",
+                 "explícamelo a fondo", "¿y eso para qué sirve?"):
+        assert text in messages
+    assert messages[messages.index("¿quién ganó el mundial de 2026?") + 1] == "sí"
+    assert messages[messages.index("¿y eso para qué sirve?") - 1].startswith("/buscar")
