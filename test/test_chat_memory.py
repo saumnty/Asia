@@ -176,3 +176,48 @@ def test_recall_de_un_dato_del_usuario_sigue_igual(monkeypatch):
     brain.memory = type("M", (), {"recall": lambda self, key: "amarillo"})()
 
     assert brain.process("¿cuál es mi color favorito?") == "color_favorito: amarillo"
+
+
+@pytest.mark.parametrize(
+    "text", ["¿de qué tema empezamos a hablar?", "¿de qué estábamos hablando?", "¿qué te pregunté primero?",
+             "¿cuál fue mi primera pregunta?"],
+)
+def test_pregunta_por_la_charla(text):
+    from core.chat_memory import asks_about_conversation
+
+    assert asks_about_conversation(text)
+
+
+def test_recuerda_los_mensajes_del_usuario_en_orden():
+    router, provider = setup()
+
+    for text in ("hablemos de ROS 2", "¿qué es un nodo?", "¿y un tópico?"):
+        say(router, text)
+
+    say(router, "¿de qué tema empezamos a hablar?")
+
+    user = provider.calls[-1][0][-1]["content"]
+    assert user.startswith(
+        "Mensajes anteriores del usuario en esta charla, en orden:\n1. hablemos de ROS 2\n2. ¿qué es un nodo?\n3. ¿y un tópico?"
+    )
+    # El historial guardado no lleva el recordatorio.
+    assert router.history[-2] == {"role": "user", "content": "¿de qué tema empezamos a hablar?"}
+
+
+def test_sin_pregunta_por_la_charla_no_hay_recordatorio():
+    router, provider = setup()
+
+    say(router, "hablemos de ROS 2")
+    say(router, "¿y un tópico?")
+
+    assert "Mensajes anteriores" not in provider.calls[-1][0][-1]["content"]
+
+
+def test_el_recordatorio_no_sale_hacia_fuera():
+    router, provider = setup()
+    say(router, "hablemos de ROS 2")
+    request, _ = router.last_request
+    say(router, "¿de qué tema empezamos a hablar?")
+    request, _ = router.last_request
+
+    assert all("Mensajes anteriores" not in m["content"] for m in request.external_messages)

@@ -104,6 +104,28 @@ def is_recall(text: str) -> bool:
     return not WHOLE_MEMORY.search(command)
 
 
+CONVERSATION = re.compile(
+    r"\b(de|sobre) que (tema )?(empezamos|estabamos|estamos|hablabamos|hablamos|veniamos)"
+    r"|\bque te (pregunte|dije|pedi) (primero|antes|al principio)|\bcomo empezo (la|esta) (charla|conversacion)"
+    r"|\bde que (iba|va) (la|esta) (charla|conversacion)|\bcual fue (mi|la) primera pregunta"
+)
+
+
+def asks_about_conversation(text: str) -> bool:
+    """"¿De qué tema empezamos a hablar?": qwen3 contestaba con el último tema, no con el primero."""
+    return bool(CONVERSATION.search(command_text(text or "")))
+
+
+def conversation_note(history: list) -> str:
+    """Los mensajes del usuario de la charla, numerados y en orden; "" si no hay."""
+    asked = [" ".join(m["content"].split())[:150] for m in history if m["role"] == "user"]
+
+    if not asked:
+        return ""
+
+    return "\n".join(["Mensajes anteriores del usuario en esta charla, en orden:"] + [f"{i}. {t}" for i, t in enumerate(asked, 1)])
+
+
 def memory_note(entries: dict) -> str:
     """Las entradas en tercera persona, bajo TITLE; vacío si no hay ninguna."""
     if not entries:

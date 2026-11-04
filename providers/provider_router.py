@@ -17,7 +17,7 @@ from core.confidential import (
     outgoing_messages,
 )
 from core.audit import log_external_send
-from core.chat_memory import memory_note, relevant_memory
+from core.chat_memory import asks_about_conversation, conversation_note, memory_note, relevant_memory
 from core.model_selection import StickyModel, model_for, thinks
 from core.interruptible import call as interruptible_call
 from core.timing import timed
@@ -229,7 +229,16 @@ Contexto del proyecto:
         history = self.history[len(self.history) - kept:]
         history_labels = self.history_labels[len(self.history_labels) - kept:]
 
-        messages = [system, *history, user_message]
+        # "¿De qué tema empezamos?": el historial llegaba entero y qwen3 contestaba
+        # con el último tema. Se le recuerdan los mensajes del usuario en orden.
+        # Solo hacia el modelo local: el historial que sale fuera va filtrado.
+        local_message = user_message
+        recap = conversation_note(history) if asks_about_conversation(typed) else ""
+
+        if recap:
+            local_message = {"role": "user", "content": f"{recap}\n\n{user_message['content']}"}
+
+        messages = [system, *history, local_message]
 
         ambient = []
 
