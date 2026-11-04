@@ -1,7 +1,9 @@
-"""jarvis.exe (fase I): el entry point de pyproject.toml y lo que necesita para funcionar igual."""
+"""asia.exe y jarvis.exe (fase I): el entry point de pyproject.toml y lo que necesita para funcionar igual."""
 import importlib
 import inspect
 import tomllib
+
+import pytest
 
 import launcher
 from core.paths import PROJECT_ROOT
@@ -11,8 +13,9 @@ def project():
     return tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
 
-def test_jarvis_apunta_a_launcher_main():
-    module, function = project()["project"]["scripts"]["jarvis"].split(":")
+@pytest.mark.parametrize("command", ["asia", "jarvis"])
+def test_asia_y_su_alias_jarvis_apuntan_a_launcher_main(command):
+    module, function = project()["project"]["scripts"][command].split(":")
 
     assert getattr(importlib.import_module(module), function) is launcher.main
 
@@ -25,7 +28,7 @@ def test_main_se_puede_llamar_sin_argumentos():
 
 
 def test_el_nombre_en_la_ayuda_no_depende_del_exe():
-    assert launcher.build_parser().prog == "jarvis"
+    assert launcher.build_parser().prog == "asia"
 
 
 def test_incluye_el_codigo_de_asia():

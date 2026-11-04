@@ -37,7 +37,7 @@ class ApplyChangesTool:
         )
 
         # Se guarda la ruta absoluta: el cambio puede confirmarse desde otra
-        # carpeta (p. ej. en otra llamada a jarvis.bat).
+        # carpeta (p. ej. en otra llamada a asia).
         pending_change = {
             "file_path": file_path,
             "absolute_path": str(path.resolve()),

@@ -92,3 +92,14 @@ def test_faster_whisper_lo_usa_como_initial_prompt():
 
     assert calls[0]["initial_prompt"] == "Órdenes para Asia: abre."
     assert calls[1]["initial_prompt"] is None
+
+
+def test_asia_esta_en_el_vocabulario_por_defecto(tmp_path):
+    from config.settings_manager import read_json
+    from core.paths import DEFAULTS_FILE
+
+    voice = read_json(DEFAULTS_FILE)["voice"]
+    apps_file, projects_dir = data(tmp_path)
+
+    assert "Asia" in voice["stt_vocabulary"]
+    assert "Asia" in build_prompt(FakeSettings(), config(stt_vocabulary=voice["stt_vocabulary"]), apps_file, projects_dir)

@@ -117,7 +117,7 @@ def test_respond_registra_lo_oido(capsys):
     assert "[tiempos] voz a texto 0,7 s (1,5 s de audio)" in capsys.readouterr().err
 
 
-def test_jarvis_voz_con_mensaje_lee_la_respuesta(monkeypatch, capsys):
+def test_asia_voz_con_mensaje_lee_la_respuesta(monkeypatch, capsys):
     from core.voice import session as voice_session
 
     spoken = []

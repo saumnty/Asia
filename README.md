@@ -11,10 +11,11 @@ cd C:\Asia
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m pip install -e . --no-deps --no-build-isolation
+Copy-Item .\.venv\Scripts\asia.exe C:\Tools\asia.exe
 Copy-Item .\.venv\Scripts\jarvis.exe C:\Tools\jarvis.exe
 ```
 
-`pip install -e .` genera `.venv\Scripts\jarvis.exe`, y `C:\Tools` ya está en el PATH. El modo editable usa el código de `C:\Asia`: cambiar el código no requiere reinstalar.
+`pip install -e .` genera `.venv\Scripts\asia.exe` y `.venv\Scripts\jarvis.exe`, y `C:\Tools` ya está en el PATH. El comando es `asia`; `jarvis`, el nombre de antes, queda como alias y hace lo mismo. El modo editable usa el código de `C:\Asia`: cambiar el código no requiere reinstalar.
 
 Las pruebas necesitan además `requirements-dev.txt`:
 
@@ -29,14 +30,15 @@ Las pruebas necesitan además `requirements-dev.txt`:
 .\.venv\Scripts\python.exe -m pip install -r requirements-voice.txt
 ```
 
-El modelo de Whisper va en `data/models/` y las voces de Piper en `data/voices/`; no están en el repositorio. Si falta el modelo, Asia dice cómo descargarlo. Se activa con `/voz` o `jarvis --voz`.
+El modelo de Whisper va en `data/models/` y las voces de Piper en `data/voices/`; no están en el repositorio. Si falta el modelo, Asia dice cómo descargarlo. Se activa con `/voz` o `asia --voz`.
 
 ## Si recreas el .venv
 
-`jarvis.exe` guarda la ruta del Python del `.venv`. Después de recrear el `.venv` o de moverlo de carpeta, repite la instalación y vuelve a copiar el ejecutable:
+`asia.exe` y `jarvis.exe` guardan la ruta del Python del `.venv`. Después de recrear el `.venv` o de moverlo de carpeta, repite la instalación y vuelve a copiar los ejecutables:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e . --no-deps --no-build-isolation
+Copy-Item .\.venv\Scripts\asia.exe C:\Tools\asia.exe -Force
 Copy-Item .\.venv\Scripts\jarvis.exe C:\Tools\jarvis.exe -Force
 ```
 

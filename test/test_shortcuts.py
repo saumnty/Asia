@@ -82,7 +82,7 @@ def test_frases_que_no_son_exactas_van_al_intentengine(tmp_path, text):
 
 
 @pytest.mark.parametrize("word", ["salir", "Salir", "exit", "quit "])
-def test_jarvis_salir_no_crea_brain(word, capsys):
+def test_asia_salir_no_crea_brain(word, capsys):
     def no_brain():
         raise AssertionError("no debía crearse Brain")
 

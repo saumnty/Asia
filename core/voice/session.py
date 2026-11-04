@@ -153,7 +153,7 @@ class VoiceSession:
             self.reading.wait(timeout)
 
     def speak(self, answer: str) -> Spoken:
-        """Lee answer entera y espera a que termine (jarvis --voz "mensaje"). Ctrl+C corta la lectura."""
+        """Lee answer entera y espera a que termine (asia --voz "mensaje"). Ctrl+C corta la lectura."""
         reading = self.start_reading()
         reading.finish(answer)
 

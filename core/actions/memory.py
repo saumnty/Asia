@@ -145,7 +145,7 @@ class MemoryActions:
             return f"Provider no disponible todavía: {provider}"
 
         # Solo esta sesión: settings.json no cambia (fase G). Para que sea
-        # permanente se edita default_provider a mano (ver jarvis --help).
+        # permanente se edita default_provider a mano (ver asia --help).
         set_session(default_provider=provider)
 
         return (

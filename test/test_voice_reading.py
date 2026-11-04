@@ -262,7 +262,7 @@ def test_volver_a_escuchar_corta_la_lectura():
     assert not reading.active and speaker.stops >= 1
 
 
-def test_jarvis_voz_con_mensaje_lee_todo_y_espera():
+def test_asia_voz_con_mensaje_lee_todo_y_espera():
     voice, _ = session([])
 
     spoken = voice.speak("Hola. ¿Qué tal?")

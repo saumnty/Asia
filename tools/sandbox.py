@@ -192,7 +192,7 @@ class PendingRun:
     """Ejecución preparada que espera "confirmar ejecución".
 
     Se guarda en un archivo (como el cambio pendiente) para que pueda
-    confirmarse en otra llamada a jarvis. Guarda una copia del código: se
+    confirmarse en otra llamada a asia. Guarda una copia del código: se
     ejecuta exactamente lo que se mostró, aunque el archivo cambie después.
     """
 

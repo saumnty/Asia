@@ -78,6 +78,8 @@ Medido con `test/manual/check_speed.py` (una sesión, `qwen2.5-coder:7b`, `num_c
 
 **Fase I, ejecutable nativo** (`07cb95b9`, `55081129`, `320f6d41`): `pyproject.toml` con el entry point `jarvis = launcher:main`, instalado con `pip install -e .` en el `.venv`; `jarvis.exe` copiado a `C:\Tools`, sin tocar el PATH (`.exe` gana a `.bat`). La carpeta actual, los flags, stdin y el código de salida no cambian. Cambiar el contenido de `C:\Tools\jarvis.bat` no servía: con cualquier `.bat` en la cadena sigue el S/N. Librerías pesadas al primer uso: `google.genai` al usar Gemini, `chromadb` y `requests` con RAG, `ollama` al primer uso del cliente, que en el modo interactivo es el hilo de precarga.
 
+Renombre (2026-11-04): el comando es `asia` (`asia = launcher:main`) y `jarvis` queda como alias que hace lo mismo; `asia.exe` y `jarvis.exe` en `C:\Tools`, `asia --help`, README y mensajes con el nombre nuevo. El repositorio y las carpetas no cambian.
+
 | Arranque (mediana) | Antes (`.bat`) | `.exe` solo | `.exe` y carga diferida |
 |---|---|---|---|
 | `jarvis --help` | 10,01 s | 9,67 s | 0,91 s |
@@ -641,7 +643,7 @@ Extras de Asia 2.0, junto al modo confidencial:
 
 **c. Perfiles aislados (trabajo y personal).** Memoria, fuentes, RAG y bitácoras separadas. En el perfil de trabajo, el modo local queda bloqueado: sin proveedores externos, salvo uno que apruebe la empresa (por ejemplo, Claude vía Bedrock o Vertex). Un comando para borrar todo un perfil.
 
-**d. Asia multiplataforma (Windows y Ubuntu).** Preparar el paso al servidor y al Jetson aislando lo que hoy es solo de Windows: `open_app`, `jarvis.exe` y las rutas.
+**d. Asia multiplataforma (Windows y Ubuntu).** Preparar el paso al servidor y al Jetson aislando lo que hoy es solo de Windows: `open_app`, `asia.exe` y las rutas.
 
 ### Voz y avatar
 

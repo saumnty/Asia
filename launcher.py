@@ -83,7 +83,7 @@ def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label
 
     voice (modo voz interactivo): la respuesta se lee frase por frase
     mientras se escribe y sigue sonando al volver al prompt. speak (una sola
-    ejecución, jarvis --voz "mensaje"): se lee entera al final.
+    ejecución, asia --voz "mensaje"): se lee entera al final.
 
     cuttable (modo interactivo): Ctrl+C corta la respuesta y se vuelve al
     prompt; el turno cortado no queda en el historial. Con voz, si algo
@@ -176,7 +176,7 @@ def ctrl_c_stops(reading):
 
 
 def speak_answer(speak, answer):
-    """jarvis --voz "mensaje": lee la respuesta (ya mostrada en pantalla). Un fallo de la voz no la pierde."""
+    """asia --voz "mensaje": lee la respuesta (ya mostrada en pantalla). Un fallo de la voz no la pierde."""
     if speak is None or not answer:
         return
 
@@ -754,13 +754,13 @@ def startup_message(settings) -> str:
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        prog="jarvis",
+        prog="asia",
         # El epílogo va con su formato (RawDescription); la descripción se
         # reajusta a mano.
         description=textwrap.fill(
             "Asia, asistente local. Sin mensaje abre el modo interactivo. "
             "Adjunta archivos con @ruta dentro del mensaje o con --file; "
-            "también acepta contenido por stdin (Get-Content a.py | jarvis \"explica esto\"). "
+            "también acepta contenido por stdin (Get-Content a.py | asia \"explica esto\"). "
             "En el modo interactivo, un mensaje que termina en << sigue en varias "
             "líneas hasta una línea con FIN (o FIN al final de la última línea). "
             "Usa -- antes de un mensaje que empiece con guion."
@@ -905,7 +905,7 @@ def main(argv=None, stdin=None, brain_factory=Brain):
         print(f"Carpeta desde donde llamaste a Asia: {Session.get_user_cwd()}")
         return
 
-    # "jarvis salir" no tiene nada que hacer: no se crea Brain ni se llama al modelo.
+    # "asia salir" no tiene nada que hacer: no se crea Brain ni se llama al modelo.
     if is_launcher_command(prompt, "salir") and not args.file and stdin_data is None:
         print("Asia apagada.")
         return
@@ -925,7 +925,7 @@ def main(argv=None, stdin=None, brain_factory=Brain):
 
     speak = None
 
-    # jarvis --voz "mensaje": se lee la respuesta (escuchar es del modo interactivo).
+    # asia --voz "mensaje": se lee la respuesta (escuchar es del modo interactivo).
     if voice_enabled(brain.settings):
         from core.voice.session import VoiceSession
 
