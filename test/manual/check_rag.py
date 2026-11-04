@@ -294,6 +294,89 @@ QA_BENCH = {
             ("cuál es la capital de Australia en stackoverflow_es", ""),
         ],
     },
+    # Hilos canónicos buscados por título y texto completo en el .zim de 2026-10. Las trampas
+    # son inventadas: ninguna palabra (zarnquist, flopctl, quirsagactl, QX7741Z, Velluto,
+    # Tumbarrayo, Brezalmonte, Orzaluna, Quetzacoya) sale en títulos ni en texto (2026-11-04).
+    "unix": {
+        "preguntas": [
+            ("cómo hago ejecutable un script en unix", "how do I make a script executable", ("792565",), r"chmod"),
+            ("cómo cuento las líneas de un archivo en unix", "how do I count the lines in a file",
+             ("4478", "652599", "504892"), r"wc -l"),
+            ("cómo sé qué proceso usa un puerto en unix", "how do I know which process is using a port",
+             ("44009", "244531", "616125"), r"lsof|netstat|\bss\b|fuser"),
+            ("cómo extraigo un archivo tar.gz en unix", "how do I extract a tar.gz file",
+             ("669532", "145342", "61461"), r"tar -?[a-z]*x"),
+            ("cómo reemplazo un texto en un archivo con sed en unix", "how do I replace a string in a file with sed",
+             ("563306", "366081", "383832"), r"sed -i|s/"),
+            ("cómo dejo un proceso corriendo después de cerrar la terminal en unix",
+             "how do I keep a process running after closing the terminal",
+             ("525340", "682793", "24658", "73221"), r"nohup|disown|screen|tmux"),
+        ],
+        "trampas": [
+            ("qué hace el comando zarnquist en unix", "what does the zarnquist command do"),
+            ("cómo configuro flopctl para que arranque solo en unix", "how do I configure flopctl to start at boot"),
+            ("en qué año se fundó Brezalmonte de Arriba en unix", "what year was Brezalmonte de Arriba founded"),
+        ],
+    },
+    "askubuntu": {
+        "preguntas": [
+            ("cómo instalo un archivo .deb en askubuntu", "how do I install a .deb file",
+             ("40779", "1237733", "1018942"), r"dpkg -i|apt install|gdebi"),
+            ("cómo añado un usuario a sudoers en askubuntu", "how do I add a user to sudoers",
+             ("296256", "7477", "124166", "1067901"), r"usermod|adduser|visudo"),
+            ("cómo encuentro mi dirección IP en askubuntu", "how do I find my IP address",
+             ("430853", "197628"), r"ip a|ifconfig|hostname -I|ip addr"),
+            ("cómo cambio el nombre del equipo en askubuntu", "how do I change the hostname",
+             ("87665", "228202", "9540", "1023966", "878380"), r"hostnamectl|/etc/hostname"),
+            ("cómo actualizo a una versión nueva de Ubuntu en askubuntu", "how do I upgrade to a newer version of Ubuntu",
+             ("110477",), r"do-release-upgrade|update-manager"),
+        ],
+        "trampas": [
+            ("cómo instalo el paquete brezalmonte-daemon en askubuntu", "how do I install the brezalmonte-daemon package"),
+            ("qué hace el comando quirsagactl en askubuntu", "what does the quirsagactl command do"),
+            ("qué profundidad tiene la laguna Quetzacoya en askubuntu", "how deep is lake Quetzacoya"),
+        ],
+    },
+    "electronics": {
+        "preguntas": [
+            ("cómo calculo la resistencia para un LED en electronics", "how do I calculate the resistor for an LED",
+             ("450706", "14852", "436291", "339458"), r"forward voltage|ohm|\bV_?f\b"),
+            ("qué es una resistencia pull-up en electronics", "what is a pull-up resistor",
+             ("162309", "185953", "677164", "481332", "621096"), r"pull-?up"),
+            ("para qué sirve un condensador de desacoplo en electronics", "what is a decoupling capacitor for",
+             ("127312", "136298", "217281"), r"noise|supply|bypass"),
+            ("qué diferencia hay entre un MOSFET y un BJT en electronics", "what is the difference between a MOSFET and a BJT",
+             ("94978", "28447", "417798"), r"gate|base current|voltage[- ]controlled|current[- ]controlled"),
+            ("por qué se pone un diodo flyback en un relé en electronics", "why use a flyback diode on a relay",
+             ("367675", "100212"), r"inductive|back.?emf|spike|coil"),
+        ],
+        "trampas": [
+            ("qué tensión máxima soporta el transistor QX7741Z en electronics",
+             "what is the maximum voltage of the QX7741Z transistor"),
+            ("cómo conecto el sensor Orzaluna-30 en electronics", "how do I wire the Orzaluna-30 sensor"),
+            ("en qué año se fundó Brezalmonte de Arriba en electronics", "what year was Brezalmonte de Arriba founded"),
+        ],
+    },
+    "superuser": {
+        "preguntas": [
+            ("cómo sé qué proceso bloquea un archivo en Windows en superuser",
+             "how do I find which process is locking a file in Windows",
+             ("117902", "1101905", "13291"), r"Process Explorer|handle|Resource Monitor|LockHunter"),
+            ("cómo hago una captura de pantalla en Windows en superuser", "how do I take a screenshot in Windows",
+             ("379165", "412293"), r"Print Screen|PrtSc|Snipping|Win\+Shift\+S"),
+            ("cómo vacío la caché de DNS en Windows en superuser", "how do I flush the DNS cache in Windows",
+             ("992830", "235749"), r"ipconfig /flushdns"),
+            ("cómo creo un enlace simbólico en Windows en superuser", "how do I create a symbolic link in Windows",
+             ("1020821", "891973", "1287528"), r"mklink"),
+            ("cómo muestro los archivos ocultos en Windows en superuser", "how do I show hidden files in Windows",
+             ("1151844", "1711950"), r"attrib|Hidden|reg add"),
+        ],
+        "trampas": [
+            ("cómo activo el modo Velluto de Windows en superuser", "how do I enable the Velluto mode in Windows"),
+            ("qué hace el programa Tumbarrayo.exe en superuser", "what does the Tumbarrayo.exe program do"),
+            ("quién ganó el Premio Orzaluna de novela en 1987 en superuser", "who won the Orzaluna novel prize in 1987"),
+        ],
+    },
 }
 QA_KEY = "preguntas"
 QA_PAGE_ID = re.compile(r"questions/(\d+)/")
