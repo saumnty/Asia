@@ -445,3 +445,28 @@ def test_adjunto_faltante_en_modo_interactivo_vuelve_al_prompt(cwd, capsys):
 
 def test_adjunto_valido_no_devuelve_error(cwd):
     assert launcher.main(["explica", "@a.py"], stdin=TTY, brain_factory=FakeBrain) is None
+
+
+def test_casi_salir_pregunta_y_con_si_sale(cwd):
+    brain = FakeBrain()
+    read = reader(["salior", "s"])
+
+    launcher.interactive_mode(brain, read=read)
+
+    assert brain.processed == []
+    assert "¿Quieres salir? (s/N): " in read.prompts
+
+
+def test_casi_salir_con_no_sigue(cwd):
+    brain = FakeBrain()
+
+    launcher.interactive_mode(brain, read=reader(["slir", "no", "hola", "salir"]))
+
+    assert brain.processed == ["hola"]
+
+
+@pytest.mark.parametrize("text, exit_like", [("salior", True), ("/salr", True), ("salir", False), ("salud", False), ("hola", False), ("sal de aquí", False)])
+def test_parecido_a_salir(text, exit_like):
+    from core.commands import looks_like_exit
+
+    assert looks_like_exit(text) is exit_like

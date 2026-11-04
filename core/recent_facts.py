@@ -25,7 +25,7 @@ EVENT = re.compile(
 )
 NOW = re.compile(r"\b(actual|actualmente|ahora|hoy|ultim[oa]s?|reciente\w*|este ano|esta semana|este mes)\b")
 
-AFFIRMATIVE = {"si", "si por favor", "si busca", "si buscalo", "buscalo", "dale", "ok", "vale", "claro", "por favor"}
+AFFIRMATIVE = {"s", "si", "si por favor", "si busca", "si buscalo", "buscalo", "dale", "ok", "vale", "claro", "por favor"}
 EDITION = re.compile(r"_(\d{4}-\d{2})\.zim$")
 
 

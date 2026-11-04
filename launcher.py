@@ -31,7 +31,8 @@ from core.path_completion import make_completer
 from core import timing
 from core.actions.models import command_text
 from core.actions.voice import VOICE_SETTING
-from core.commands import is_launcher_command, options_text
+from core.commands import is_launcher_command, looks_like_exit, options_text
+from core.recent_facts import is_affirmative
 from core.confidential import LOCAL_MODE, OPEN_MODE, current_mode
 from core.model_selection import model_for
 from core.provenance import ADJUNTO, USUARIO, Fragment, request_sources
@@ -606,6 +607,13 @@ def interactive_mode(brain=None, read=None, voice=None):
 
             if block is None and is_launcher_command(user, "salir"):
                 break
+
+            # "salior": casi salir. Se pregunta en vez de mandarlo al modelo.
+            if block is None and looks_like_exit(user):
+                if is_affirmative(read("¿Quieres salir? (s/N): ")):
+                    break
+
+                continue
 
             # El mensaje nuevo no compite con el resumen en marcha.
             summarizer.interrupt()

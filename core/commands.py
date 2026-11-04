@@ -212,6 +212,20 @@ def is_launcher_command(text: str, name: str) -> bool:
     return command_text(text) in {command_text(a) for a in command.aliases}
 
 
+def looks_like_exit(text: str) -> bool:
+    """"salior", "slir", "/salr": una sola palabra casi igual a salir (o a un alias), sin serlo."""
+    import difflib
+
+    word = command_text(text).lstrip("/")
+
+    if not word or " " in word or is_launcher_command(text, "salir"):
+        return False
+
+    command = next(c for c in COMMANDS if c.special == "salir")
+    names = {command_text(a) for a in command.aliases} | {command_text(command.slash).lstrip("/")}
+    return any(difflib.SequenceMatcher(None, word, name).ratio() >= 0.75 for name in names)
+
+
 def options_text() -> str:
     """La lista por grupos, con un ejemplo de cada comando."""
     lines = [
