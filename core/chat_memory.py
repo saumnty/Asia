@@ -123,7 +123,11 @@ def conversation_note(history: list) -> str:
     if not asked:
         return ""
 
-    return "\n".join(["Mensajes anteriores del usuario en esta charla, en orden:"] + [f"{i}. {t}" for i, t in enumerate(asked, 1)])
+    return "\n".join(
+        ["Mensajes anteriores del usuario en esta charla, en orden:"]
+        + [f"{i}. {t}" for i, t in enumerate(asked, 1)]
+        + ["El primer tema es el del primer mensaje que no es un saludo; contesta con esta lista, no con el último tema."]
+    )
 
 
 def memory_note(entries: dict) -> str:

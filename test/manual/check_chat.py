@@ -48,12 +48,20 @@ from memory.memory_manager import MemoryManager
 MEMORY = {"nombre": "Santiago", "proyecto": "Bolitabot", "universidad": "UAM", "color_favorito": "amarillo"}
 VALUES = [value.lower() for value in MEMORY.values()]
 NOT_NAME = [value for value in VALUES if value != "santiago"]
+# Bolitabot es también el nombre de la fuente que se busca y sale en el resumen de la sesión anterior.
+NOT_NAME_NOR_PROJECT = [value for value in VALUES if value not in ("santiago", "bolitabot")]
 
 YELLOW_FRUIT = r"amarill|platano|banana|limon|mango|pina|maracuya|melon"
 
 # (mensaje, datos que no deben aparecer, regex de una respuesta correcta o None; "about_me": 3 de los 4 datos)
 CASES = [
     ("hola", VALUES, None),
+    # El hilo va al principio: "empezamos" es el primer tema de la charla.
+    ("hablemos de ROS 2", VALUES, None),
+    ("¿qué es un nodo?", VALUES, r"nodo"),
+    ("¿y un tópico?", VALUES, r"topico|topic|publica"),
+    ("¿de qué tema empezamos a hablar?", VALUES, r"(de|con|sobre|fue|era|es) (el |la )?(tema de )?ros ?2"),
+    ("explícamelo a fondo", VALUES, "long"),
     ("¿quién eres?", VALUES, r"asia|asistente"),
     ("¿cuál es tu color favorito?", ["amarillo"], None),
     ("qué es un grafo bipartito", VALUES, r"conjunto|grupo"),
@@ -71,16 +79,11 @@ CASES = [
     # lo de después de /buscar, "a fondo", recall en una frase y el glosario.
     ("¿quién ganó el mundial de 2026?", VALUES, r"no lo se de memoria.*wikipedia"),
     ("sí", VALUES, r"wikipedia"),
-    ("¿qué hicimos en la sesión anterior?", VALUES, r"pid"),
-    ("hablemos de ROS 2", VALUES, None),
-    ("¿qué es un nodo?", VALUES, r"nodo"),
-    ("¿y un tópico?", VALUES, r"topico|topic|publica"),
-    ("¿de qué tema empezamos a hablar?", VALUES, r"ros"),
-    ("explícamelo a fondo", VALUES, "long"),
+    ("¿qué hicimos en la sesión anterior?", NOT_NAME_NOR_PROJECT, r"pid"),
     ("/buscar cómo se guardan los pendientes del usuario", VALUES, r"pendiente|task"),
     ("¿y eso para qué sirve?", VALUES, r"pendiente|tarea"),
     ("¿cómo me llamo?", [], r"te llamas santiago"),
-    ("/buscar cómo se calcula el punto desplazado en bolitabot", VALUES, r"x_front"),
+    ("/buscar cómo se calcula el punto desplazado en bolitabot", NOT_NAME_NOR_PROJECT, r"x_front"),
 ]
 
 # El resumen de la "sesión anterior" que se deja en la carpeta temporal.

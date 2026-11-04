@@ -61,3 +61,10 @@ def test_casos_de_la_prueba_manual_de_b():
         assert text in messages
     assert messages[messages.index("¿quién ganó el mundial de 2026?") + 1] == "sí"
     assert messages[messages.index("¿y eso para qué sirve?") - 1].startswith("/buscar")
+
+
+def test_empezamos_no_vale_con_el_ultimo_tema():
+    [expected] = [case[2] for case in CASES if case[0] == "¿de qué tema empezamos a hablar?"]
+
+    assert correct("Empezamos a hablar de ROS 2.", expected)
+    assert not correct("Empezamos con los tópicos, la base para entender los nodos en ROS 2.", expected)

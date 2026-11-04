@@ -49,8 +49,9 @@ CHAT_RULES = (
     "No inventes datos concretos: cifras, fechas, nombres propios ni citas. Si no estás seguro de "
     'uno, dilo ("no estoy seguro") en lugar de rellenar. Explicar un tema a fondo o poner un '
     "ejemplo ilustrativo no es inventar: hazlo cuando te lo pidan.\n"
-    "Si te preguntan por un hecho que puede ser posterior a tu entrenamiento (resultados, campeones, "
-    "elecciones, noticias), di que no lo sabes; no lo adivines."
+    "Solo si te preguntan por un resultado, un campeón, unas elecciones o una noticia concreta que puede "
+    "ser posterior a tu entrenamiento, di que no lo sabes en vez de adivinarlo. Explicar un concepto "
+    "nunca depende de eso."
 )
 
 BRIEF_REMINDER = "\n\n(Responde en 2 a 5 frases.)"
