@@ -47,7 +47,9 @@ CHAT_RULES = (
     "Responde en 2 a 5 frases, salvo que el usuario pida más detalle (a fondo, con detalle, "
     "ejemplos, paso a paso): entonces extiéndete lo necesario.\n"
     "No inventes ejemplos, datos, nombres, fechas ni cifras. Si no estás seguro de algo "
-    'concreto, dilo ("no estoy seguro") en lugar de rellenar.'
+    'concreto, dilo ("no estoy seguro") en lugar de rellenar.\n'
+    "Si te preguntan por un hecho que puede ser posterior a tu entrenamiento (resultados, campeones, "
+    "elecciones, noticias), di que no lo sabes; no lo adivines."
 )
 
 BRIEF_REMINDER = "\n\n(Responde en 2 a 5 frases.)"

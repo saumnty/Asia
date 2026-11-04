@@ -15,6 +15,7 @@
     },
     "ollama_one_model_at_a_time": true,
     "ollama_early_load": true,
+    "knowledge_until_year": 2024,
     "think_domains": ["math"],
 
     "external_allow_memory": false,

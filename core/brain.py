@@ -20,6 +20,7 @@ from core.chat_memory import is_recall
 from core.early_load import EarlyLoad
 from core.fast_chat import is_clear_chat
 from core.fixed_intents import fixed_intent
+from core.recent_facts import DEFAULT_KNOWN_UNTIL, asks_recent_fact, is_affirmative, offer_text
 from tools.app_tool import AppTool
 from core.provenance import USUARIO, Fragment, request_sources
 # wants_synthesis y wants_unverified se importan desde aquí en las pruebas.
@@ -185,6 +186,15 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         # None si fue un comando de sesión.
         self.last_action = None
 
+    def offer_wikipedia(self, text):
+        """No lo sé; ¿lo busco en Wikipedia? El "sí" del mensaje siguiente lo busca."""
+        from core.rag.library import ENCYCLOPEDIA, Library
+
+        source = next((s for s in Library().all() if s.kind == ENCYCLOPEDIA and s.name.lower() == "wikipedia"), None)
+        self.last_action = "chat"
+        self.offered_search = text.strip().rstrip("?¿ ").lstrip("¿") if source else None
+        return offer_text(source)
+
     def limit(self, name):
         """Límite de contexto configurado en context_limits (settings)."""
         return self.settings.get("context_limits")[name]
@@ -263,6 +273,12 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
         command = normalized_command(text)
 
+        # "¿Lo busco en Wikipedia?" y la respuesta es "sí" (core/recent_facts.py).
+        offered, self.offered_search = getattr(self, "offered_search", None), None
+
+        if offered and is_affirmative(text):
+            return self.handle_search_project_rag(text, {"question": f"{offered} en wikipedia"})
+
         # Comandos fijos: texto exacto, sin pasar por el IntentEngine.
         shortcut = SHORTCUT_ACTIONS.get(command)
 
@@ -299,6 +315,13 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
         # Charla clara (saludo, gracias, "qué es X"): directo al chat, sin
         # los ~20 s del IntentEngine (core/fast_chat.py).
+        # Un hecho concreto posterior a lo que sabe el modelo: no se contesta de memoria.
+        settings = getattr(self, "settings", None)
+        known_until = (settings.get("knowledge_until_year") if settings else None) or DEFAULT_KNOWN_UNTIL
+
+        if asks_recent_fact(text, known_until):
+            return self.offer_wikipedia(text)
+
         if is_clear_chat(text, self.app_names()):
             self.last_action = "chat"
             return None
