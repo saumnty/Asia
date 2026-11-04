@@ -935,8 +935,8 @@ Límites conocidos:
 - Las dos reglas son de forma, no de significado: un nombre propio en minúsculas o un nombre técnico sin forma de identificador ("sudoers") no se comprueban, y una respuesta buena con otro nombre ("La Gioconda" por "Mona Lisa") vale solo si la línea nombra lo preguntado.
 - Las preguntas de opinión resumen lo que dicen las respuestas, pero no siempre con citas (NTFS o exFAT).
 - La comprobación de correctas de `check_rag` es una regex sobre las líneas verificadas: aproximada.
-- Con seed y temperatura 0 queda algo de variación de Ollama en CPU (1 de 18 respuestas entre dos corridas).
-- La GPU no se detecta: tiempos en CPU. Hace falta un modelo a la vez y unos 6 GB libres para medir.
+- Con seed y temperatura 0 queda algo de variación (1 de 18 respuestas entre dos corridas), de la parte del 7B que sigue en CPU.
+- La GPU se detecta desde Ollama 0.40.14: el 7B va con 16 capas en la GPU (`num_gpu` 16) y el resto en CPU. La variación que queda con seed y temperatura 0 viene de esa parte en CPU. Hace falta un modelo a la vez y unos 6 GB libres para medir.
 - Sin Wikipedia en inglés descargada; Stack Overflow en inglés, descartado.
 
 Conocimiento, pendientes generales:
