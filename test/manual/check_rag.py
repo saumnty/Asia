@@ -224,20 +224,18 @@ WIKIPEDIA_QUESTIONS = [
     ("en qué año llegó el hombre a la Luna en wikipedia", ("Apolo_11", "Programa_Apolo", "Luna"), r"1969"),
 ]
 
-# Sus artículos no están en el top (has_entry_by_path, con el .zim de 2026-10): un dato
-# así de concreto no debería estar en otro. Si se responde, se lee entera. Fuera la
-# laguna de Bacalar y Copán Ruinas: "Bacalar" y "Departamento_de_Copán" sí están. Y
-# fuera las que el dato sí está en otro artículo (búsqueda de texto completo, 2026-11-03):
-# Villarrubia de los Ojos (tabla de Provincia_de_Ciudad_Real), Salento (tabla de Quindío),
-# Vilcabamba ("menos de mil", Provincia_de_Loja), Salto del Laja (Cascada) y Real del
-# Monte (Mina de Acosta, Minas de Pachuca).
+# Lugares, personas y hechos inventados: con la Wikipedia completa (all_nopic, 2026-10)
+# no hay ruta, ni sugerencia de título, ni texto completo con el nombre (2026-11-04). Las
+# de antes eran lugares reales fuera del top; la completa sí tiene Purmamarca, Concepción
+# de Ataco y Conguillío. Fuera Villaserena (un resultado de texto), San Crisanto de las
+# Brumas, Isidora Melgarejo Santander y Merchante Ibarguren (resultados por las palabras).
 WIKIPEDIA_TRAPS = [
-    "en qué año se fundó Tlacolula de Matamoros en wikipedia",
-    "dónde nace el río Ulúa en wikipedia",
-    "cuántos habitantes tiene Purmamarca en wikipedia",
-    "en qué año se fundó Barichara en wikipedia",
-    "en qué año se fundó Concepción de Ataco en wikipedia",
-    "en qué año se creó el Parque nacional Conguillío en wikipedia",
+    "en qué año se fundó Brezalmonte de Arriba en wikipedia",
+    "dónde nace el río Tumbarrayo en wikipedia",
+    "en qué año se inauguró el puente de Valdecierzo en wikipedia",
+    "quién ganó el Premio Orzaluna de novela en 1987 en wikipedia",
+    "en qué año nació el pintor Eulalio Quirsaga en wikipedia",
+    "qué profundidad tiene la laguna Quetzacoya en wikipedia",
 ]
 
 # Un resumen que dice que el dato no está en lo que se le dio: es una negativa, no una respuesta.
