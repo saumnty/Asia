@@ -9,6 +9,9 @@ o posibles títulos; core/rag/wikipedia.found_articles las busca por título
 import re
 
 SETTING = "zim_keywords"
+# Quién las saca: "general" es qwen3; "code", el 7B que luego contesta /buscar (sin recargar).
+DOMAIN_SETTING = "zim_keywords_domain"
+DEFAULT_DOMAIN = "general"
 MAX_KEYWORDS = 4
 MAX_CHARS = 60
 KEYWORD_TOKENS = 60
@@ -48,10 +51,10 @@ def enabled_for(setting, source) -> bool:
     return setting is True or (isinstance(setting, list) and source.kind in setting)
 
 
-def zim_keywords(question: str, source, ask) -> list:
+def zim_keywords(question: str, source, ask, domain=DEFAULT_DOMAIN) -> list:
     """ask(prompt, domain=, max_tokens=): ProviderRouter.ask. [] si el modelo no da nada útil."""
     from core.rag.library import ENCYCLOPEDIA
 
     site = "Wikipedia" if source.kind == ENCYCLOPEDIA else "Stack Exchange"
-    answer = ask(keywords_prompt(question, source.language, site), domain="general", max_tokens=KEYWORD_TOKENS)
+    answer = ask(keywords_prompt(question, source.language, site), domain=domain, max_tokens=KEYWORD_TOKENS)
     return parse_keywords(answer)

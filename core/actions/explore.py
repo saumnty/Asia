@@ -4,7 +4,13 @@ from pathlib import Path
 from core import prompts
 from core.rag.glossary import expand
 from core.rag.instructions import source_notes, with_project_notes
-from core.rag.keywords import SETTING as KEYWORDS_SETTING, enabled_for, zim_keywords
+from core.rag.keywords import (
+    DEFAULT_DOMAIN as KEYWORDS_DOMAIN,
+    DOMAIN_SETTING as KEYWORDS_DOMAIN_SETTING,
+    SETTING as KEYWORDS_SETTING,
+    enabled_for,
+    zim_keywords,
+)
 from core.rag.library import (
     ZIM_KINDS,
     Library,
@@ -161,10 +167,12 @@ class ExploreActions:
     def zim_search_keywords(self, question):
         """{idioma: [búsquedas]} para una pregunta a un .zim (rag.zim_keywords); {} si no toca.
 
-        Una llamada a qwen3 por idioma: con "en preguntas" puede ser una en español y
-        otra en inglés.
+        Una llamada al modelo de rag.zim_keywords_domain por idioma: con "en preguntas"
+        puede ser una en español y otra en inglés.
         """
-        setting = (self.settings.get("rag") or {}).get(KEYWORDS_SETTING)
+        rag = self.settings.get("rag") or {}
+        setting = rag.get(KEYWORDS_SETTING)
+        domain = rag.get(KEYWORDS_DOMAIN_SETTING, KEYWORDS_DOMAIN)
 
         if not setting:
             return {}
@@ -177,7 +185,7 @@ class ExploreActions:
         for source in targets:
             if enabled_for(setting, source) and source.language not in found:
                 text = without_source(question, source) if named else without_group(question)
-                found[source.language] = zim_keywords(text, source, self.provider_router.ask)
+                found[source.language] = zim_keywords(text, source, self.provider_router.ask, domain)
 
         return found
 

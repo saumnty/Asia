@@ -49,8 +49,9 @@ class Asks:
         return "kalman filter\nextended kalman"
 
 
-def keywords_brain(enabled, sources):
-    SettingsManager.set_overrides({"rag": {"min_coverage": 0.3, "max_distance": 392.0, "zim_keywords": enabled}})
+def keywords_brain(enabled, sources, domain="general"):
+    SettingsManager.set_overrides({"rag": {"min_coverage": 0.3, "max_distance": 392.0, "zim_keywords": enabled,
+                                           "zim_keywords_domain": domain}})
     brain = make_brain()
     brain.settings = SettingsManager()
     brain.provider_router = Asks()
@@ -91,6 +92,14 @@ def test_por_defecto_solo_la_enciclopedia():
     assert brain.zim_search_keywords("vale la pena un EKF en preguntas") == {}
     assert brain.zim_search_keywords("qué moneda se usa en Japón en wikipedia") == {"es": ["kalman filter", "extended kalman"]}
     assert len(brain.provider_router.calls) == 1
+
+
+def test_con_el_7b_si_lo_pide_la_configuracion():
+    brain = keywords_brain(["enciclopedia"], [WIKIPEDIA], domain="code")
+
+    brain.zim_search_keywords("qué moneda se usa en Japón en wikipedia")
+
+    assert [options["domain"] for _, options in brain.provider_router.calls] == ["code"]
 
 
 def test_los_valores_por_defecto():

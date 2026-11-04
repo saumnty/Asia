@@ -727,20 +727,23 @@ _router = []
 
 
 def keywords_for(question, source, enabled) -> list:
-    """Las palabras clave de qwen3 para question (core/rag/keywords.py); [] sin --palabras-clave.
+    """Las palabras clave para question (core/rag/keywords.py); [] sin --palabras-clave.
 
-    Con corridas, además, rag.zim_keywords se enciende para /buscar (main).
+    El modelo, el de --palabras-clave (general: qwen3; code: el 7B). Con corridas, además,
+    rag.zim_keywords se enciende o se apaga para /buscar (main), con ese dominio.
     """
     if not enabled:
         return []
 
-    from core.rag.keywords import zim_keywords
+    from config.settings_manager import SettingsManager
+    from core.rag.keywords import DEFAULT_DOMAIN, DOMAIN_SETTING, zim_keywords
     from providers.provider_router import ProviderRouter
 
     if not _router:
         _router.append(ProviderRouter())
 
-    found = zim_keywords(question, source, _router[0].ask)
+    domain = (SettingsManager().get("rag") or {}).get(DOMAIN_SETTING, DEFAULT_DOMAIN)
+    found = zim_keywords(question, source, _router[0].ask, domain)
     print(f"    palabras clave: {found}", flush=True)
     return found
 
@@ -977,18 +980,24 @@ def main():
     parser.add_argument("--calibrar", action="store_true", help="cobertura y distancia de cada pregunta")
     parser.add_argument("--fragmentos", type=int, help="fragmentos que recibe el modelo, en vez del valor del código")
     parser.add_argument("--wikipedia", type=int, metavar="CORRIDAS", help="Wikipedia offline; con 0, solo la búsqueda")
-    parser.add_argument("--palabras-clave", action="store_true",
-                        help="con --wikipedia o --preguntas: búsqueda con palabras clave de qwen3 (rag.zim_keywords)")
+    parser.add_argument("--palabras-clave", nargs="?", const="general", choices=("general", "code"),
+                        help="con --wikipedia o --preguntas: búsqueda con palabras clave (rag.zim_keywords) de "
+                             "qwen3 (general, sin valor) o del 7B (code); sin la opción, apagadas")
     parser.add_argument("--preguntas", type=int, metavar="CORRIDAS",
                         help="sitios de Stack Exchange en .zim; con 0, solo la búsqueda")
     args = parser.parse_args()
     base = load_base()
     sweep_leftovers()
 
-    if args.palabras_clave:
+    if args.wikipedia is not None or args.preguntas is not None:
         from config.settings_manager import SettingsManager
 
-        rag = {**(SettingsManager().get("rag") or {}), "zim_keywords": True}
+        # Explícito: por defecto la enciclopedia ya las usa, y sin la opción se mide sin ellas.
+        rag = {**(SettingsManager().get("rag") or {}), "zim_keywords": bool(args.palabras_clave)}
+
+        if args.palabras_clave:
+            rag["zim_keywords_domain"] = args.palabras_clave
+
         SettingsManager.set_overrides({**SettingsManager.overrides, "rag": rag})
 
     if args.wikipedia is not None:
