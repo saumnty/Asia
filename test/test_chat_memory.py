@@ -175,7 +175,7 @@ def test_recall_de_un_dato_del_usuario_sigue_igual(monkeypatch):
     brain.intent_engine = RecallIntent()
     brain.memory = type("M", (), {"recall": lambda self, key: "amarillo"})()
 
-    assert brain.process("¿cuál es mi color favorito?") == "color_favorito: amarillo"
+    assert brain.process("¿cuál es mi color favorito?") == "Tu color favorito es amarillo."
 
 
 @pytest.mark.parametrize(
@@ -221,3 +221,14 @@ def test_el_recordatorio_no_sale_hacia_fuera():
     request, _ = router.last_request
 
     assert all("Mensajes anteriores" not in m["content"] for m in request.external_messages)
+
+
+@pytest.mark.parametrize(
+    "key, value, sentence",
+    [("nombre", "Santiago", "Te llamas Santiago."), ("universidad", "UAM", "Estudias en UAM."),
+     ("color_favorito", "amarillo", "Tu color favorito es amarillo."), ("proyecto", "Bolitabot", "Tu proyecto es Bolitabot.")],
+)
+def test_recall_con_una_frase_natural(key, value, sentence):
+    from core.actions.memory import recall_sentence
+
+    assert recall_sentence(key, value) == sentence

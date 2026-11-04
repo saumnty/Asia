@@ -39,7 +39,7 @@ class MemoryActions:
         result = self.memory.recall(key)
 
         if result:
-            return f"{key}: {result}"
+            return recall_sentence(key, result)
 
         return f"No tengo guardado ningún dato para: {key}."
 
@@ -161,3 +161,23 @@ class MemoryActions:
 
     def handle_show_active_project(self, text, params):
         return f"Proyecto activo: {self.active_project()}"
+
+
+# Claves con su frase propia; el resto, "Tu <clave> es <valor>.".
+RECALL_SENTENCES = {
+    "nombre": "Te llamas {}.",
+    "universidad": "Estudias en {}.",
+    "proyecto": "Tu proyecto es {}.",
+    "edad": "Tienes {}.",
+    "ciudad": "Vives en {}.",
+}
+
+
+def recall_sentence(key: str, value) -> str:
+    """"nombre: Santiago" → "Te llamas Santiago."; "color_favorito" → "Tu color favorito es amarillo."."""
+    template = RECALL_SENTENCES.get(key.lower())
+
+    if template:
+        return template.format(value)
+
+    return f"Tu {key.replace('_', ' ')} es {value}."
