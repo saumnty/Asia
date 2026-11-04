@@ -315,6 +315,10 @@ QA_BENCH = {
             ("cómo dejo un proceso corriendo después de cerrar la terminal en unix",
              "how do I keep a process running after closing the terminal",
              ("525340", "682793", "24658", "73221"), r"nohup|disown|screen|tmux|segundo plano"),
+            # De opinión: la respuesta resume lo que dicen las del hilo.
+            ("vale la pena cambiar de bash a zsh en unix", "is it worth switching from bash to zsh",
+             ("72570", "983"), r"zsh"),
+            ("qué es mejor, vim o emacs en unix", "which is better vim or emacs", ("986",), r"vim|emacs"),
         ],
         "trampas": [
             ("qué hace el comando zarnquist en unix", "what does the zarnquist command do"),
@@ -374,6 +378,8 @@ QA_BENCH = {
              ("1020821", "891973", "1287528"), r"mklink"),
             ("cómo muestro los archivos ocultos en Windows en superuser", "how do I show hidden files in Windows",
              ("1151844", "1711950"), r"attrib|Hidden|reg add|ocult"),
+            ("qué es mejor para un disco externo, NTFS o exFAT en superuser", "which is better NTFS or exFAT",
+             ("1386758", "257646", "533449"), r"exFAT|NTFS"),
         ],
         "trampas": [
             ("cómo activo el modo Velluto de Windows en superuser", "how do I enable the Velluto mode in Windows"),
@@ -973,7 +979,7 @@ def questions_failures(found, traps, base) -> list:
     return failures
 
 
-def questions(runs, base):
+def questions(runs, base, sites=None):
     """Los sitios de Stack Exchange: la búsqueda en el .zim (sin modelo) y, con runs, las respuestas del modelo."""
     from libzim.reader import Archive
 
@@ -981,10 +987,10 @@ def questions(runs, base):
     from core.rag.questions import QUESTION_PATHS
     from core.rag.wikipedia import found_articles
 
-    sources = {name: Library().get(name) for name in QA_BENCH}
+    sources = {name: Library().get(name) for name in sites or QA_BENCH}
     sources = {name: s for name, s in sources.items() if s is not None and Path(s.path).is_file()}
 
-    for name in QA_BENCH.keys() - sources.keys():
+    for name in set(sites or QA_BENCH) - sources.keys():
         print(f"Falta la fuente {name}: /indexar {name} <ruta del .zim> preguntas (no se mide)")
 
     if not sources:
@@ -1084,6 +1090,7 @@ def main():
                              ".zim, de qwen3 (general) o del 7B (code); sin la opción, la configuración real")
     parser.add_argument("--preguntas", type=int, metavar="CORRIDAS",
                         help="sitios de Stack Exchange en .zim; con 0, solo la búsqueda")
+    parser.add_argument("--sitios", nargs="+", choices=list(QA_BENCH), help="con --preguntas: solo estos sitios")
     parser.add_argument("--guardar", type=Path, help="JSON con lo que se mostró en cada pregunta")
     args = parser.parse_args()
     make_repeatable()
@@ -1107,7 +1114,7 @@ def main():
         return wikipedia(args.wikipedia, base)
 
     if args.preguntas is not None:
-        return questions(args.preguntas, base)
+        return questions(args.preguntas, base, args.sitios)
 
     if args.fragmentos:
         explore.RAG_FRAGMENTS = args.fragmentos

@@ -572,3 +572,20 @@ def test_guardar_escribe_cada_pregunta_con_su_respuesta(tmp_path, monkeypatch):
 
     saved = json.loads((tmp_path / "respuestas.json").read_text(encoding="utf-8"))
     assert saved == [["qué moneda se usa en Japón en wikipedia", prompts.NO_DIRECT_ANSWER + " algo"]]
+
+
+def test_sitios_mide_solo_los_pedidos(monkeypatch, capsys):
+    from types import SimpleNamespace
+
+    asked = []
+    monkeypatch.setattr(check_rag, "Library", lambda: SimpleNamespace(get=lambda name: asked.append(name)))
+
+    assert check_rag.questions(0, {}, ["unix"]) == 1
+    assert asked == ["unix"] and "Falta la fuente unix" in capsys.readouterr().out
+
+
+def test_hay_preguntas_de_opinion():
+    opinion = [q for bench in check_rag.QA_BENCH.values() for q, *_ in bench["preguntas"]
+               if q.startswith(("vale la pena", "qué es mejor"))]
+
+    assert len(opinion) == 4
