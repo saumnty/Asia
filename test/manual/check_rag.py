@@ -43,6 +43,13 @@ la biblioteca y una caché de embeddings temporal: la corrida 1 es en frío.
 
     .venv\\Scripts\\python.exe test\\manual\\check_rag.py --wikipedia 1
 
+Preguntas y respuestas de Stack Exchange (fase H, capa 4), igual que Wikipedia y
+por sitio: la página de pregunta esperada entre las 3 que elige la búsqueda (con
+0 corridas, con la pregunta en inglés en los sitios en inglés) y, con corridas, la
+respuesta en las líneas verificadas y las trampas. Base en "preguntas".
+
+    .venv\\Scripts\\python.exe test\\manual\\check_rag.py --preguntas 1
+
 Sale con código 1 si el ranking baja de check_rag_base.json, si se responde una trampa
 o una ajena, o si alguna corrida supera el límite conocido de ese archivo. Lo demás
 del punta a punta varía con el azar del 7B: se lee, no se comprueba.
@@ -240,6 +247,58 @@ DENIAL = re.compile(
     r"|\bno\b[^.\n]{0,40}\ben (?:las|los) (?:fuentes|l[íi]neas|fragmentos)",
     re.IGNORECASE,
 )
+
+
+# Preguntas y respuestas de Stack Exchange (fase H, capa 4), por fuente:
+# (pregunta, la misma en inglés si el sitio es en inglés, ids de pregunta que la
+# responden, lo que tiene que salir en las líneas verificadas). Con 0 corridas se
+# busca con la de inglés, sin modelo; con corridas, la traduce el modelo como en /buscar.
+QA_BENCH = {
+    "robotics": {
+        "preguntas": [
+            ("cómo publico un mensaje en un tópico desde la línea de comandos en robotics",
+             "how to publish a message on a topic from the command line in ros2",
+             ("99767", "103415", "102467", "99940"), r"ros2 topic pub"),
+            ("qué estrategias hay para sintonizar un PID en robotics", "what strategies are there to tune a PID",
+             ("167",), r"\b(proportional|integral|derivative|ziegler)"),
+            ("cómo obtengo la odometría a partir de los encoders de las ruedas en robotics",
+             "how do I get odometry from the wheel encoders", ("75758", "52698"), r"encoder|tick"),
+            ("cómo convierto ángulos de Euler a cuaterniones en robotics", "how do I convert Euler angles to quaternions",
+             ("78301", "23753", "34944"), r"quaternion"),
+            ("necesito una cámara además del lidar para hacer SLAM en robotics",
+             "do I need a camera besides the lidar to do SLAM", ("18675",), r"lidar|camera"),
+            ("vale la pena usar un filtro de Kalman extendido en robotics", "is it worth using an extended Kalman filter",
+             ("14126",), r"kalman|ekf"),
+        ],
+        "trampas": [
+            ("receta de mole poblano en robotics", "mole poblano recipe"),
+            ("quién ganó el mundial de 1986 en robotics", "who won the 1986 world cup"),
+            ("cuál es la capital de Australia en robotics", "what is the capital of Australia"),
+        ],
+    },
+    # En español: se busca con la pregunta tal cual, sin traducir.
+    "stackoverflow_es": {
+        "preguntas": [
+            ("cómo leo un archivo csv con pandas en stackoverflow_es", "",
+             ("464960", "230764", "282246", "515960", "471346"), r"read_csv"),
+            ("cómo quito los elementos duplicados de una lista en python en stackoverflow_es", "",
+             ("185611", "565160", "490785", "189191"), r"set\(|fromkeys"),
+            ("cómo hago un commit en git en stackoverflow_es", "", ("280102",), r"git commit"),
+            ("qué son los punteros en c en stackoverflow_es", "", ("290038", "294445", "403454"), r"direcci[oó]n de memoria"),
+            ("cómo ordeno un diccionario por su valor en python en stackoverflow_es", "",
+             ("414902", "260873", "425071"), r"sorted"),
+            ("cómo invierto una cadena en python en stackoverflow_es", "", ("578094", "421480", "560010"),
+             r"\[::-1\]|reversed"),
+        ],
+        "trampas": [
+            ("receta de mole poblano en stackoverflow_es", ""),
+            ("quién ganó el mundial de 1986 en stackoverflow_es", ""),
+            ("cuál es la capital de Australia en stackoverflow_es", ""),
+        ],
+    },
+}
+QA_KEY = "preguntas"
+QA_PAGE_ID = re.compile(r"questions/(\d+)/")
 
 
 def model_denied(shown) -> bool:
@@ -777,6 +836,113 @@ def wikipedia(runs, base):
     return finished(wikipedia_failures(found, all_fell, base))
 
 
+def questions_failures(found, traps, base) -> list:
+    """found y traps por fuente: preguntas con su página entre las encontradas y trampas respondidas."""
+    failures = []
+
+    for name, expected in (base.get(QA_KEY) or {}).items():
+        if name not in found:
+            continue
+
+        if found[name] < expected["encontrados"]:
+            failures.append(f"{name}, página encontrada: {found[name]}, base {expected['encontrados']}")
+
+        if traps.get(name, 0) > expected["trampas"]:
+            failures.append(f"{name}, trampas respondidas: {traps[name]}, base {expected['trampas']}")
+
+    return failures
+
+
+def questions(runs, base):
+    """Los sitios de Stack Exchange: la búsqueda en el .zim (sin modelo) y, con runs, las respuestas del modelo."""
+    from libzim.reader import Archive
+
+    from core import paths
+    from core.rag.questions import QUESTION_PATHS
+    from core.rag.wikipedia import found_articles
+
+    sources = {name: Library().get(name) for name in QA_BENCH}
+    sources = {name: s for name, s in sources.items() if s is not None and Path(s.path).is_file()}
+
+    for name in QA_BENCH.keys() - sources.keys():
+        print(f"Falta la fuente {name}: /indexar {name} <ruta del .zim> preguntas (no se mide)")
+
+    if not sources:
+        return 1
+
+    found = {}
+
+    for name, source in sources.items():
+        archive = Archive(source.path)
+        found[name] = 0
+
+        for question, english, expected, _ in QA_BENCH[name]["preguntas"]:
+            query = english if source.language == "en" else without_source(question, source)
+            ids = [QA_PAGE_ID.match(path).group(1) for path, _, _ in found_articles(archive, query, 3, QUESTION_PATHS)]
+            hit = bool(set(expected) & set(ids))
+            found[name] += hit
+            print(f"{name} {'sí' if hit else 'no'}: {query} -> {', '.join(ids) or 'nada'}", flush=True)
+
+        expected_found = ((base.get(QA_KEY) or {}).get(name) or {}).get("encontrados", "—")
+        print(f"{name}: página esperada entre las encontradas {found[name]}/{len(QA_BENCH[name]['preguntas'])}, "
+              f"base {expected_found}.\n", flush=True)
+
+    if not runs:
+        return finished(questions_failures(found, {}, base))
+
+    from core.brain import Brain
+    from core.session import Session
+
+    Session.set_paths(project_root=paths.PROJECT_ROOT, user_cwd=ROOT)
+    scratch = temp_folder()
+    paths.WIKIPEDIA_CACHE_FILE = scratch / "embeddings.sqlite3"
+    brain = Brain()
+    summary = [
+        "| Sitio | Corrida | Correctas | Respondió | Sin respuesta directa | No lo encontré | El modelo negó "
+        "| Trampas respondidas | Segundos por pregunta |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    fell = {}
+
+    try:
+        for run in range(1, runs + 1):
+            for name in sources:
+                rows, traps = [], []
+
+                for question, _, _, pattern in QA_BENCH[name]["preguntas"]:
+                    state, _, seconds, shown = answer_row(brain, question)
+                    state = wikipedia_state(state, shown)
+                    correct = wikipedia_correct(shown, pattern)
+                    rows.append((state, correct, seconds))
+                    opening = " ".join((shown.partition(prompts.UNVERIFIED_SUMMARY)[2] or shown).split())[:300]
+                    print(f"[{run}] {name} {state}, {'correcta' if correct else 'no'}, {seconds:.0f} s: {question} -> "
+                          f"{opening}", flush=True)
+
+                for question, _ in QA_BENCH[name]["trampas"]:
+                    state, _, seconds, shown = answer_row(brain, question)
+                    state = wikipedia_state(state, shown)
+                    traps.append((state, seconds))
+                    print(f"\n[{run}] {name} TRAMPA {state}, {seconds:.0f} s: {question}", flush=True)
+
+                    if state in ANSWERED + ("el modelo negó",):
+                        print(shown, flush=True)
+
+                states = Counter(state for state, _, _ in rows)
+                fell[name] = fell.get(name, 0) + sum(1 for state, _ in traps if state in ANSWERED)
+                seconds = (sum(r[2] for r in rows) + sum(t[1] for t in traps)) / (len(rows) + len(traps))
+                summary.append(
+                    f"| {name} | {run} | {sum(1 for r in rows if r[1])}/{len(rows)} | {states['respondió']} "
+                    f"| {states['sin respuesta directa']} | {states['el código negó']} | {states['el modelo negó']} "
+                    f"| {sum(1 for state, _ in traps if state in ANSWERED)}/{len(traps)} | {seconds:.0f} |"
+                )
+                print()
+    finally:
+        remove_tree(scratch)
+
+    print("\n".join(summary))
+    return finished(questions_failures(found, fell, base))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--indice", help="carpeta del índice: se conserva y solo se reindexa lo que cambió")
@@ -786,12 +952,17 @@ def main():
     parser.add_argument("--calibrar", action="store_true", help="cobertura y distancia de cada pregunta")
     parser.add_argument("--fragmentos", type=int, help="fragmentos que recibe el modelo, en vez del valor del código")
     parser.add_argument("--wikipedia", type=int, metavar="CORRIDAS", help="Wikipedia offline; con 0, solo la búsqueda")
+    parser.add_argument("--preguntas", type=int, metavar="CORRIDAS",
+                        help="sitios de Stack Exchange en .zim; con 0, solo la búsqueda")
     args = parser.parse_args()
     base = load_base()
     sweep_leftovers()
 
     if args.wikipedia is not None:
         return wikipedia(args.wikipedia, base)
+
+    if args.preguntas is not None:
+        return questions(args.preguntas, base)
 
     if args.fragmentos:
         explore.RAG_FRAGMENTS = args.fragmentos

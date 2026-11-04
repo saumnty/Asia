@@ -9,5 +9,9 @@
   "wikipedia": {
     "encontrados": 9,
     "trampas": 0
+  },
+  "preguntas": {
+    "robotics": {"encontrados": 4, "trampas": 0},
+    "stackoverflow_es": {"encontrados": 2, "trampas": 0}
   }
 }

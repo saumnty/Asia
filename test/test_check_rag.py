@@ -526,3 +526,18 @@ def test_sin_corridas_solo_mira_los_articulos(zim, monkeypatch, capsys):
     assert check_rag.wikipedia(0, WIKI_BASE) == 0
     assert "1/1" in capsys.readouterr().out
     assert check_rag.wikipedia(0, {"wikipedia": {"encontrados": 2, "trampas": 0}}) == 1
+
+
+def test_preguntas_fallan_por_sitio_si_bajan_o_responden_trampas():
+    base = {"preguntas": {"robotics": {"encontrados": 3, "trampas": 0}, "es_stackoverflow": {"encontrados": 4, "trampas": 0}}}
+
+    assert check_rag.questions_failures({"robotics": 3}, {"robotics": 0}, base) == []
+    assert check_rag.questions_failures({"robotics": 2}, {}, base) == ["robotics, página encontrada: 2, base 3"]
+    assert check_rag.questions_failures({"robotics": 3}, {"robotics": 1}, base) == ["robotics, trampas respondidas: 1, base 0"]
+    # Un sitio sin descargar no se mide ni falla.
+    assert check_rag.questions_failures({}, {}, base) == []
+
+
+def test_el_banco_de_preguntas_nombra_su_fuente():
+    for name, bench in check_rag.QA_BENCH.items():
+        assert all(question.endswith(f" en {name}") for question, *_ in bench["preguntas"] + bench["trampas"])
