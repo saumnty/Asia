@@ -94,6 +94,8 @@ class AppTool:
         # "notepad++", si está instalado, no se abre como "notepad".
         known = resolve_known_app(app_name, apps)
         command = apps.get(known) if known else None
+        # Lo que se abre de verdad: "Abriendo blocknote" no decía qué app era.
+        shown = known
 
         if not command:
             found = find_start_app(app_key)
@@ -102,16 +104,18 @@ class AppTool:
                 command = f"explorer.exe shell:AppsFolder\\{found['appid']}"
                 apps[app_key] = command
                 self.learn(app_key, command)
+                shown = found.get("name") or app_name
 
         if not command:
             close = close_app(app_name, apps)
             command = apps.get(close) if close else None
+            shown = close
 
         if not command:
             return clarification(app_name, apps)
 
         try:
             launch(command)
-            return f"Abriendo {app_name}."
+            return f"Abriendo {shown or app_name}."
         except Exception as e:
             return f"No pude abrir {app_name}. Error: {e}"

@@ -64,7 +64,10 @@ def tool(tmp_path, monkeypatch):
     ],
 )
 def test_variantes_cercanas_abren_la_app_correcta(tool, name, command):
-    assert tool.open_app(name) == f"Abriendo {name}."
+    # Se dice qué app se abre, no lo que escribió o dedujo el IntentEngine ("blocknote").
+    shown = {"notepad": "bloc de notas", "calc": "calculadora", "chrome": "chrome", "code": "vscode",
+             APPS["spotify"]: "spotify", APPS["whatsapp"]: "whatsapp"}[command]
+    assert tool.open_app(name) == f"Abriendo {shown}."
     assert tool.launched == [command]
 
 
@@ -162,7 +165,7 @@ def test_apps_learned_roto_o_ausente(tool):
     tool.learned_file.write_text("{ no es json", encoding="utf-8")
 
     assert tool.load_learned() == {}
-    assert tool.open_app("crome") == "Abriendo crome."
+    assert tool.open_app("crome") == "Abriendo chrome."
 
 
 def test_apps_learned_en_gitignore():
