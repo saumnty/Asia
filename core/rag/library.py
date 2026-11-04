@@ -118,6 +118,22 @@ def without_source(question: str, source) -> str:
     return " ".join(re.sub(source_pattern(source), " ", question, flags=re.IGNORECASE).split())
 
 
+# "en preguntas": todos los sitios de tipo preguntas a la vez.
+QUESTIONS_GROUP = re.compile(r"\ben (?:las )?preguntas(?: y respuestas)?\b", re.IGNORECASE)
+
+
+def questions_group(question: str, sources: list) -> list:
+    """Las fuentes de tipo preguntas si la pregunta dice "en preguntas" y no nombra otra fuente."""
+    if named_in_question(question, sources) or not QUESTIONS_GROUP.search(question):
+        return []
+
+    return [source for source in sources if source.kind == QUESTIONS]
+
+
+def without_group(question: str) -> str:
+    return " ".join(QUESTIONS_GROUP.sub(" ", question).split())
+
+
 def searched_sources(question: str, sources: list) -> list:
     """Las fuentes que consulta una pregunta: la de "en <fuente>" o todas las generales."""
     named = named_in_question(question, sources)
@@ -127,6 +143,11 @@ def searched_sources(question: str, sources: list) -> list:
 def needs_translation(question: str, sources: list) -> bool:
     """True si nombra una fuente en inglés. Un nombre suelto se dice igual en los dos idiomas."""
     named = named_in_question(question, sources)
+    group = questions_group(question, sources)
+
+    if group:
+        return any(source.language == ENGLISH_SOURCE for source in group) and len(without_group(question).split()) > 1
+
     return bool(named) and named.language == ENGLISH_SOURCE and len(without_source(question, named).split()) > 1
 
 

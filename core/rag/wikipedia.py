@@ -18,6 +18,8 @@ from core.rag.word_index import ENGLISH, SPANISH, inverse_frequency
 ARTICLES = 3
 # Lo que da la búsqueda antes de seguir redirecciones, que pueden repetir artículo.
 SEARCH_RESULTS = 10
+# Títulos por palabra clave: con más, "Yen" trae "Donnie_Yen".
+TITLE_RESULTS = 2
 # Por artículo: 40 fragmentos por pregunta. Un artículo largo pasa de 500.
 ARTICLE_FRAGMENTS = 13
 NOT_IN_TAG = re.compile(r"_*[^\w.-]+_*")
@@ -70,19 +72,41 @@ def search_for(archive, question: str):
     return None
 
 
-def found_articles(archive, question: str, count: int = ARTICLES, path_pattern=None) -> list:
+def title_paths(archive, text: str, limit: int = TITLE_RESULTS) -> list:
+    """Rutas de los títulos que empiezan como text (SuggestionSearcher): "Monte Everest", "Apolo 11"."""
+    from libzim.suggestion import SuggestionSearcher
+
+    found = SuggestionSearcher(archive).suggest(text)
+    return [getattr(result, "path", result) for result in found.get_results(0, limit)]
+
+
+def candidate_paths(archive, question: str, keywords=()) -> list:
+    """Rutas en orden: títulos de las palabras clave, su búsqueda de texto y la de la pregunta (respaldo)."""
+    paths = [path for keyword in keywords for path in title_paths(archive, keyword)]
+
+    for text in ([" ".join(keywords)] if keywords else []) + [question]:
+        found = search_for(archive, text)
+        paths += [result.path for result in found.get_results(0, SEARCH_RESULTS)] if found else []
+
+    return paths
+
+
+def found_articles(archive, question: str, count: int = ARTICLES, path_pattern=None, keywords=()) -> list:
     """[(ruta, título, html)] de los mejores artículos, siguiendo redirecciones.
 
     path_pattern: solo rutas que encajan (una regex compilada; en un .zim de Stack
     Exchange, las páginas de pregunta: la búsqueda también trae usuarios y etiquetas).
+    keywords: búsquedas cortas de core/rag/keywords.py; sin ellas, solo la pregunta.
     """
-    found = search_for(archive, question)
     articles = {}
 
-    for result in found.get_results(0, SEARCH_RESULTS) if found else []:
-        entry = archive.get_entry_by_path(result.path)
-        entry = entry.get_redirect_entry() if entry.is_redirect else entry
+    for path in candidate_paths(archive, question, keywords):
+        try:
+            entry = archive.get_entry_by_path(path)
+        except KeyError:
+            continue
 
+        entry = entry.get_redirect_entry() if entry.is_redirect else entry
         wanted = path_pattern is None or path_pattern.match(entry.path)
 
         if wanted and entry.path not in articles and len(articles) < count:
@@ -123,12 +147,12 @@ def origin_of_article(source, path: str, edition: str) -> str:
     return " · ".join(part for part in parts if part)
 
 
-def article_fragments(archive, source, question: str, language: str = SPANISH) -> list:
+def article_fragments(archive, source, question: str, language: str = SPANISH, keywords=()) -> list:
     """[(id, documento, metadatos)] de los fragmentos elegidos, listos para ordenar."""
     edition = edition_of(archive)
     fragments = []
 
-    for path, title, html in found_articles(archive, question):
+    for path, title, html in found_articles(archive, question, keywords=keywords):
         slug = slug_of(path)
         metadata = {
             "file_path": slug,
@@ -148,7 +172,7 @@ def article_fragments(archive, source, question: str, language: str = SPANISH) -
     return fragments
 
 
-def wikipedia_hits(question: str, source, n_results=5, embedder=None, translated="") -> list:
+def wikipedia_hits(question: str, source, n_results=5, embedder=None, translated="", keywords=()) -> list:
     """Los mejores fragmentos de los artículos que encuentra question en el .zim de source.
 
     translated es la pregunta en inglés: en un .zim en inglés los artículos se buscan con
@@ -157,7 +181,7 @@ def wikipedia_hits(question: str, source, n_results=5, embedder=None, translated
     from libzim.reader import Archive
 
     searches = searches_for(question, source, translated)
-    fragments = article_fragments(Archive(str(Path(source.path))), source, *searches[-1])
+    fragments = article_fragments(Archive(str(Path(source.path))), source, *searches[-1], keywords=keywords)
     return rank_fragments(fragments, searches, n_results, embedder)
 
 

@@ -4,7 +4,18 @@ from pathlib import Path
 from core import prompts
 from core.rag.glossary import expand
 from core.rag.instructions import source_notes, with_project_notes
-from core.rag.library import Library, clean_translation, is_refusal, named_in_question, needs_translation, without_source
+from core.rag.keywords import SETTING as KEYWORDS_SETTING, zim_keywords
+from core.rag.library import (
+    ZIM_KINDS,
+    Library,
+    clean_translation,
+    is_refusal,
+    named_in_question,
+    needs_translation,
+    questions_group,
+    without_group,
+    without_source,
+)
 from core.rag.quotes import (
     best_fragments,
     check_draft,
@@ -106,7 +117,8 @@ class ExploreActions:
             question=question,
             project_name=project_name,
             n_results=RAG_FRAGMENTS,
-            translated=translated
+            translated=translated,
+            keywords=self.zim_search_keywords(question)
         )
 
         # Sin nada relevante, ni se llama al modelo: no hay de dónde responder.
@@ -145,6 +157,27 @@ class ExploreActions:
             return f"{lines}\n\n{prompts.UNVERIFIED_SUMMARY}\n\n{summary}"
 
         return f"{prompts.INVALID_DRAFT}\n\n{lines}"
+
+    def zim_search_keywords(self, question):
+        """{idioma: [búsquedas]} para una pregunta a un .zim (rag.zim_keywords); {} si no toca.
+
+        Una llamada a qwen3 por idioma: con "en preguntas" puede ser una en español y
+        otra en inglés.
+        """
+        if not (self.settings.get("rag") or {}).get(KEYWORDS_SETTING):
+            return {}
+
+        sources = Library().all()
+        named = named_in_question(question, sources)
+        targets = ([named] if named.kind in ZIM_KINDS else []) if named else questions_group(question, sources)
+        found = {}
+
+        for source in targets:
+            if source.language not in found:
+                text = without_source(question, source) if named else without_group(question)
+                found[source.language] = zim_keywords(text, source, self.provider_router.ask)
+
+        return found
 
     def translated_question(self, question):
         """La pregunta en inglés si nombra una fuente en ese idioma; si no, vacía.

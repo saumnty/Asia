@@ -65,13 +65,13 @@ def closest_posts(chunks: list, question: str, language: str = SPANISH, count: i
     return fixed + rest[:count - len(fixed)]
 
 
-def qa_fragments(archive, source, question: str, language: str = SPANISH) -> list:
+def qa_fragments(archive, source, question: str, language: str = SPANISH, keywords=()) -> list:
     """[(id, documento, metadatos)] de los fragmentos elegidos de las páginas de pregunta."""
     edition = edition_date(archive)
     domain = site_domain(archive)
     fragments = []
 
-    for _, _, html in found_articles(archive, question, PAGES, path_pattern=QUESTION_PATHS):
+    for _, _, html in found_articles(archive, question, PAGES, path_pattern=QUESTION_PATHS, keywords=keywords):
         page = parse_page(html, edition)
         slug = f"{NOT_IN_TAG.sub('_', source.name)}_{page.question_id}{QA_SUFFIX}"
 
@@ -94,10 +94,10 @@ def qa_fragments(archive, source, question: str, language: str = SPANISH) -> lis
     return fragments
 
 
-def qa_hits(question: str, source, n_results=5, embedder=None, translated="") -> list:
+def qa_hits(question: str, source, n_results=5, embedder=None, translated="", keywords=()) -> list:
     """Los mejores fragmentos de las páginas de pregunta que encuentra question en el .zim de source."""
     from libzim.reader import Archive
 
     searches = searches_for(question, source, translated)
-    fragments = qa_fragments(Archive(str(Path(source.path))), source, *searches[-1])
+    fragments = qa_fragments(Archive(str(Path(source.path))), source, *searches[-1], keywords=keywords)
     return rank_fragments(fragments, searches, n_results, embedder)

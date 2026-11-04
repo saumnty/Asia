@@ -17,11 +17,13 @@ from core.rag.library import (
     fragment_header,
     named_in_question,
     searched_sources,
+    questions_group,
+    without_group,
     without_source,
 )
 from core.rag.questions import qa_hits, zim_language
 from core.rag.quotes import best_fragments
-from core.rag.retriever import relevant, search_collections
+from core.rag.retriever import merge, relevant, search_collections
 from core.rag.wikipedia import wikipedia_hits, zim_summary
 from core.provenance import PUBLICA, RAG, LabeledResult
 
@@ -36,35 +38,63 @@ QA_LICENSE = "CC BY-SA (versión según la fecha)"
 ZIM_SUFFIX = ".zim"
 
 
+def group_hits(query, sources, n_results, translated, keywords) -> list:
+    """Los mejores fragmentos de varios sitios de preguntas, fusionados por RRF como una sola lista."""
+    lists = []
+
+    for source in sources:
+        found = qa_hits(query, source, n_results, translated=translated, keywords=keywords.get(source.language, ()))
+
+        for hit in found:
+            # La puntuación de su propia fusión no se suma a la de esta.
+            hit.score = 0.0
+
+        lists.append([(f"{hit.metadata['file_path']}::{hit.metadata.get('start_line')}", hit) for hit in found])
+
+    return merge(*lists, n_results=n_results)
+
+
 class RagTool:
     def search_project(
         self,
         question: str,
         project_name: str,
         n_results: int = 5,
-        translated: str = ""
+        translated: str = "",
+        keywords: dict = None
     ):
-        """Busca en todas las fuentes, o en la de "en <fuente>". Sin fuentes, en el proyecto activo.
+        """Busca en todas las fuentes, en la de "en <fuente>" o en los sitios de "en preguntas".
 
-        translated es la pregunta en inglés, para las fuentes en ese idioma.
+        Sin fuentes, en el proyecto activo. translated es la pregunta en inglés, para
+        las fuentes en ese idioma. keywords: {idioma: [búsquedas]} para los .zim
+        (core/rag/keywords.py).
         """
         sources = Library().all()
         named = named_in_question(question, sources)
-        searched = searched_sources(question, sources)
+        group = questions_group(question, sources)
+        keywords = keywords or {}
+        searched = group or searched_sources(question, sources)
         collections = [source.collection for source in searched] or [project_name]
         english = [source.collection for source in searched if source.language == ENGLISH_SOURCE]
 
         in_wikipedia = bool(named) and named.kind == ENCYCLOPEDIA
-        in_questions = bool(named) and named.kind == QUESTIONS
-        query = without_source(question, named) if named else question
+        in_questions = bool(group) or bool(named) and named.kind == QUESTIONS
+        query = without_source(question, named) if named else without_group(question) if group else question
 
-        if (in_wikipedia or in_questions) and not Path(named.path).is_file():
+        if (in_wikipedia or in_questions and named) and not Path(named.path).is_file():
             return WIKIPEDIA_MISSING if in_wikipedia else QA_MISSING
 
-        if in_wikipedia:
-            hits = wikipedia_hits(query, named, n_results, translated=translated)
+        if group:
+            searched = [source for source in group if Path(source.path).is_file()]
+
+            if not searched:
+                return QA_MISSING
+
+            hits = group_hits(query, searched, n_results, translated, keywords)
+        elif in_wikipedia:
+            hits = wikipedia_hits(query, named, n_results, translated=translated, keywords=keywords.get(named.language, ()))
         elif in_questions:
-            hits = qa_hits(query, named, n_results, translated=translated)
+            hits = qa_hits(query, named, n_results, translated=translated, keywords=keywords.get(named.language, ()))
         else:
             # Los términos del glosario cuentan aparte (core/rag/glossary.py).
             boost = glossary_terms(question, sources)
@@ -97,7 +127,7 @@ class RagTool:
 
         # Quien nombra la fuente sabe que el tema está ahí: la distancia mide mal el
         # español contra el inglés. Se enseña lo encontrado, sin pasar por el modelo.
-        if named and hits:
+        if (named or group) and hits:
             return LabeledResult(best_fragments(response), label)
 
         return NOT_FOUND_IN_WIKIPEDIA if in_wikipedia else NOT_FOUND_IN_QA if in_questions else NOT_FOUND

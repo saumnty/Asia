@@ -313,6 +313,10 @@
     "search_project_rag",
     [
      [
+      "keywords",
+      "{}"
+     ],
+     [
       "n_results",
       "5"
      ],
