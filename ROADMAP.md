@@ -959,6 +959,7 @@ Límites conocidos:
 
 Conocimiento, pendientes generales:
 
+- Glosario de traducción técnica para las fuentes en inglés: equipo → computer/hostname, carpeta → folder, contraseña → password, arranque → boot/startup, actualizar → update/upgrade… Va con la pregunta a la traducción del 7B, para que "nombre del equipo" no salga como "team name". Puede reusar el glosario por fuente de hoy (`core/rag/glossary.py`, que ya añade equivalentes a la pregunta) con uno común para todos los sitios en inglés. Medir con `check_rag --preguntas` antes y después.
 - Knowledge Manager: destilar lo aprendido de proveedores externos, deduplicar y reindexar en una base global.
 - Indexación incremental del RAG por hash y calibración de umbrales del retriever.
 - Detección de código muerto por AST y auto-fix desde el diagnóstico de `DebugAgent`.
@@ -1044,6 +1045,13 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 - Control de tono: elegir entre variantes; más adelante, DPO o LoRA.
 - Evaluación con casos apartados que el sistema no vio.
 - Reglas: todo local con la etiqueta "emocional"; sin adulación; no es terapeuta; el usuario puede ver, corregir y borrar lo que Asia cree de su estado; lo que simula "pensamiento" se documenta como simulación.
+- Guía destilada: un proveedor (el maestro) genera conocimiento general sobre emociones, tono y mediación, y casos de práctica inventados, en `data/afecto/guia.md`, que Asia lee. El maestro también evalúa a Asia con escenarios inventados y añade a la guía lo aprendido. Por defecto, los datos emocionales del usuario no salen.
+- Etapa de entrenamiento con proveedor (opcional): se activa a propósito, con fecha de inicio y de fin; al terminar se apaga sola y la etiqueta "emocional" vuelve a ser nunca exportable.
+  - Envíos por tandas, con vista previa y confirmación del usuario. Se anonimiza a terceros y se quitan los datos identificables.
+  - Solo proveedores de pago por API que no entrenen con los datos. Bitácora de cada envío.
+  - Lo que devuelve el proveedor (patrones, guía de tono, casos de evaluación) se guarda en local; al terminar, opción de borrar las copias exportadas. Después, Asia aplica lo aprendido solo en local.
+- Simulador de respuestas: dado un escenario, Asia genera 2–4 respuestas con tonos distintos y, para cada una, una estimación de cómo podría sentirse el usuario; el usuario elige y corrige. Las elecciones se guardan para mejorar la guía y, más adelante, para DPO o LoRA. Solo texto, sin acciones, marcado como simulación.
+- Todo lo que Asia guarde sobre el usuario son hipótesis visibles, corregibles y borrables.
 
 **Tareas grandes.**
 - Bucle de agente: planear, dividir en tareas pequeñas, hacer una, verificar (pruebas, sandbox, simulación), corregir, siguiente. El plan se guarda en un archivo para retomarlo.
@@ -1061,6 +1069,18 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 - Empezar solo con lectura y abrir escritura poco a poco.
 - Asia como servidor MCP: exponer sus acciones locales a Claude u otro cliente, con la barrera de confidencialidad aplicada.
 - Candidato: AutoCAD (Windows). Revisar si hay servidor MCP existente o construir uno con su API (COM, .NET o AutoLISP). Reglas: trabajar siempre sobre una copia del dibujo, confirmar cada cambio y empezar por lectura (capas, bloques, medidas).
+
+**Bots personalizados** (Asia 2.0, después de M y N).
+- Un bot es una ficha en `data/bots/`: nombre, objetivo, instrucciones, modelo, herramientas permitidas (acciones de Asia y servidores MCP), permisos propios, activación (manual, programada o por evento), memoria y bitácora propias.
+- Flujo: el usuario describe la necesidad, Asia redacta la ficha y la muestra, y el usuario la revisa y la confirma. La ficha dura hasta que se borre. Comandos: `/bots`, `/bot <nombre>`, `/bot pausar` y `/bot borrar`.
+- Nivel 1 (primero): bots que solo combinan herramientas que ya existen. Nivel 2 (después): bots que necesitan una herramienta nueva; su código pasa por el sandbox, el chequeo de imports, las pruebas y la revisión del usuario.
+- Reglas: mínimo privilegio. Un bot no amplía sus permisos ni crea otros bots sin aprobación. Sin nadie presente, lo que preguntaría se niega. Escribir, enviar o borrar, siempre con confirmación. Bitácora de todo. Modo confidencial y guardián en los envíos externos.
+- Depende de: el motor de permisos, el agente de varios pasos (M), MCP (N) y la regla de tareas sin nadie presente.
+
+**Biblioteca de lecciones** (sandbox y código).
+- Cada fallo resuelto en el sandbox o en las pruebas deja una lección en `data/lecciones/` (qué falló, por qué y cómo se arregló), que Asia lee antes de generar código parecido.
+- La escribe el modelo local, como reflexión sobre el fallo y su arreglo. Un proveedor puede mejorarla solo con errores resumidos, sin código del usuario, o con documentación pública.
+- Va con "Generación de código con verificación": las lecciones son el recuerdo del ciclo generar → ejecutar → verificar → reparar.
 
 ### Servidor y acceso remoto, siempre disponible (fase L)
 
@@ -1092,5 +1112,5 @@ Va después de los extras.
 3. Cambio entre modelos. ~~Ver y cambiar el modelo por comando, `--model`, `models_by_domain`.~~ Hecho (`1231b36b`, `fccf75bd`). Falta lo de "Qué falta" en "Multi-modelo según tipo de tarea".
 4. Voz: J4 y voz propia.
 5. Avatar.
-6. Extras: guardián de envíos externos, modo sin rastro, perfiles aislados, Asia multiplataforma, imágenes en la terminal, cambio de modelo seguro, especialistas internos, control y estimación, Asia → ROS 2 → Bolitabot, SQLite como almacenamiento, afecto y cognición social, tareas grandes y MCP.
+6. Extras (los bots personalizados, después de M y N; la biblioteca de lecciones, con la generación de código): guardián de envíos externos, modo sin rastro, perfiles aislados, Asia multiplataforma, imágenes en la terminal, cambio de modelo seguro, especialistas internos, control y estimación, Asia → ROS 2 → Bolitabot, SQLite como almacenamiento, afecto y cognición social, tareas grandes y MCP.
 7. Jetson, servidor y uso remoto (siempre disponible).
