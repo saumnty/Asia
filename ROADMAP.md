@@ -430,6 +430,55 @@ Stack Exchange en inglés: `unix` (1,32 GB), `askubuntu` (2,77 GB), `electronics
 - En askubuntu y superuser, el fragmento "más relevante" suele ser el hilo correcto ("How do I install a .deb file via the command line?", "How can I create a symbolic link on Windows 10?"), y aun así el 7B dice NINGUNA. Siguiente paso: ver qué recibe en esas preguntas; quizá le cuesta casar una pregunta en español con fragmentos en inglés (probar a darle también la pregunta traducida).
 - Bases propuestas para los sitios nuevos, sin cambiar: encontrados unix 2, askubuntu 5, electronics 3, superuser 4.
 
+### Mediciones repetibles, regla de la entidad y preguntas de opinión (2026-11-04, tarde)
+
+Una medición a la vez, cada una con al menos 6 GB libres al empezar; pytest completo antes de cada commit.
+
+1. **Seed 42 y temperatura 0** en todas las llamadas a Ollama de `check_rag`, `check_chat`, `check_intents` y `check_speed` (`ollama_fixed_options`, `make_repeatable()`, `10c031b4`). Antes, Ollama usaba su temperatura por defecto en `/buscar`.
+
+   | `--wikipedia 1` (configuración real) | Correctas | Trampas respondidas | Respuestas idénticas |
+   |---|---|---|---|
+   | Sin seed (tandas 3 y anteriores) | 6, 6 y 7 de 12 | 2/6 | — |
+   | Con seed, corrida A | 8/12 | 3/6 | 17/18 |
+   | Con seed, corrida B | 8/12 | 3/6 | |
+
+   La que cambia es la de los huesos: las mismas cifras (206), con otras líneas. Queda algo de variación de Ollama en CPU.
+
+2. **Regla de la entidad** (`core/rag/entities.py`, `8e0373d7`): si la pregunta nombra un lugar, una persona o una obra (palabras con mayúscula fuera de la primera, sin siglas), una cita de Wikipedia o Stack Exchange solo vale si su línea, su artículo o su hilo lo dicen. Si no queda ninguna: "No encontré información sobre <nombre>".
+
+   | | Correctas antes | Correctas después | Trampas antes | Trampas después |
+   |---|---|---|---|---|
+   | `--wikipedia 1` | 8/12 | 8/12 | 3/6 (Valdecierzo, Orzaluna, Quirsaga) | 0/6 |
+   | `--preguntas 1`, 6 sitios | 12/33 | 12/33 | 2/18 (Camberra del JSON, flopctl) | 1/18 (flopctl) |
+
+   flopctl no tiene mayúscula: la regla no lo ve.
+
+3. **`check_rag` mide con la configuración real** (`2d5df2db`): palabras clave de qwen3 para la enciclopedia; `--palabras-clave no|general|code` para forzarlas. `--wikipedia 0` encuentra 11/12 (6/12 sin palabras clave). Bases propuestas, sin cambiar: `wikipedia.encontrados` 9 → 11, `wikipedia.trampas` sigue en 0; `preguntas`: unix 4 (de 8), askubuntu 5, electronics 3, superuser 5 (de 6), todas con trampas 0. Con la base de trampas en 0, unix falla por flopctl.
+
+4. **Pregunta traducida en la extracción**: ya la recibía (`rag.translate_question`, "La misma pregunta en inglés…"). Lo que cambió askubuntu y superuser fue el punto 1:
+
+   | Sitio | Sin seed (tanda 4) | Con seed | Con seed y regla de la entidad |
+   |---|---|---|---|
+   | askubuntu | 1/5 | 2/5 | 2/5 |
+   | superuser | 0/5 | 2/5 | 2/5 |
+
+   Con seed, el 7B copia `dpkg -i`, `mklink` e `ipconfig /flushdns` de la respuesta aceptada. Quedan: el nombre del equipo, donde `/buscar` trae «How can I choose a background for Microsoft Teams» aunque `--preguntas 0` encuentra el hilo, y sudoers y actualizar Ubuntu, donde el 7B dice NINGUNA con el hilo correcto delante.
+
+5. **Preguntas de opinión** (`b47f702c`): "vale la pena", "qué es mejor", "conviene"… añaden una regla a la extracción (copiar las líneas que opinan, con razones a favor y en contra) y a la redacción (resumir sin decidir). Las demás preguntas llevan el prompt de antes. Cuatro preguntas de opinión en `check_rag` (EKF, bash o zsh, vim o emacs, NTFS o exFAT; `b6e2754d`).
+
+   | Pregunta | Antes | Después |
+   |---|---|---|
+   | EKF | "vale la pena", 3 frases sin cita | resume a favor y en contra, todo citado |
+   | bash o zsh | 1 frase sin cita | todo citado, "depende del uso" |
+   | vim o emacs | 2 frases sin cita | igual |
+   | NTFS o exFAT | "NTFS es mejor", con una línea de otro hilo | a favor y en contra, sin citas |
+
+   Las correctas no cambian (robotics 2/6, unix 6/8, superuser 3/6).
+
+6. **Términos traducidos en las regex** (`676463bc`): "gains", "ganancias", "cuaternión", "cámara"... Con las respuestas guardadas de la tanda 5, 12/33 → 12/33: las líneas verificadas se copian tal cual del hilo, en inglés, y las que fallaban eran de otro tema (`rostopic pub` de ROS 1, un condensador de acoplo).
+
+`check_rag --guardar` deja en JSON lo que se mostró en cada pregunta, para volver a puntuar sin el modelo (`648ea5c6`); `--sitios` mide solo los sitios pedidos.
+
 ## Fases futuras (diseño pendiente)
 
 ### Multi-modelo según tipo de tarea
