@@ -253,6 +253,8 @@ DENIAL = re.compile(
 # (pregunta, la misma en inglés si el sitio es en inglés, ids de pregunta que la
 # responden, lo que tiene que salir en las líneas verificadas). Con 0 corridas se
 # busca con la de inglés, sin modelo; con corridas, la traduce el modelo como en /buscar.
+# Las regex aceptan también los términos traducidos ("ganancias" por "gains"): el 7B puede copiar
+# líneas de stackoverflow_es o, si cambia la extracción, traducidas.
 QA_BENCH = {
     "robotics": {
         "preguntas": [
@@ -260,13 +262,13 @@ QA_BENCH = {
              "how to publish a message on a topic from the command line in ros2",
              ("99767", "103415", "102467", "99940"), r"ros2 topic pub"),
             ("qué estrategias hay para sintonizar un PID en robotics", "what strategies are there to tune a PID",
-             ("167",), r"\b(proportional|integral|derivative|ziegler)"),
+             ("167",), r"\b(proportional|integral|derivative|ziegler|gains?|proporcional|derivativ[oa]|ganancias?)"),
             ("cómo obtengo la odometría a partir de los encoders de las ruedas en robotics",
-             "how do I get odometry from the wheel encoders", ("75758", "52698"), r"encoder|tick"),
+             "how do I get odometry from the wheel encoders", ("75758", "52698"), r"encoder|tick|codificador|pulsos"),
             ("cómo convierto ángulos de Euler a cuaterniones en robotics", "how do I convert Euler angles to quaternions",
-             ("78301", "23753", "34944"), r"quaternion"),
+             ("78301", "23753", "34944"), r"quaternion|cuaterni[oó]n"),
             ("necesito una cámara además del lidar para hacer SLAM en robotics",
-             "do I need a camera besides the lidar to do SLAM", ("18675",), r"lidar|camera"),
+             "do I need a camera besides the lidar to do SLAM", ("18675",), r"lidar|camera|c[aá]mara"),
             ("vale la pena usar un filtro de Kalman extendido en robotics", "is it worth using an extended Kalman filter",
              ("14126",), r"kalman|ekf"),
         ],
@@ -312,7 +314,7 @@ QA_BENCH = {
              ("563306", "366081", "383832"), r"sed -i|s/"),
             ("cómo dejo un proceso corriendo después de cerrar la terminal en unix",
              "how do I keep a process running after closing the terminal",
-             ("525340", "682793", "24658", "73221"), r"nohup|disown|screen|tmux"),
+             ("525340", "682793", "24658", "73221"), r"nohup|disown|screen|tmux|segundo plano"),
         ],
         "trampas": [
             ("qué hace el comando zarnquist en unix", "what does the zarnquist command do"),
@@ -342,15 +344,15 @@ QA_BENCH = {
     "electronics": {
         "preguntas": [
             ("cómo calculo la resistencia para un LED en electronics", "how do I calculate the resistor for an LED",
-             ("450706", "14852", "436291", "339458"), r"forward voltage|ohm|\bV_?f\b"),
+             ("450706", "14852", "436291", "339458"), r"forward voltage|ohm|\bV_?f\b|tensi[oó]n directa|ca[ií]da de tensi[oó]n"),
             ("qué es una resistencia pull-up en electronics", "what is a pull-up resistor",
              ("162309", "185953", "677164", "481332", "621096"), r"pull-?up"),
             ("para qué sirve un condensador de desacoplo en electronics", "what is a decoupling capacitor for",
-             ("127312", "136298", "217281"), r"noise|supply|bypass"),
+             ("127312", "136298", "217281"), r"noise|supply|bypass|ruido|alimentaci[oó]n"),
             ("qué diferencia hay entre un MOSFET y un BJT en electronics", "what is the difference between a MOSFET and a BJT",
-             ("94978", "28447", "417798"), r"gate|base current|voltage[- ]controlled|current[- ]controlled"),
+             ("94978", "28447", "417798"), r"gate|base current|voltage[- ]controlled|current[- ]controlled|puerta|corriente de base|controlado por (?:tensi[oó]n|corriente)"),
             ("por qué se pone un diodo flyback en un relé en electronics", "why use a flyback diode on a relay",
-             ("367675", "100212"), r"inductive|back.?emf|spike|coil"),
+             ("367675", "100212"), r"inductive|back.?emf|spike|coil|inductiv|pico|bobina|contraelectromotriz"),
         ],
         "trampas": [
             ("qué tensión máxima soporta el transistor QX7741Z en electronics",
@@ -365,13 +367,13 @@ QA_BENCH = {
              "how do I find which process is locking a file in Windows",
              ("117902", "1101905", "13291"), r"Process Explorer|handle|Resource Monitor|LockHunter"),
             ("cómo hago una captura de pantalla en Windows en superuser", "how do I take a screenshot in Windows",
-             ("379165", "412293"), r"Print Screen|PrtSc|Snipping|Win\+Shift\+S"),
+             ("379165", "412293"), r"Print Screen|PrtSc|Snipping|Win\+Shift\+S|Impr Pant|Recortes"),
             ("cómo vacío la caché de DNS en Windows en superuser", "how do I flush the DNS cache in Windows",
              ("992830", "235749"), r"ipconfig /flushdns"),
             ("cómo creo un enlace simbólico en Windows en superuser", "how do I create a symbolic link in Windows",
              ("1020821", "891973", "1287528"), r"mklink"),
             ("cómo muestro los archivos ocultos en Windows en superuser", "how do I show hidden files in Windows",
-             ("1151844", "1711950"), r"attrib|Hidden|reg add"),
+             ("1151844", "1711950"), r"attrib|Hidden|reg add|ocult"),
         ],
         "trampas": [
             ("cómo activo el modo Velluto de Windows en superuser", "how do I enable the Velluto mode in Windows"),
