@@ -82,6 +82,23 @@ def test_con_qwen3_del_dominio_general_y_una_vez_por_idioma():
     assert all("en preguntas" not in prompt for prompt, _ in brain.provider_router.calls)
 
 
+WIKIPEDIA = Source("wikipedia", "enciclopedia", "C:/zim/wiki.zim", "wikipedia", language="es")
+
+
+def test_por_defecto_solo_la_enciclopedia():
+    brain = keywords_brain(["enciclopedia"], [ROBOTICS, SPANISH, WIKIPEDIA])
+
+    assert brain.zim_search_keywords("vale la pena un EKF en preguntas") == {}
+    assert brain.zim_search_keywords("qué moneda se usa en Japón en wikipedia") == {"es": ["kalman filter", "extended kalman"]}
+    assert len(brain.provider_router.calls) == 1
+
+
+def test_los_valores_por_defecto():
+    from config.settings_manager import DEFAULTS_FILE, read_json
+
+    assert read_json(DEFAULTS_FILE)["rag"]["zim_keywords"] == ["enciclopedia"]
+
+
 def test_una_fuente_que_no_es_zim_no_pide_palabras():
     brain = keywords_brain(True, [Source("bolitabot", "proyecto", "C:/b", "bolitabot")])
 

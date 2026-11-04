@@ -4,7 +4,7 @@ from pathlib import Path
 from core import prompts
 from core.rag.glossary import expand
 from core.rag.instructions import source_notes, with_project_notes
-from core.rag.keywords import SETTING as KEYWORDS_SETTING, zim_keywords
+from core.rag.keywords import SETTING as KEYWORDS_SETTING, enabled_for, zim_keywords
 from core.rag.library import (
     ZIM_KINDS,
     Library,
@@ -164,7 +164,9 @@ class ExploreActions:
         Una llamada a qwen3 por idioma: con "en preguntas" puede ser una en español y
         otra en inglés.
         """
-        if not (self.settings.get("rag") or {}).get(KEYWORDS_SETTING):
+        setting = (self.settings.get("rag") or {}).get(KEYWORDS_SETTING)
+
+        if not setting:
             return {}
 
         sources = Library().all()
@@ -173,7 +175,7 @@ class ExploreActions:
         found = {}
 
         for source in targets:
-            if source.language not in found:
+            if enabled_for(setting, source) and source.language not in found:
                 text = without_source(question, source) if named else without_group(question)
                 found[source.language] = zim_keywords(text, source, self.provider_router.ask)
 

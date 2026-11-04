@@ -92,7 +92,7 @@
         "min_coverage": 0.3,
         "max_distance": 392.0,
         "translate_question": true,
-        "zim_keywords": false
+        "zim_keywords": ["enciclopedia"]
     },
 
     "reflection": {

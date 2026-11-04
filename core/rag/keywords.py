@@ -39,6 +39,15 @@ def parse_keywords(answer: str) -> list:
     return found[:MAX_KEYWORDS]
 
 
+def enabled_for(setting, source) -> bool:
+    """rag.zim_keywords: true para todos los .zim, o la lista de tipos ("enciclopedia").
+
+    Medido en 2026-11: con Wikipedia el artículo aparece en 10/12 en vez de 6/12, pero
+    en robotics baja de 4/6 a 2/6 (los títulos son preguntas enteras).
+    """
+    return setting is True or (isinstance(setting, list) and source.kind in setting)
+
+
 def zim_keywords(question: str, source, ask) -> list:
     """ask(prompt, domain=, max_tokens=): ProviderRouter.ask. [] si el modelo no da nada útil."""
     from core.rag.library import ENCYCLOPEDIA

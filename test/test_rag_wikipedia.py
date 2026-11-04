@@ -2,6 +2,7 @@
 import pytest
 from libzim.writer import Creator, Hint, Item, StringProvider
 
+from config.settings_manager import SettingsManager
 from core import prompts
 from core.prompts import NOT_FOUND, NOT_FOUND_IN_WIKIPEDIA, WIKIPEDIA_MISSING
 from core.provenance import PUBLICA
@@ -321,7 +322,12 @@ def brain_with(*answers):
 
 @pytest.fixture
 def registered(zim, monkeypatch):
-    """Wikipedia en la biblioteca, sin Ollama: el embedder de las pruebas."""
+    """Wikipedia en la biblioteca, sin Ollama: el embedder de las pruebas.
+
+    Sin palabras clave de qwen3: las prueba test_zim_keywords.py; aquí cada respuesta
+    del modelo simulado es la extracción o la respuesta.
+    """
+    SettingsManager.set_overrides({"rag": {**SettingsManager().get("rag"), "zim_keywords": False}})
     assert "lista" in RagTool().index_project("wikipedia", str(zim), "enciclopedia")
     monkeypatch.setattr("core.rag.wikipedia.OllamaEmbedder", Embedder)
     return zim
