@@ -1,6 +1,9 @@
 """Memoria personal, memoria del proyecto y ajustes (provider, proyecto activo)."""
+from pathlib import Path
+
 from core import prompts
 from core.actions.models import set_session
+from core.project_history import read_roadmap, recent_commits
 from core.provenance import PROYECTO, Fragment, record
 from memory.project_memory import age_notice
 
@@ -66,8 +69,14 @@ class MemoryActions:
             **self.limit("save_project_summary")
         )
 
+        folder = Path(folder_path) if Path(folder_path).is_absolute() else Path.cwd() / folder_path
+        roadmap, commits = read_roadmap(folder), recent_commits(folder)
+
+        if roadmap or commits:
+            record(Fragment(PROYECTO, roadmap + "\n" + commits))
+
         summary = self.provider_router.ask(
-            prompts.summarize_and_save_project(project_name, content)
+            prompts.summarize_and_save_project(project_name, content, roadmap, commits)
         )
 
         self.project_memory.save_project_summary(

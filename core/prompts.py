@@ -67,7 +67,19 @@ Memoria:
 
 # --- Memoria del proyecto ----------------------------------------------------
 
-def summarize_and_save_project(project_name, content):
+def summarize_and_save_project(project_name, content, roadmap="", commits=""):
+    """roadmap y commits (core/project_history.py), si los hay: de ahí salen el estado y los pasos."""
+    history = ""
+
+    if roadmap:
+        history += f"\nEsquema del ROADMAP (fases hechas y pendientes):\n{roadmap}\n"
+
+    if commits:
+        history += f"\nCommits recientes (fecha y mensaje):\n{commits}\n"
+
+    if history:
+        history += "\nEl estado actual y los siguientes pasos salen del ROADMAP y los commits, no de los archivos.\n"
+
     return f"""
 Crea un resumen actualizado del proyecto.
 
@@ -84,7 +96,7 @@ Proyecto:
 
 Contenido:
 {content}
-"""
+{history}"""
 
 
 def ask_project_memory(project_name, project_summary, question):
