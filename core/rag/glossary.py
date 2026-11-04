@@ -43,6 +43,28 @@ def said_in(term: str, question: str) -> bool:
     return bool(re.search(rf"\b{re.escape(normalized(term))}\b", normalized(question)))
 
 
+def glossary_terms(question: str, sources: list) -> list:
+    """Los equivalentes del glosario de los términos que aparecen en question (la fuente nombrada o todas).
+
+    A diferencia de expand, también los que ya están en la pregunta: con la
+    pregunta expandida, son los que se buscan aparte para darles más peso.
+    """
+    named = named_in_question(question, sources)
+    terms = []
+
+    for source in [named] if named else sources:
+        try:
+            glossary = read_glossary(source.name)
+        except (ValueError, TypeError):
+            continue
+
+        for term, values in glossary.items():
+            if said_in(term, question):
+                terms += values
+
+    return list(dict.fromkeys(terms))
+
+
 def expand(question: str, sources: list) -> str:
     """La pregunta con los equivalentes de sus términos, de la fuente nombrada o de todas."""
     named = named_in_question(question, sources)

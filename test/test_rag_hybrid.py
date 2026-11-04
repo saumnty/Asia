@@ -309,3 +309,26 @@ def test_si_reabrir_no_lo_cura_el_error_se_ve(tmp_path, monkeypatch):
         store.query([1.0, 2.0, 1.0])
 
     assert stale.calls == 2
+
+
+def test_los_terminos_del_glosario_pesan_aparte(tmp_path, embeddings):  # noqa: F811
+    project = tmp_path / "proyecto"
+    project.mkdir()
+    # Comparte más palabras con la pregunta, pero no es la respuesta (como hoja_cuadrante).
+    (project / "tramos.py").write_text(
+        "# punto desplazado del cuadrante: se calcula el punto en cada hoja\ndef hoja_cuadrante():\n    return 1\n",
+        encoding="utf-8",
+    )
+    (project / "control.py").write_text("x_front = x + d * cos(theta)\n", encoding="utf-8")
+    ProjectIndexer(str(project), "prueba", persist_dir=tmp_path / "i").index_project()
+    question = "cómo se calcula el punto desplazado (x_front)"
+
+    def scores(**kwargs):
+        hits = search_collections(question, ["prueba"], n_results=2, persist_dir=tmp_path / "i", **kwargs)
+        return {hit.metadata["relative_path"]: hit.score for hit in hits}
+
+    plain, boosted = scores(), scores(boost=["x_front"])
+
+    # Una lista más en la fusión: solo sube el fragmento con el término del glosario.
+    assert boosted["control.py"] > plain["control.py"]
+    assert boosted["tramos.py"] == plain["tramos.py"]

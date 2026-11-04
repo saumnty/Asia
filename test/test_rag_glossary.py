@@ -149,3 +149,14 @@ def test_en_la_tabla_de_opciones():
 
 def test_el_contexto_de_prueba_sigue_valiendo():
     assert prompts.extract_quotes("x", CONTEXT)
+
+
+def test_terminos_del_glosario_aunque_ya_esten_en_la_pregunta(sources):
+    from core.rag.glossary import glossary_terms
+
+    write_glossary("Bolitabot", {"punto desplazado": ["x_front", "y_front"]})
+    question = expand("cómo se calcula el punto desplazado", sources)
+
+    assert question.endswith("(x_front, y_front)")
+    assert glossary_terms(question, sources) == ["x_front", "y_front"]
+    assert glossary_terms("qué es un nodo", sources) == []

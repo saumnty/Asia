@@ -2,6 +2,7 @@ from pathlib import Path
 
 from config.settings_manager import SettingsManager
 from core.prompts import NOT_FOUND, NOT_FOUND_IN_WIKIPEDIA, WIKIPEDIA_MISSING
+from core.rag.glossary import glossary_terms
 from core.rag.indexer import ProjectIndexer, unload_chat_models
 from core.rag.library import (
     DEFAULT_KIND,
@@ -57,7 +58,11 @@ class RagTool:
         if in_wikipedia:
             hits = wikipedia_hits(query, named, n_results, translated=translated)
         else:
-            hits = search_collections(query, collections, n_results=n_results, translated=translated, english=english)
+            # Los términos del glosario cuentan aparte (core/rag/glossary.py).
+            boost = glossary_terms(question, sources)
+            hits = search_collections(
+                query, collections, n_results=n_results, translated=translated, english=english, boost=boost,
+            )
 
         limits = SettingsManager().get("rag") or {}
 

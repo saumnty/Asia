@@ -93,11 +93,16 @@ def ranked_lists(stores: list, question: str, language: str) -> tuple:
     return vector, keyword
 
 
-def search_collections(question: str, collections: list, n_results=5, persist_dir=None, translated="", english=()) -> list:
+def search_collections(
+    question: str, collections: list, n_results=5, persist_dir=None, translated="", english=(), boost=(),
+) -> list:
     """Los mejores fragmentos de varias colecciones.
 
     translated es la pregunta en inglés: se busca además en las colecciones de english,
     con raíces del inglés, y la cobertura de cada fragmento es la mejor de las dos.
+    boost son los términos del glosario de la pregunta ("x_front"): se buscan
+    solos, en una lista más de la fusión. Con la pregunta entera pesaban como una
+    palabra más y "punto desplazado" traía hoja_cuadrante antes que x_front.
     """
     stores = [VectorStore(persist_dir=persist_dir, collection_name=collection) for collection in collections]
 
@@ -112,6 +117,14 @@ def search_collections(question: str, collections: list, n_results=5, persist_di
 
     if in_english:
         lists += ranked_lists(in_english, translated, ENGLISH)
+
+    if boost:
+        lists += ([
+            (chunk_id, Hit(document, metadata, keyword_score=score))
+            for chunk_id, document, metadata, score in stores[0].words.top(
+                " ".join(boost), [store.name for store in stores], CANDIDATES, SPANISH,
+            )
+        ],)
 
     hits = merge(*lists, n_results=n_results)
     documents = [hit.document for hit in hits]
