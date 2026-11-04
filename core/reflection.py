@@ -61,6 +61,26 @@ def load_summary():
         return None
 
 
+PREVIOUS_SESSION = re.compile(
+    r"\b(sesion anterior|ultima sesion|la ultima vez|la vez pasada)\b|^(y )?que hicimos( ayer| antes| la otra vez)?$"
+)
+
+
+def asks_previous_session(text: str) -> bool:
+    from core.actions.models import command_text
+
+    return bool(PREVIOUS_SESSION.search(command_text(text or "")))
+
+
+def previous_session_text(summary) -> str:
+    """La respuesta a "¿qué hicimos en la sesión anterior?", con el resumen de sesión guardado."""
+    if not summary or not summary.get("resumen"):
+        return "No tengo resumen de la sesión anterior."
+
+    date = summary.get("fecha", "").replace("T", " ")[:16]
+    return f"En la sesión anterior ({date}): {summary['resumen']}"
+
+
 def opening_text() -> str:
     """Lo que se muestra al abrir Asia; "" si no hay nada."""
     parts = []

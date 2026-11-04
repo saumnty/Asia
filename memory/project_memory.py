@@ -28,6 +28,13 @@ class ProjectMemory:
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
     
+    def summary_date(self, project_name: str):
+        """Fecha de la última vez que se guardó el resumen (la del archivo); None si no hay."""
+        from datetime import date
+
+        path = self._project_path(project_name)
+        return date.fromtimestamp(path.stat().st_mtime) if path.exists() else None
+
     def append_project_note(self, project_name: str, note: str):
         path = self._project_path(project_name)
 
@@ -36,3 +43,24 @@ class ProjectMemory:
             f.write(note)
 
         return path
+
+# Un resumen de más días que esto se marca como posiblemente desactualizado.
+STALE_DAYS = 30
+
+
+def age_notice(saved, today=None) -> str:
+    """La fecha del resumen del proyecto y, si es viejo, el aviso y cómo rehacerlo; "" sin fecha."""
+    if saved is None:
+        return ""
+
+    from datetime import date
+
+    days = ((today or date.today()) - saved).days
+
+    if days <= STALE_DAYS:
+        return f"Resumen del proyecto guardado el {saved.isoformat()}."
+
+    return (
+        f"Resumen del proyecto guardado el {saved.isoformat()} (hace {days} días): puede estar desactualizado. "
+        "Para rehacerlo: «resume el proyecto y guarda el resumen»."
+    )

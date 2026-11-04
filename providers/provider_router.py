@@ -3,7 +3,7 @@ import re
 from providers.ollama_provider import RESPONSE_RESERVE_TOKENS, OllamaProvider, estimate_tokens, model_options
 from core.actions.models import command_text
 from memory.memory_manager import MemoryManager
-from memory.project_memory import ProjectMemory
+from memory.project_memory import ProjectMemory, age_notice
 from config.settings_manager import SettingsManager
 from providers.gemini_provider import GeminiProvider
 from core.confidential import (
@@ -143,7 +143,10 @@ class ProviderRouter:
         if not summary:
             return ""
 
-        return summary
+        # Con su fecha, para que el modelo no lo tome por el estado actual.
+        dated = getattr(self.project_memory, "summary_date", None)
+        notice = age_notice(dated(project_name)) if dated else ""
+        return f"({notice})\n{summary}" if notice else summary
 
     def ask(self, prompt: str, review=False, domain="code", max_tokens=None) -> str:
         """Llamada de un solo turno, sin historial de chat ni contexto personal.

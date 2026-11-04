@@ -20,6 +20,7 @@ from core.chat_memory import is_recall
 from core.early_load import EarlyLoad
 from core.fast_chat import is_clear_chat
 from core.fixed_intents import fixed_intent
+from core.reflection import asks_previous_session, load_summary, previous_session_text
 from core.recent_facts import DEFAULT_KNOWN_UNTIL, asks_recent_fact, is_affirmative, offer_text
 from tools.app_tool import AppTool
 from core.provenance import USUARIO, Fragment, request_sources
@@ -180,6 +181,8 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         self.settings = SettingsManager()
         # El launcher le pasa lo que se va escribiendo (core/early_load.py).
         self.early_load = EarlyLoad(self.settings, self.intent_engine.preload)
+        # El de la sesión anterior: durante esta, el archivo se va reescribiendo con la actual.
+        self.previous_session = load_summary()
         self.last_debug_report = None
         self.pending_run = PendingRun()
         # Qué hizo el último mensaje (resumen de la sesión): una acción, "chat" o
@@ -321,6 +324,12 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
         if asks_recent_fact(text, known_until):
             return self.offer_wikipedia(text)
+
+        # "¿Qué hicimos en la sesión anterior?": el resumen de sesión (fase R), no
+        # el del proyecto, que iba por ask_project_memory y podía ser de hace meses.
+        if asks_previous_session(text):
+            self.last_action = "chat"
+            return previous_session_text(getattr(self, "previous_session", None) or load_summary())
 
         if is_clear_chat(text, self.app_names()):
             self.last_action = "chat"

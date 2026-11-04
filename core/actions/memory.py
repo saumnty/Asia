@@ -2,6 +2,7 @@
 from core import prompts
 from core.actions.models import set_session
 from core.provenance import PROYECTO, Fragment, record
+from memory.project_memory import age_notice
 
 
 class MemoryActions:
@@ -85,10 +86,11 @@ class MemoryActions:
             return f"No tengo resumen guardado para el proyecto {project_name}."
 
         record(Fragment(PROYECTO, project_summary))
-
-        return self.provider_router.ask(
-            prompts.ask_project_memory(project_name, project_summary, question)
-        )
+        # La fecha va con la respuesta: el resumen puede ser de hace meses.
+        dated = getattr(self.project_memory, "summary_date", None)
+        notice = age_notice(dated(project_name)) if dated else ""
+        answer = self.provider_router.ask(prompts.ask_project_memory(project_name, project_summary, question))
+        return f"{notice}\n\n{answer}" if notice else answer
 
     def handle_update_project_memory(self, text, params):
         note = params.get("note")
