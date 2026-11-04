@@ -361,7 +361,7 @@ Se recuperan ~5 de los ~9,5 s. El resto lo pone la intención con el 7B (prompt 
 
 ### Wikipedia completa y palabras clave (2026-11-04, noche)
 
-`wikipedia_es_all_nopic_2026-10.zim` (13,3 GB, sha256 OK) registrada como fuente `wikipedia`: 4.232.654 artículos frente a 348.403 de `top_nopic`, que sigue en `data/zim/`. Cada medición, sola, con al menos 6 GB libres al empezar y el vigilante.
+`wikipedia_es_all_nopic_2026-10.zim` (13,3 GB, sha256 OK) registrada como fuente `wikipedia`: 4.232.654 artículos frente a 348.403 de `top_nopic`, borrada el 2026-11-04 (sus resultados quedan aquí como referencia). Cada medición, sola, con al menos 6 GB libres al empezar y el vigilante.
 
 Palabras clave de qwen3 antes de buscar en el `.zim` (títulos con SuggestionSearcher, texto completo, la pregunta original de respaldo; `e6e3c65f`, `30c1cb97`), artículo o página esperada entre los encontrados:
 
@@ -387,7 +387,7 @@ Con 4,2 millones de artículos, el texto completo con la pregunta entera trae ar
 - `check_chat` con la completa: 21/21 correctas, 0 atribuciones, 0 fugas, 183 s en total, RAM mínima 2,08 GB.
 - `check_rag --preguntas 1`, entera por primera vez sin el cuerpo de la pregunta: robotics 0/6 y stackoverflow_es 1/6 correctas, trampas 0/6, 18 y 16 s; 10 de 12 sin respuesta directa. Igual que antes de `11c48627`: el problema no era el cuerpo de la pregunta. Pendiente.
 - Resumen del proyecto `asia` rehecho con la acción de siempre: del 2026-06-05 al 2026-11-04 (`77dc4a38`). Es genérico: no nombra la biblioteca, el RAG ni la estrategia B.
-- Propuesta: borrar `wikipedia_es_top_nopic_2026-10.zim` (1,2 GB). Con palabras clave, la completa encuentra lo mismo (10/12), contesta una más y cubre lugares pequeños. En contra: una respuesta falsa en las trampas, frente a ninguna. No se borró.
+- Propuesta: borrar `wikipedia_es_top_nopic_2026-10.zim` (1,2 GB). Con palabras clave, la completa encuentra lo mismo (10/12), contesta una más y cubre lugares pequeños. En contra: una respuesta falsa en las trampas, frente a ninguna. Borrada el 2026-11-04, archivo y `.sha256`; el registro ya apuntaba a la completa.
 
 ## Fases futuras (diseño pendiente)
 
@@ -789,7 +789,7 @@ Arreglo general medido y descartado: sumar a la puntuación RRF hasta 0,02 segú
 El ranking es determinista y empeora, y además bajan las coberturas de "filtrar secretos" (de 1,00 a 0,67) y otras cuatro preguntas. Lo punta a punta lleva el azar del 7B. Las prohibidas no bastan: el arreglo no comprueba significado y esas frases dependen de lo que escriba el modelo. Causa probable, sin comprobar: un título de una palabra que coincide por casualidad suma lo mismo que uno exacto. Medido con 1 fragmento más en el índice, por el propio cambio.
 
 **Capa 3, Wikipedia offline (a medias):** commits `c14b2cea` (HTML a fragmentos), `2faef3a1` (búsqueda en el `.zim` y caché de embeddings), `429a9f23` (fuente pública con "en wikipedia").
-- Archivo: `wikipedia_es_top_nopic_2026-10.zim` (1,21 GB, sha256 comprobado), en `data/zim/`, que no estaba ignorada y ahora sí (también `data/wikipedia/`). libzim 4.0.0 (GPL-3.0-or-later), beautifulsoup4 y lxml en `requirements.txt`. Registrada como `wikipedia`, tipo `enciclopedia`, pública y solo nombrada: `/indexar wikipedia C:\Asia\data\zim\wikipedia_es_top_nopic_2026-10.zim enciclopedia`. No se indexa: no hay colección de Chroma.
+- Archivo: `wikipedia_es_top_nopic_2026-10.zim` (1,21 GB, sha256 comprobado; sustituida por `all_nopic` y borrada el 2026-11-04), en `data/zim/`, que no estaba ignorada y ahora sí (también `data/wikipedia/`). libzim 4.0.0 (GPL-3.0-or-later), beautifulsoup4 y lxml en `requirements.txt`. Registrada como `wikipedia`, tipo `enciclopedia`, pública y solo nombrada: `/indexar wikipedia C:\Asia\data\zim\wikipedia_es_top_nopic_2026-10.zim enciclopedia`. No se indexa: no hay colección de Chroma.
 - Solo con "en wikipedia". Cadena: la búsqueda del `.zim` elige 3 artículos (`core/rag/wikipedia.py`), el HTML pasa a fragmentos por sección con una frase por línea (`core/rag/article.py`, sin infoboxes de navegación, referencias ni "Véase también"), se queda el principio y los 12 fragmentos que más palabras comparten por artículo, y se embeben al momento con caché por hash en `data/wikipedia/embeddings.sqlite3` (`core/rag/embedding_cache.py`, 60 000 entradas, unos 200 MB). Después, la misma fusión, filtro, extracción y verificación que las otras capas. Cita `[Camberra.wiki:12]` por dentro; se muestra el artículo con su sección, URL, CC BY-SA 4.0 y la edición, bajo "De Wikipedia, no de tus proyectos:".
 - Comprobado con el archivo real: la búsqueda del `.zim` exige todas las palabras (OR no es operador), con raíces y sin acentos, y tarda 0,01–0,09 s. Con palabras vacías no encuentra nada, así que se quitan, y si no hay resultados se va quitando la palabra más común. libzim 4.0.0 devuelve objetos `SearchResult`, no rutas como dice su documentación. El metadato dice "mejores 50 000 artículos" y `article_count` da 348 403 (cuenta redirecciones).
 - Búsqueda floja en algunas preguntas naturales: "qué moneda se usa en Japón" no trae Yen, "en qué año llegó el hombre a la Luna" no trae Apolo 11 y "la montaña más alta" no trae el Everest entre los 4 primeros. No se reordena por título.
