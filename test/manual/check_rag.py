@@ -79,6 +79,7 @@ from core.rag.indexer import ProjectIndexer, unload_chat_models
 from core.rag.library import Library, named_in_question, without_source
 from core.rag.quotes import BAD_TAG, NOT_DEFINED, UNKNOWN_FIGURE, UNKNOWN_NAME
 from core.rag.retriever import relevant, search_collections
+from providers.ollama_provider import make_repeatable
 from tools import rag_tool
 from tools.rag_tool import DEFAULT_MAX_DISTANCE, DEFAULT_MIN_COVERAGE
 
@@ -1069,6 +1070,7 @@ def main():
     parser.add_argument("--preguntas", type=int, metavar="CORRIDAS",
                         help="sitios de Stack Exchange en .zim; con 0, solo la búsqueda")
     args = parser.parse_args()
+    make_repeatable()
     base = load_base()
     sweep_leftovers()
 

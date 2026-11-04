@@ -12,6 +12,16 @@ CHARS_PER_TOKEN = 3.3
 # Espacio que se deja para la respuesta dentro de la ventana de contexto.
 RESPONSE_RESERVE_TOKENS = 1024
 
+# Opciones que van encima de todas las demás en cada llamada (ollama_fixed_options).
+# Las mediciones de test/manual fijan REPEATABLE_OPTIONS: misma respuesta en cada corrida.
+FIXED_OPTIONS_SETTING = "ollama_fixed_options"
+REPEATABLE_OPTIONS = {"seed": 42, "temperature": 0}
+
+
+def make_repeatable():
+    """Seed fijo y temperatura 0 en todas las llamadas a Ollama de esta ejecución."""
+    SettingsManager.set_overrides({**SettingsManager.overrides, FIXED_OPTIONS_SETTING: REPEATABLE_OPTIONS})
+
 
 def estimate_tokens(messages: list[dict]) -> int:
     return int(sum(len(message["content"]) for message in messages) / CHARS_PER_TOKEN)
@@ -46,7 +56,7 @@ def ollama_options(settings, messages: list[dict], model: str = None, **extra) -
             file=sys.stderr
         )
 
-    return {**options, **extra}
+    return {**options, **extra, **(settings.get(FIXED_OPTIONS_SETTING) or {})}
 
 
 def review_options(settings) -> dict:

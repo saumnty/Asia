@@ -44,6 +44,7 @@ from core.brain import Brain
 from core.reflection import save_summary
 from core.timing import SETTING
 from memory.memory_manager import MemoryManager
+from providers.ollama_provider import make_repeatable
 
 MEMORY = {"nombre": "Santiago", "proyecto": "Bolitabot", "universidad": "UAM", "color_favorito": "amarillo"}
 VALUES = [value.lower() for value in MEMORY.values()]
@@ -148,6 +149,7 @@ def run(folder):
     paths.SESSION_SUMMARY_FILE = folder / "ultima_sesion.json"
     paths.TASKS_FILE = folder / "pendientes.json"
     SettingsManager.set_overrides({**SettingsManager.overrides, SETTING: True})
+    make_repeatable()
     save_summary(PREVIOUS_SESSION, "modelo", 5)
     brain = Brain()
     brain.memory = brain.provider_router.memory = MemoryManager(folder / "memory.json")

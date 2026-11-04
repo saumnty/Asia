@@ -33,6 +33,7 @@ Session.set_paths(project_root=PROJECT_ROOT, user_cwd=ROOT)
 import launcher
 from core.brain import Brain
 from core.timing import SETTING
+from providers.ollama_provider import make_repeatable
 
 MESSAGES = ["hola", "qué es un grafo bipartito", "si", "explica @ROADMAP.md"]
 
@@ -59,6 +60,7 @@ def main():
 
     messages = args.mensajes or [m for m in MESSAGES if not (args.sin_archivo and m.startswith("explica @"))]
     SettingsManager.set_overrides({**SettingsManager.overrides, SETTING: True})
+    make_repeatable()
 
     if args.descargar:
         subprocess.run(["ollama", "stop", SettingsManager().get("intent_model")], check=False)

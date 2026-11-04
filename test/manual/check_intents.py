@@ -26,6 +26,7 @@ from config.settings_manager import SettingsManager
 from core.fast_chat import is_clear_chat
 from core.fixed_intents import fixed_intent
 from core.intent_engine import IntentEngine
+from providers.ollama_provider import make_repeatable
 from tools.app_tool import AppTool
 
 # Así llegan al IntentEngine los mensajes con @ruta: el launcher cambia
@@ -169,9 +170,10 @@ def main():
     parser.add_argument("--sin-ruta-rapida", action="store_true", help="todo pasa por el IntentEngine")
     parser.add_argument("--model", help="intent_model para esta medición (no cambia settings.json)")
     args = parser.parse_args()
+    make_repeatable()
 
     if args.model:
-        SettingsManager.set_overrides({"intent_model": args.model})
+        SettingsManager.set_overrides({**SettingsManager.overrides, "intent_model": args.model})
 
     print(f"intent_model: {SettingsManager().get('intent_model')}\n")
     results = classify(IntentEngine(), args.runs, fast=not args.sin_ruta_rapida)

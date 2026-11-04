@@ -8,7 +8,7 @@ from core.intent_engine import IntentEngine
 from core.model_selection import StickyModel, classify_domain, model_for
 from core.paths import DEFAULTS_FILE
 from providers.ollama_models import unload_others
-from providers.ollama_provider import OllamaProvider, model_options, ollama_options
+from providers.ollama_provider import OllamaProvider, make_repeatable, model_options, ollama_options
 from providers.provider_router import ProviderRouter
 
 
@@ -414,3 +414,37 @@ def test_router_activa_think_solo_en_math():
     router.chat("resuelve 3x + 2 = 11")
 
     assert router.providers["fake"].thinks == [False, False, True]
+
+
+# --- Mediciones repetibles ------------------------------------------------------
+
+def test_las_opciones_fijas_van_encima_de_todas():
+    settings = Settings(ollama_fixed_options={"seed": 42, "temperature": 0})
+
+    options = ollama_options(settings, [{"role": "user", "content": "hola"}], "coder", temperature=0.1)
+
+    assert options == {"num_ctx": 16384, "seed": 42, "temperature": 0}
+
+
+def test_por_defecto_no_hay_opciones_fijas():
+    assert read_json(DEFAULTS_FILE)["ollama_fixed_options"] == {}
+    assert ollama_options(Settings(), [{"role": "user", "content": "hola"}], "coder") == {"num_ctx": 16384}
+
+
+def test_las_mediciones_fijan_seed_y_temperatura_0():
+    SettingsManager.set_overrides({"intent_model": "chico"})
+
+    make_repeatable()
+
+    assert SettingsManager().get("ollama_fixed_options") == {"seed": 42, "temperature": 0}
+    assert SettingsManager().get("intent_model") == "chico"
+
+
+def test_el_proveedor_manda_las_opciones_fijas():
+    make_repeatable()
+    provider = OllamaProvider()
+    provider.client = FakeClient()
+
+    provider.complete([{"role": "user", "content": "hola"}], model="coder", review=True)
+
+    assert provider.client.options[-1]["seed"] == 42 and provider.client.options[-1]["temperature"] == 0

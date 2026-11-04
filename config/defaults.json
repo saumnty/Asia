@@ -29,6 +29,7 @@
     },
     "ollama_temperature": 0.1,
     "ollama_repeat_penalty": 1.15,
+    "ollama_fixed_options": {},
     "embedding_model": "nomic-embed-text",
     "embedding_timeout": 120,
     "gemini_model": "gemini-2.5-flash",
