@@ -1,4 +1,5 @@
 """check_rag.py limpia sus carpetas temporales, también con Chroma abierto en Windows."""
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -558,3 +559,16 @@ def test_las_palabras_clave_siguen_la_configuracion_real(monkeypatch):
     assert check_rag.keywords_for("qué moneda se usa en Japón", site) == []
     assert check_rag.keywords_for("qué moneda se usa en Japón", wiki) == ["Yen"]
     assert asked == ["general"]
+
+
+def test_guardar_escribe_cada_pregunta_con_su_respuesta(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(check_rag, "ANSWERS", [])
+    brain = SimpleNamespace(process=lambda text: prompts.NO_DIRECT_ANSWER + " algo")
+
+    assert check_rag.answer_row(brain, "qué moneda se usa en Japón en wikipedia")[0] == "sin respuesta directa"
+    check_rag.save_answers(tmp_path / "respuestas.json")
+
+    saved = json.loads((tmp_path / "respuestas.json").read_text(encoding="utf-8"))
+    assert saved == [["qué moneda se usa en Japón en wikipedia", prompts.NO_DIRECT_ANSWER + " algo"]]

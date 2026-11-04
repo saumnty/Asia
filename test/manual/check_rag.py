@@ -55,6 +55,7 @@ o una ajena, o si alguna corrida supera el límite conocido de ese archivo. Lo d
 del punta a punta varía con el azar del 7B: se lee, no se comprueba.
 """
 import argparse
+import atexit
 import gc
 import io
 import json
@@ -617,11 +618,16 @@ def forbidden_said(question, shown) -> bool:
     return question in FORBIDDEN and bool(re.search(FORBIDDEN[question], unmarked, re.IGNORECASE))
 
 
+# Lo que se mostró en cada pregunta, para --guardar: [pregunta, respuesta].
+ANSWERS = []
+
+
 def answer_row(brain, question, expected=None):
     """(estado, cita el archivo, segundos, lo que se muestra) de una pregunta con el modelo real."""
     start = time.perf_counter()
     shown = brain.process(f"/buscar {question}")
     seconds = time.perf_counter() - start
+    ANSWERS.append([question, shown])
 
     if shown in prompts.NOTHING_TO_ANSWER:
         return "el código negó", False, seconds, shown
@@ -1055,6 +1061,10 @@ def questions(runs, base):
     return finished(questions_failures(found, fell, base))
 
 
+def save_answers(path):
+    path.write_text(json.dumps(ANSWERS, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--indice", help="carpeta del índice: se conserva y solo se reindexa lo que cambió")
@@ -1069,8 +1079,12 @@ def main():
                              ".zim, de qwen3 (general) o del 7B (code); sin la opción, la configuración real")
     parser.add_argument("--preguntas", type=int, metavar="CORRIDAS",
                         help="sitios de Stack Exchange en .zim; con 0, solo la búsqueda")
+    parser.add_argument("--guardar", type=Path, help="JSON con lo que se mostró en cada pregunta")
     args = parser.parse_args()
     make_repeatable()
+
+    if args.guardar:
+        atexit.register(save_answers, args.guardar)
     base = load_base()
     sweep_leftovers()
 
