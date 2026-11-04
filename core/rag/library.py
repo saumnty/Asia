@@ -16,13 +16,19 @@ from core.rag.tokens import without_accents
 from core.rag.vector_store import safe_collection_name
 
 ENCYCLOPEDIA = "enciclopedia"
-KINDS = ("proyecto", "reporte", "notas", "documentacion", ENCYCLOPEDIA)
+# Un sitio de Stack Exchange en .zim (fase H, capa 4).
+QUESTIONS = "preguntas"
+KINDS = ("proyecto", "reporte", "notas", "documentacion", ENCYCLOPEDIA, QUESTIONS)
+# Las que son un .zim: no se indexan, se busca en el archivo.
+ZIM_KINDS = (ENCYCLOPEDIA, QUESTIONS)
 DEFAULT_KIND = "proyecto"
 LANGUAGES = ("es", "en")
 DEFAULT_LANGUAGE, ENGLISH_SOURCE = LANGUAGES
 ORIGIN_PREFIX = "Página: "
 # Las etiquetas de un artículo de Wikipedia: "Camberra.wiki:12".
 WIKI_SUFFIX = ".wiki"
+# Las de una página de pregunta: "robotics_103415.qa:12".
+QA_SUFFIX = ".qa"
 FRAGMENT_HEADER = re.compile(r"^--- \[(.+?)\](?: (.+))? ---$", re.MULTILINE)
 REFUSAL = re.compile(
     r"\bno (lo |la |se )?(encontr|encuentr|hay informacion|tengo informacion|dispongo|puedo (responder|determinar))"

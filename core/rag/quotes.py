@@ -9,7 +9,7 @@ import textwrap
 from dataclasses import dataclass
 
 from core import prompts
-from core.rag.library import FRAGMENT_HEADER, ORIGIN_PREFIX, WIKI_SUFFIX
+from core.rag.library import FRAGMENT_HEADER, ORIGIN_PREFIX, QA_SUFFIX, WIKI_SUFFIX
 from tools.review_findings import clean_quote, locate_quote, squash
 
 # "- [core/brain.py:40-55] línea copiada". La etiqueta es opcional: sin ella, la
@@ -367,14 +367,20 @@ def verified_lines(quotes: list) -> str:
                 blocks.append([header, text])
 
     # Lo que viene de fuera no se puede confundir con lo que hay en sus proyectos.
-    from_wikipedia = [prompts.FROM_WIKIPEDIA] if any(quote.path.endswith(WIKI_SUFFIX) for quote in quotes) else []
-    return f"{prompts.VERIFIED_LINES}\n\n" + "\n\n".join(from_wikipedia + [f"{h}\n{t}" for h, t in blocks])
+    outside = from_outside([quote.path for quote in quotes])
+    return f"{prompts.VERIFIED_LINES}\n\n" + "\n\n".join(outside + [f"{h}\n{t}" for h, t in blocks])
+
+
+def from_outside(tags: list) -> list:
+    """El aviso de que viene de Wikipedia o de Stack Exchange, no de sus proyectos."""
+    notices = [(WIKI_SUFFIX, prompts.FROM_WIKIPEDIA), (QA_SUFFIX, prompts.FROM_QA)]
+    return [notice for suffix, notice in notices if any(suffix in tag for tag in tags)]
 
 
 def best_fragments(context: str) -> str:
     """Los mejores fragmentos tal cual: lo que se muestra si no hay citas verificadas."""
     fragments = parse_fragments(context)[:FALLBACK_FRAGMENTS]
-    blocks = [prompts.FROM_WIKIPEDIA] if any(WIKI_SUFFIX in fragment.tag for fragment in fragments) else []
+    blocks = from_outside([fragment.tag for fragment in fragments])
 
     for fragment in fragments:
         text = fragment.text.partition("\n")[2].strip()

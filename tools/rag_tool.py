@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from config.settings_manager import SettingsManager
-from core.prompts import NOT_FOUND, NOT_FOUND_IN_WIKIPEDIA, WIKIPEDIA_MISSING
+from core.prompts import NOT_FOUND, NOT_FOUND_IN_QA, NOT_FOUND_IN_WIKIPEDIA, QA_MISSING, WIKIPEDIA_MISSING
 from core.rag.glossary import glossary_terms
 from core.rag.indexer import ProjectIndexer, unload_chat_models
 from core.rag.library import (
@@ -10,6 +10,8 @@ from core.rag.library import (
     ENCYCLOPEDIA,
     ENGLISH_SOURCE,
     ORIGIN_PREFIX,
+    QUESTIONS,
+    ZIM_KINDS,
     Library,
     Source,
     fragment_header,
@@ -17,6 +19,7 @@ from core.rag.library import (
     searched_sources,
     without_source,
 )
+from core.rag.questions import qa_hits, zim_language
 from core.rag.quotes import best_fragments
 from core.rag.retriever import relevant, search_collections
 from core.rag.wikipedia import wikipedia_hits, zim_summary
@@ -28,6 +31,8 @@ DEFAULT_MIN_COVERAGE = 0.3
 DEFAULT_MAX_DISTANCE = 392.0
 WIKIPEDIA_LICENSE = "CC BY-SA 4.0"
 WIKIPEDIA_URL = "https://{language}.wikipedia.org/wiki/{{}}"
+# Stack Exchange: 2.5, 3.0 o 4.0 según la fecha de cada publicación.
+QA_LICENSE = "CC BY-SA (versión según la fecha)"
 ZIM_SUFFIX = ".zim"
 
 
@@ -50,13 +55,16 @@ class RagTool:
         english = [source.collection for source in searched if source.language == ENGLISH_SOURCE]
 
         in_wikipedia = bool(named) and named.kind == ENCYCLOPEDIA
+        in_questions = bool(named) and named.kind == QUESTIONS
         query = without_source(question, named) if named else question
 
-        if in_wikipedia and not Path(named.path).is_file():
-            return WIKIPEDIA_MISSING
+        if (in_wikipedia or in_questions) and not Path(named.path).is_file():
+            return WIKIPEDIA_MISSING if in_wikipedia else QA_MISSING
 
         if in_wikipedia:
             hits = wikipedia_hits(query, named, n_results, translated=translated)
+        elif in_questions:
+            hits = qa_hits(query, named, n_results, translated=translated)
         else:
             # Los términos del glosario cuentan aparte (core/rag/glossary.py).
             boost = glossary_terms(question, sources)
@@ -92,7 +100,7 @@ class RagTool:
         if named and hits:
             return LabeledResult(best_fragments(response), label)
 
-        return NOT_FOUND_IN_WIKIPEDIA if in_wikipedia else NOT_FOUND
+        return NOT_FOUND_IN_WIKIPEDIA if in_wikipedia else NOT_FOUND_IN_QA if in_questions else NOT_FOUND
 
     def index_project(
         self,
@@ -110,8 +118,8 @@ class RagTool:
         project_path = project_path or known.path
         kind = kind or known.kind
 
-        if kind == ENCYCLOPEDIA:
-            return self.register_encyclopedia(project_name, project_path, url, license, language, registered)
+        if kind in ZIM_KINDS:
+            return self.register_zim(project_name, kind, project_path, url, license, language, registered)
 
         unload_chat_models()
         url = url or known.url
@@ -137,8 +145,12 @@ class RagTool:
             f"({indexer.changed} archivos reindexados, {indexer.unchanged} sin cambios)."
         )
 
-    def register_encyclopedia(self, name: str, path: str, url: str, license: str, language: str, known):
-        """Una enciclopedia no se indexa: se apunta al .zim. Pública y solo con "en <fuente>"."""
+    def register_zim(self, name: str, kind: str, path: str, url: str, license: str, language: str, known):
+        """Una enciclopedia o un sitio de preguntas no se indexa: se apunta al .zim. Pública y solo con "en <fuente>".
+
+        En un sitio de Stack Exchange la licencia depende de la fecha de cada
+        publicación (core/rag/qa_page.py) y el idioma sale del metadato Language.
+        """
         zim = Path(path)
 
         if zim.suffix.lower() != ZIM_SUFFIX or not zim.is_file():
@@ -149,10 +161,18 @@ class RagTool:
         if not summary["searchable"]:
             return f"{zim.name} no trae índice de búsqueda: hace falta un .zim con _ftindex."
 
-        language = language or (known.language if known else DEFAULT_LANGUAGE)
-        url = url or (known.url if known else "") or WIKIPEDIA_URL.format(language=language)
-        license = license or (known.license if known else "") or WIKIPEDIA_LICENSE
         publica = known.publica if known else True
-        Library().save(name, ENCYCLOPEDIA, zim.as_posix(), summary["articles"], url, license, True, language, publica)
 
-        return f"Fuente '{name}' lista: {summary['articles']} artículos de {zim.name}. Pregúntale con \"en {name}\"."
+        if kind == QUESTIONS:
+            from libzim.reader import Archive
+
+            language = language or (known.language if known else "") or zim_language(Archive(str(zim)))
+            license = license or (known.license if known else "") or QA_LICENSE
+        else:
+            language = language or (known.language if known else DEFAULT_LANGUAGE)
+            url = url or (known.url if known else "") or WIKIPEDIA_URL.format(language=language)
+            license = license or (known.license if known else "") or WIKIPEDIA_LICENSE
+
+        Library().save(name, kind, zim.as_posix(), summary["articles"], url, license, True, language, publica)
+        units = "páginas" if kind == QUESTIONS else "artículos"
+        return f"Fuente '{name}' lista: {summary['articles']} {units} de {zim.name}. Pregúntale con \"en {name}\"."
