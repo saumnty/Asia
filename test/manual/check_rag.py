@@ -637,6 +637,9 @@ def answer_row(brain, question, expected=None):
     if shown.startswith(prompts.NO_DIRECT_ANSWER):
         return "sin respuesta directa", False, seconds, shown
 
+    if shown.startswith(prompts.NO_INFO_ABOUT):
+        return "el código negó", False, seconds, shown
+
     lines, _, summary = shown.partition(prompts.VERIFIED_LINES)[2].partition(prompts.UNVERIFIED_SUMMARY)
     state = "respondió" if summary else "redacción inválida" if shown.startswith(prompts.INVALID_DRAFT) else "solo líneas"
     return state, bool(expected) and Path(expected).name.lower() in lines.lower(), seconds, shown

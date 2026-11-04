@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from core import prompts
+from core.rag.entities import about_entities
 from core.rag.glossary import expand
 from core.rag.instructions import source_notes, with_project_notes
 from core.rag.keywords import (
@@ -113,6 +114,8 @@ class ExploreActions:
         # También por "/buscar", que no pasa por el IntentEngine.
         self.last_action = "search_project_rag"
 
+        # La regla de la entidad mira la pregunta tal cual, sin los equivalentes del glosario.
+        asked = question
         # También para el modelo: si no, no ve la relación con lo que dicen los fragmentos.
         question = expand(question, Library().all())
 
@@ -141,6 +144,13 @@ class ExploreActions:
             max_tokens=self.answer_limits("search_quotes")["tokens"],
         )
         quotes = verify_quotes(without_cut_notice(extracted)[0], rag_context)
+
+        # Si la pregunta nombra un lugar, una persona o una obra, la línea o su artículo tiene que
+        # nombrarlo: el 7B contestaba por el puente de Valdecierzo con el Puente de Hierro de Soria.
+        quotes, missing = about_entities(quotes, asked, [source.name for source in Library().all()] + ["Wikipedia"])
+
+        if missing:
+            return f"{prompts.NO_INFO_ABOUT} {' ni '.join(missing)}."
 
         # Sin líneas verificadas no hay respuesta del modelo: no hay con qué comprobarla.
         if not quotes:

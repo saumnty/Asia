@@ -19,6 +19,8 @@ FROM_WIKIPEDIA = "De Wikipedia, no de tus proyectos:"
 FROM_QA = "De preguntas y respuestas de Stack Exchange, no de tus proyectos:"
 # Lo que encabeza los fragmentos si había material, pero ninguna línea lo responde.
 NO_DIRECT_ANSWER = "No encontré una respuesta directa. Esto es lo más relevante:"
+# Lo que se muestra si las líneas de Wikipedia o Stack Exchange no dicen el nombre que se pregunta.
+NO_INFO_ABOUT = "No encontré información sobre"
 # Lo que se muestra en lugar de una redacción con nombres o citas que no existen.
 INVALID_DRAFT = (
     "Estas son las líneas que responden; no incluyo explicación porque mencionaba "
