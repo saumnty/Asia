@@ -702,6 +702,11 @@ Pruebas de "Hey Jarvis" con el micrófono de la laptop (2026-11-04 y 05):
 - Decisión: "Hey Jarvis" queda de provisional. "Oye Asia" pasa a ser la prioridad de J3, con positivos de la voz del usuario grabados con el micrófono de la laptop (`check_wake --grabar N --frase "oye Asia"`, `180fc1ed`) además de los de Piper, y negativos parecidos (`--negativos`, `70ae34ee`), en `data/wake/` (ignorada por git). Subirlos a Colab: decisión del usuario, pendiente.
 - Configuración recomendada: mejoras de audio de Windows desactivadas para el micrófono (también afecta a Whisper y al VAD); repetir `/calibrar voz` tras el cambio.
 
+Clips para "Oye Asia" (2026-11-05):
+- Voz del usuario con el micrófono de la laptop: 80 positivos de "oye Asia" (picos de −1,8 a −25,6 dBFS; 15 con una frase después) y 21 negativos (3 por frase).
+- Sintéticos con Piper (`test/manual/generar_wake.py`, `462d2d4e`): 4000 positivos (117,8 min; "oye Asia", "oye, Asia", "¡oye Asia!", "¿oye Asia?", "oye Asia." y "oye Asia, <frase corta>") y 2000 negativos difíciles (36,8 min; "hoy hacia", "oye Alicia", "Malasia", "fantasía", "Anastasia"…), con las cuatro voces (claude-high, ald y los dos hablantes de sharvard) y length_scale 0,8–1,3, noise_scale 0,4–0,9 y noise_w 0,5–1,1 al azar. WAV de 16 kHz mono de 1 a 3 s (116 cortados a 3 s). 14,6 min de generación en CPU.
+- Paquetes en `C:\AsiaVoz\wake\` (fuera del repositorio): `sintetico.zip` (251,5 MB, con `clips.csv`), `mi_voz.zip` (4,4 MB) y `LEEME.txt` con los conteos, las licencias de las voces y la herencia no comercial de ACAV100M. Subirlos a Drive lo decide el usuario.
+
 Paso 2, entrenar "Oye Asia" (plan, 2026-11-04; se hace con otro permiso). En Colab con GPU: el cuaderno de entrenamiento de openWakeWord (`automatic_model_training.ipynb`) usa los 17 GB de negativos y dependencias que aquí no conviene instalar (`openwakeword[full]`; el TensorFlow 2.8.1 que pide no instala en Python 3.11 y solo sirve para tflite).
 
 1. En local, positivos con Piper (unos 30 min en CPU). Un script en `test/manual/` genera "oye Asia" y variantes ("oye, Asia", "¡oye Asia!", "oye Asia, …" con frases cortas detrás) con las tres voces en español (`es_MX-claude-high`, `es_MX-ald-medium`, `es_ES-sharvard-medium`), variando `length_scale` (0,8–1,3), `noise_scale` y `noise_w`. Unos 4000 clips WAV de 16 kHz, mono, de 1–2 s (unos 250 MB). El generador de muestras del cuaderno (`piper-sample-generator`) es de inglés: no se usa.
@@ -713,6 +718,8 @@ Paso 2, entrenar "Oye Asia" (plan, 2026-11-04; se hace con otro permiso). En Col
 7. Medir en local con `check_wake --modelo oye_asia_v0.1 --aciertos 20` y `--falsas 30`, frente a "Hey Jarvis", y elegir `voice.wake_threshold`. Si hay muchas falsas activaciones: más negativos difíciles y volver a entrenar.
 
 Licencias: el modelo sale de las características de ACAV100M (CC BY-NC-SA 4.0), así que hereda el uso no comercial: personal, no distribuible, como los de la v0.5.1. Las voces de Piper: `claude-high` (datos Apache-2.0), `ald` (Unlicense), `sharvard` (CC BY 3.0, pide atribución).
+
+**Después de J3, modo de conversación seguida:** tras una respuesta, Asia escucha unos 8 s sin palabra de activación, para seguir hablando sin repetirla. Descartado "Asia" sola como palabra de activación: es corta y frecuente en el habla (Malasia, fantasía, hacia); si se prueba, con un modelo aparte comparado con `--falsas 30`.
 
 **J4, servicio en segundo plano:** Asia escuchando sin la terminal abierta (bandeja del sistema o servicio), con el mismo modo confidencial.
 
@@ -1067,6 +1074,13 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 - La voz base del fine-tuning debe coincidir en género y acento con la final.
 - TTS expresivo: evaluar uno con control de emoción o de estilo que, conectado al núcleo afectivo (`core/afecto`), ajuste la velocidad, las pausas y la energía según el estado: más calmado ante el estrés, más animado ante el entusiasmo. Medir si cabe junto a qwen3 en la GPU, frente a Piper (que va en CPU).
 - Opcional: generar una sola vez sonidos cortos propios (activación de J3, aviso) y guardarlos como archivos.
+
+Dataset de la voz propia (2026-11-05), fuera del repositorio (nada de audio, texto ni nombres en el repo):
+- Fuente: 19 notas de voz de WhatsApp (`separar_audios_voz.py`, `a744bfb7`); 39,9 min de voz neta (`inventario_voz.py`, `3a45f10b`). 17 de los 19 traen picos por encima de 0 dBFS.
+- Frases (`preparar_voz.py`, `09b497ee`): Silero VAD de faster-whisper (silencios de 0,3 s, margen de 0,15 s), unidas o partidas a 2–15 s; WAV mono de 16 bits a 48 kHz, formato LJSpeech. 750 frases (52,7 min), 336 aceptadas (24,0 min); 414 a revisar, casi todas por avg_logprob < −0,6 (391) y 66 por saturación. Transcripción con Whisper small en CPU int8: 40,7 min. Incluso las aceptadas tienen errores de transcripción: hay que escucharlas todas.
+- Segunda transcripción con large-v3-turbo (`transcribir_turbo.py`, `86d8346f`; modelo descargado a `data/models/faster-whisper-large-v3-turbo`, 1,62 GB, de `dropbox-dash/faster-whisper-large-v3-turbo` en Hugging Face, el antiguo `mobiuslabsgmbh`, sha256 comprobado): se detuvo sola en las primeras 20 frases, a 2,6× su duración; las 750 tardarían unos 138 min en CPU. Pendiente: decidir si se corre.
+- Página de revisión (`pagina_revision.py`, `33804126`): `revisar.html` junto al dataset, un solo archivo que abre con file://. Por frase, el audio, los motivos, small y turbo con las diferencias marcadas y el texto editable; Aceptar, Descartar y Saltar (espacio, Enter, D, flechas). Primero las dudosas, luego las aceptadas y al final las peores; filtros, contador, avance en el navegador y "Exportar" (metadata.csv y revision.json). Regla: lo que se oye, con los números en letra.
+- Pendiente: elegir 16 o 22 kHz para el entrenamiento, y si los audios de ella se suben a Colab para el fine-tuning.
 
 **SQLite como almacenamiento** (Asia 2.0), por partes.
 - Historial completo de sesiones con búsqueda ("¿qué hablamos del PID la semana pasada?"). Base para R y para la fase de afecto.
