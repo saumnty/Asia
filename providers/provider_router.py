@@ -170,7 +170,7 @@ class ProviderRouter:
         notice = age_notice(dated(project_name)) if dated else ""
         return f"({notice})\n{summary}" if notice else summary
 
-    def ask(self, prompt: str, review=False, domain="code", max_tokens=None) -> str:
+    def ask(self, prompt: str, review=False, domain="code", max_tokens=None, on_chunk=None) -> str:
         """Llamada de un solo turno, sin historial de chat ni contexto personal.
 
         La usan las acciones internas (resúmenes, revisiones, generación de
@@ -178,7 +178,8 @@ class ProviderRouter:
         review=True para las revisiones de código: usan temperatura baja y
         penalización de repetición (ver ollama_provider.review_options).
         domain elige el modelo en models_by_domain: las acciones internas son
-        de código.
+        de código. on_chunk recibe la respuesta a trozos (con voz, para leerla
+        frase por frase); no queda en last_request.
         """
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -197,7 +198,7 @@ class ProviderRouter:
         self.last_request = (request, options)
 
         try:
-            return self._complete(request, **options)
+            return self._complete(request, on_chunk=on_chunk, **options)
         except ProviderError as e:
             return str(e)
 

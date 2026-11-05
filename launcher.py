@@ -232,11 +232,18 @@ def respond_in_context(brain, text, attachments, use_actions, reading=None, noti
                 else:
                     print(READING_CUT, file=sys.stderr)
 
+    streamed = []
+
+    def on_action_chunk(chunk):
+        streamed.append(chunk)
+        on_chunk(chunk)
+
     try:
-        response = brain.process(text) if use_actions else None
+        # Con voz, explain_file y summarize_file escriben y leen a medida que llega la respuesta.
+        response = process_streaming(brain, text, on_action_chunk if reading is not None else None) if use_actions else None
 
         if response is not None:
-            print(response)
+            print(rest_of(response, "".join(streamed)))
             return response
 
         prompt = build_chat_prompt(text, attachments)
@@ -257,6 +264,33 @@ def respond_in_context(brain, text, attachments, use_actions, reading=None, noti
     except Exception as e:
         print(f"Error inesperado: {e}")
         return None
+
+
+def process_streaming(brain, text, on_chunk):
+    """brain.process con on_chunk para las acciones que lo usan (core/actions/explore.py)."""
+    if on_chunk is None:
+        return brain.process(text)
+
+    previous = getattr(brain, "action_stream", None)
+    brain.action_stream = on_chunk
+
+    try:
+        return brain.process(text)
+    finally:
+        brain.action_stream = previous
+
+
+def rest_of(response, streamed):
+    """Lo que falta por escribir: la respuesta entera, o lo que sigue a lo que ya salió a trozos
+    ("[Para la explicación completa: …]")."""
+    if not streamed:
+        return response
+
+    # Lo escrito a trozos no acaba en salto de línea: print lo pone tras lo que falte.
+    if response.startswith(streamed):
+        return response[len(streamed):]
+
+    return "\n" + response
 
 
 def prepare_message(brain, text, files=(), block=None, block_label=STDIN_LABEL, missing=None):

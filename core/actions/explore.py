@@ -91,7 +91,7 @@ class ExploreActions:
         else:
             prompt = prompts.summarize_file(file_path, content)
 
-        return self.provider_router.ask(prompt, max_tokens=limits["tokens"])
+        return self.ask_streaming(prompt, max_tokens=limits["tokens"])
 
     def handle_summarize_folder(self, text, params):
         folder_path = params.get("folder_path", ".")
@@ -266,7 +266,7 @@ class ExploreActions:
 
         # El ASIA.md de su fuente, si tiene (core/rag/instructions.py).
         prompt = with_project_notes(prompt, file_path, Library().all())
-        return self.provider_router.ask(prompt, max_tokens=limits["tokens"])
+        return self.ask_streaming(prompt, max_tokens=limits["tokens"])
 
     def voice_brief(self, text):
         """Con la voz activa, salvo "a fondo": 1 a 3 frases (sin voz, nada cambia).
@@ -276,8 +276,18 @@ class ExploreActions:
     def brief_answer(self, prompt, limits, more):
         """La respuesta corta y, solo en pantalla, cómo pedir la larga: entre corchetes,
         la lectura en voz alta se la salta (core/voice/speakable.py)."""
-        answer = self.provider_router.ask(prompt, max_tokens=limits.get("voice_tokens", limits["tokens"]))
+        answer = self.ask_streaming(prompt, max_tokens=limits.get("voice_tokens", limits["tokens"]))
         return f"{answer}\n\n[{more}]"
+
+    def ask_streaming(self, prompt, **options):
+        """ask con el on_chunk que dejó el launcher (action_stream, solo con voz): la respuesta
+        se escribe y se lee frase por frase mientras llega. Sin él, la llamada de siempre."""
+        on_chunk = getattr(self, "action_stream", None)
+
+        if on_chunk is not None:
+            options["on_chunk"] = on_chunk
+
+        return self.provider_router.ask(prompt, **options)
 
     def is_document(self, file_path):
         """True si no es código (.md, .txt, .json...): ver code_extensions en config."""
