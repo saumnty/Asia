@@ -121,6 +121,17 @@ def resolve_known_app(name: str, apps: dict) -> str | None:
     return None
 
 
+def is_alias(said: str, name: str) -> bool:
+    """True si lo dicho es el nombre con un error ("block de notas", "bloc notas" por
+    "bloc de notas"); False si es una parte del nombre ("look" en "Outlook") o el mismo."""
+    said, name = compact(said), compact(name)
+
+    if not said or said == name or said in name:
+        return False
+
+    return difflib.SequenceMatcher(None, said, name).ratio() >= OPEN_RATIO
+
+
 def close_app(name: str, apps: dict) -> str | None:
     scored = ratios(name, apps)
 

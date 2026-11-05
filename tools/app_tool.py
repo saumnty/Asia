@@ -7,7 +7,7 @@ from pathlib import Path
 
 from core.atomic_write import write_json_atomic
 from core.paths import APPS_FILE, APPS_LEARNED_NAME
-from tools.app_resolver import clarification, close_app, find_start_app, normalize, resolve_known_app
+from tools.app_resolver import clarification, close_app, find_start_app, is_alias, normalize, resolve_known_app
 
 
 # "explorer.exe shell:AppsFolder\<AppID>" (o solo "shell:AppsFolder\<AppID>").
@@ -43,7 +43,7 @@ class AppTool:
         # (apps_learned.json, en .gitignore): apps.json es del repositorio y
         # aprenderlas ahí lo dejaba con cambios sin commitear.
         self.learned_file = Path(learned_file) if learned_file else self.config_file.with_name(APPS_LEARNED_NAME)
-        # La app aproximada que espera un "sí" ("¿Abro Outlook? s/N"): (nombre, comando, clave que aprender).
+        # La app aproximada que espera un "sí" ("¿Abro Outlook? s/N"): (nombre, comando, claves que aprender).
         self.pending = None
 
     def load_apps(self):
@@ -92,10 +92,10 @@ class AppTool:
         return pending
 
     def open_pending(self, pending):
-        shown, command, learn = pending
+        shown, command, keys = pending
 
-        if learn:
-            self.learn(learn, command)
+        for key in keys:
+            self.learn(key, command)
 
         return self.start(shown, command)
 
@@ -140,16 +140,22 @@ class AppTool:
 
             # "look" está dentro de "Outlook": se pregunta, y si se confirma se aprende
             # "outlook", no "look" (abría Outlook al decir "el look de notas").
-            return self.ask(name, command, normalize(name))
+            return self.ask(name, command, [normalize(name), *self.alias(app_key, name)])
 
         close = close_app(app_name, apps)
 
         if close:
-            return self.ask(self.display_name(close, apps), apps[close], None)
+            return self.ask(self.display_name(close, apps), apps[close], self.alias(app_key, close))
 
         return clarification(app_name, apps)
 
-    def ask(self, shown, command, learn):
+    def ask(self, shown, command, keys):
         """Una coincidencia aproximada no se abre sin un "sí": "¿Abro Outlook? s/N"."""
-        self.pending = (shown, command, learn)
+        self.pending = (shown, command, keys)
         return f"¿Abro {shown}? s/N"
+
+    @staticmethod
+    def alias(said, name):
+        """[said] si, confirmado, vale como otro nombre de la app: un error de Whisper que
+        se repite ("block de notas") pregunta una sola vez. Una parte del nombre, no."""
+        return [said] if is_alias(said, name) else []

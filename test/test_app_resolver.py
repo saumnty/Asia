@@ -7,7 +7,7 @@ import pytest
 import tools.app_resolver as app_tool_resolver
 import tools.app_tool as app_tool
 from core.paths import APPS_FILE
-from tools.app_resolver import clarification, close_app, normalize, resolve_known_app, suggestions
+from tools.app_resolver import clarification, close_app, is_alias, normalize, resolve_known_app, suggestions
 from tools.app_tool import AppTool
 
 # Lista con las mismas claves que config/apps.json (no se lee ni se modifica
@@ -265,3 +265,42 @@ def test_apps_learned_en_gitignore():
     from core.paths import PROJECT_ROOT
 
     assert "config/apps_learned.json" in (PROJECT_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+
+# --- Lo dicho, confirmado, como alias ----------------------------------------------
+
+@pytest.mark.parametrize("said", ["block de notas", "bloc notas"])
+def test_un_nombre_casi_igual_confirmado_queda_de_alias(tool, said):
+    assert tool.open_app(said) == "¿Abro bloc de notas? s/N"
+    tool.open_pending(tool.take_pending())
+
+    assert tool.load_learned() == {said: "notepad"}
+    # El mismo error de Whisper otra vez: ya no pregunta.
+    assert tool.open_app(said) == "Abriendo bloc de notas."
+    assert tool.launched == ["notepad", "notepad"]
+
+
+def test_una_parte_del_nombre_no_queda_de_alias(tool):
+    tool.start_menu["look"] = OUTLOOK
+
+    tool.open_app("look")
+    tool.open_pending(tool.take_pending())
+
+    assert "look" not in tool.load_learned()
+    # Vuelve a preguntar: "look" no es Outlook.
+    assert tool.open_app("look") == "¿Abro Outlook? s/N"
+
+
+def test_un_nombre_del_menu_inicio_casi_igual_queda_de_alias(tool):
+    tool.start_menu["outlok"] = OUTLOOK
+
+    assert tool.open_app("outlok") == "¿Abro Outlook? s/N"
+    tool.open_pending(tool.take_pending())
+
+    assert set(tool.load_learned()) == {"outlook", "outlok"}
+
+
+def test_is_alias():
+    assert is_alias("block de notas", "bloc de notas") and is_alias("bloc notas", "bloc de notas")
+    assert not is_alias("look", "Outlook") and not is_alias("notas", "bloc de notas")
+    assert not is_alias("bloc de notas", "Bloc de Notas") and not is_alias("excel", "bloc de notas")
