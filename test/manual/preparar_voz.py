@@ -172,14 +172,15 @@ def phrases_of(audio16, segments=silero_segments, probabilities=silero_probabili
 # --- Whisper -------------------------------------------------------------------------
 
 class WhisperTranscriber:
-    """faster-whisper small en CPU int8, sin el vocabulario de Asia."""
+    """faster-whisper (small por defecto) en CPU int8, sin el vocabulario de Asia.
+    model: el nombre de data/models/faster-whisper-<model> ("large-v3-turbo")."""
 
-    def __init__(self):
+    def __init__(self, model="small"):
         from config.settings_manager import SettingsManager
         from core.voice import voice_settings
         from core.voice.stt import FasterWhisperSTT
 
-        config = {**voice_settings(SettingsManager()), "stt_model": "small", "stt_compute_type": "int8"}
+        config = {**voice_settings(SettingsManager()), "stt_model": model, "stt_compute_type": "int8"}
         self.model = FasterWhisperSTT(config).load()
 
     def __call__(self, audio16):
