@@ -218,8 +218,6 @@ class ProviderRouter:
         externo solo va lo exportable de ese contexto de fondo.
         """
         typed = history_prompt or prompt
-        # Con el núcleo afectivo activo (core/afecto), el turno es "emocional": no sale nunca.
-        tone = self.affect_tone(typed)
         note = memory_note(relevant_memory(typed, self.memory.load()))
         project_context = self.build_project_context()
         system_prompt = f"""{SYSTEM_PROMPT}
@@ -232,6 +230,9 @@ Contexto del proyecto:
 
         model = self.sticky_model.choose(prompt, self.settings)
         options = {"model": model, "think": thinks(self.settings, self.sticky_model.domain)}
+        # Con el núcleo afectivo activo (core/afecto), el turno es "emocional": no sale nunca.
+        # Se estima con el modelo que va a responder: con el 7B no se recarga qwen3.
+        tone = self.affect_tone(typed, self.sticky_model.domain)
         max_tokens = self.chat_max_tokens(typed, options["think"])
 
         # Con la regla solo en el prompt de sistema, el 7B la ignoraba (350
@@ -312,10 +313,11 @@ Contexto del proyecto:
 
         return answer
 
-    def affect_tone(self, typed):
+    def affect_tone(self, typed, domain="general"):
         """La instrucción de tono del núcleo afectivo; None si está apagado ("" si no hace falta).
 
-        La estimación (qwen3) va con la etiqueta "emocional" en la petición: se responde en local.
+        La estimación (con el modelo del chat) va con la etiqueta "emocional" en la petición:
+        se responde en local.
         """
         from core.afecto import AffectCore, affect_enabled
 
@@ -326,7 +328,7 @@ Contexto del proyecto:
 
         try:
             core = AffectCore(self.settings)
-            return core.instruction(core.observe(typed, self.ask))
+            return core.instruction(core.observe(typed, self.ask, domain))
         except Exception:
             # Sin estimación, el tono de siempre; el turno sigue siendo local.
             return ""

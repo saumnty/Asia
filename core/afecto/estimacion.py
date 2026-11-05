@@ -44,6 +44,12 @@ def parse_estimate(answer: str) -> Estimate:
     )
 
 
-def estimate(text: str, ask) -> Estimate:
-    """ask: ProviderRouter.ask, con el modelo de charla (qwen3)."""
-    return parse_estimate(ask(estimate_prompt(text), domain="general", max_tokens=ESTIMATE_TOKENS))
+# Los dominios con los que se estima: el de la charla (qwen3) o el de código (el 7B).
+# Con otro (matemáticas, que razona), la charla.
+ESTIMATE_DOMAINS = ("general", "code")
+
+
+def estimate(text: str, ask, domain="general") -> Estimate:
+    """ask: ProviderRouter.ask. domain: el del modelo que va a responder, para no cambiar de modelo."""
+    domain = domain if domain in ESTIMATE_DOMAINS else "general"
+    return parse_estimate(ask(estimate_prompt(text), domain=domain, max_tokens=ESTIMATE_TOKENS))

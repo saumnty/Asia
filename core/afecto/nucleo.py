@@ -62,9 +62,9 @@ class AffectCore:
         self.path.unlink()
         return True
 
-    def observe(self, text: str, ask) -> State:
-        """Estima el mensaje y lo suaviza con el estado anterior; lo guarda."""
-        state = smoothed(self.state(), estimate(text, ask), self.now(), self.half_life())
+    def observe(self, text: str, ask, domain="general") -> State:
+        """Estima el mensaje (con el modelo de domain) y lo suaviza con el estado anterior; lo guarda."""
+        state = smoothed(self.state(), estimate(text, ask, domain), self.now(), self.half_life())
         self.save(state)
         return state
 

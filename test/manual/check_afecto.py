@@ -8,6 +8,10 @@ estimación (lo que añade a cada mensaje del chat). Con seed fijo y temperatura
 
     .venv\\Scripts\\python.exe test\\manual\\check_afecto.py
     .venv\\Scripts\\python.exe test\\manual\\check_afecto.py --guardar resultado.json
+
+--calibracion mide el conjunto de calibración (CALIBRATION, otros 20 mensajes):
+el prompt se ajusta solo con ese, y CASES queda para medir. --dominio code estima
+con el 7B, como cuando el chat responde con él.
 """
 import argparse
 import json
@@ -55,17 +59,41 @@ CASES = [
     (NEUTRAL, "cómo se declara una lista en Python"),
     (NEUTRAL, "a qué hora abre la biblioteca"),
 ]
+# Para ajustar el prompt; distintos de CASES, que no se tocan. Más de agradable y calmado,
+# la zona que fallaba (2/6 en la primera medición).
+CALIBRATION = [
+    (CALM, "Pasé la tarde sin pendientes, con música suave."),
+    (CALM, "Me tomé un té y estoy relajado."),
+    (CALM, "Qué bien se siente no tener prisa hoy."),
+    (CALM, "Terminé el día sereno, todo en orden."),
+    (CALM, "Estoy cómodo en el sofá viendo llover."),
+    (CALM, "Fue una caminata lenta y agradable por el parque."),
+    (CALM, "Me siento descansado después de dormir bien."),
+    (CALM, "Hoy cociné con calma y salió rico."),
+    (TENSE, "¡Se me borró la tesis y no tengo respaldo!"),
+    (TENSE, "Estoy desesperado, el cliente llama cada cinco minutos."),
+    (TENSE, "Me tiemblan las manos, la presentación es en diez minutos."),
+    (LOW, "No dormí bien y me siento apagado."),
+    (LOW, "Extraño a mi abuela, hoy estoy bajoneado."),
+    (LOW, "Ya no me motiva nada del trabajo."),
+    (LIVELY, "¡Acabo de terminar mi primer maratón!"),
+    (LIVELY, "¡Hoy conocí a mi ídolo, no paro de sonreír!"),
+    (LIVELY, "¡Por fin compilé el firmware y el motor gira!"),
+    (NEUTRAL, "lista los archivos de esta carpeta"),
+    (NEUTRAL, "cuál es la capital de Perú"),
+    (NEUTRAL, "traduce hello al español"),
+]
 ZONES = [TENSE, LOW, LIVELY, CALM, NEUTRAL]
 
 
-def measure(ask, folder):
+def measure(ask, folder, cases=CASES, domain="general"):
     rows = []
 
-    for i, (expected, text) in enumerate(CASES):
+    for i, (expected, text) in enumerate(cases):
         # Cada mensaje solo: sin el estado del anterior.
         core = AffectCore(SettingsManager(), path=folder / f"estado_{i}.json")
         start = time.perf_counter()
-        state = core.observe(text, ask)
+        state = core.observe(text, ask, domain)
         seconds = time.perf_counter() - start
         found = zone(state)
         rows.append({
@@ -98,6 +126,9 @@ def report(rows):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--guardar", type=Path, help="JSON con cada mensaje y su estimación")
+    parser.add_argument("--calibracion", action="store_true", help="el conjunto de calibración, no el de medir")
+    parser.add_argument("--dominio", default="general", choices=("general", "code"),
+                        help="modelo de la estimación: qwen3 (general) o el 7B (code)")
     args = parser.parse_args()
     make_repeatable()
 
@@ -106,7 +137,7 @@ def main():
     router = ProviderRouter()
 
     with tempfile.TemporaryDirectory(prefix="asia_afecto_") as folder:
-        rows = measure(router.ask, Path(folder))
+        rows = measure(router.ask, Path(folder), CALIBRATION if args.calibracion else CASES, args.dominio)
 
     report(rows)
 

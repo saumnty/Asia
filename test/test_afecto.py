@@ -238,3 +238,18 @@ def test_los_comandos_con_barra(affect_brain):
     assert "desactivado" in affect_brain.process("/afecto off") and not affect_enabled(SettingsManager())
     assert "activado" in affect_brain.process("/afecto on") and affect_enabled(SettingsManager())
     assert "No había" in affect_brain.process("/afecto borrar")
+
+
+def test_con_el_7b_estima_con_el_7b_sin_recargar_qwen3(affect_brain):
+    from core.model_selection import model_for
+
+    ollama = affect_brain.provider_router.providers["ollama"]
+    models = []
+    complete = ollama.complete
+    ollama.complete = lambda messages, **options: models.append(options.get("model")) or complete(messages, **options)
+    SettingsManager.set_overrides({**SettingsManager.overrides, "forced_domain": "code"})
+
+    launcher.respond(affect_brain, "ya van tres horas con este error y nada funciona")
+
+    # La estimación y la respuesta, con el mismo modelo: el de código.
+    assert models == [model_for(SettingsManager(), "code")] * 2
