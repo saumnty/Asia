@@ -240,16 +240,36 @@ def test_los_comandos_con_barra(affect_brain):
     assert "No había" in affect_brain.process("/afecto borrar")
 
 
-def test_con_el_7b_estima_con_el_7b_sin_recargar_qwen3(affect_brain):
-    from core.model_selection import model_for
-
-    ollama = affect_brain.provider_router.providers["ollama"]
+def recording_models(brain):
+    ollama = brain.provider_router.providers["ollama"]
     models = []
     complete = ollama.complete
     ollama.complete = lambda messages, **options: models.append(options.get("model")) or complete(messages, **options)
+    return models
+
+
+def test_con_el_7b_no_estima_y_usa_el_ultimo_estado(affect_brain):
+    from core.model_selection import model_for
+
+    # En la charla (qwen3) se estima: frustrado.
+    launcher.respond(affect_brain, "ya van tres horas con este error y nada funciona")
+    models = recording_models(affect_brain)
     SettingsManager.set_overrides({**SettingsManager.overrides, "forced_domain": "code"})
 
-    launcher.respond(affect_brain, "ya van tres horas con este error y nada funciona")
+    launcher.respond(affect_brain, "arregla la función dividir de calc.py")
 
-    # La estimación y la respuesta, con el mismo modelo: el de código.
-    assert models == [model_for(SettingsManager(), "code")] * 2
+    # Solo la respuesta, con el 7B: sin estimar ni recargar qwen3; el tono sale del estado anterior.
+    assert models == [model_for(SettingsManager(), "code")]
+    assert "valida primero" in affect_brain.provider_router.providers["ollama"].received[-1][-1]["content"]
+
+
+def test_el_ultimo_estado_se_desvanece(tmp_path):
+    core = core_at(tmp_path)
+    core.observe("estoy harto", fake_ask(answer(-0.7, 0.6)))
+    core.now = lambda: NOW + timedelta(hours=6)
+
+    state = core.recent()
+
+    # Dos vidas medias: la confianza a un cuarto, y con ella el estilo pasa a preguntar.
+    assert state.confidence == pytest.approx(0.2) and style(state) == ASK
+    assert core.state().confidence == 0.8

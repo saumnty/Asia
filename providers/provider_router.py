@@ -231,7 +231,7 @@ Contexto del proyecto:
         model = self.sticky_model.choose(prompt, self.settings)
         options = {"model": model, "think": thinks(self.settings, self.sticky_model.domain)}
         # Con el núcleo afectivo activo (core/afecto), el turno es "emocional": no sale nunca.
-        # Se estima con el modelo que va a responder: con el 7B no se recarga qwen3.
+        # Solo la charla (qwen3) estima; con el 7B vale el último estado, sin recargar qwen3.
         tone = self.affect_tone(typed, self.sticky_model.domain)
         max_tokens = self.chat_max_tokens(typed, options["think"])
 
@@ -316,8 +316,9 @@ Contexto del proyecto:
     def affect_tone(self, typed, domain="general"):
         """La instrucción de tono del núcleo afectivo; None si está apagado ("" si no hace falta).
 
-        La estimación (con el modelo del chat) va con la etiqueta "emocional" en la petición:
-        se responde en local.
+        En la charla (dominio general, qwen3) se estima el mensaje. Si responde otro modelo
+        (código: el 7B; matemáticas), no se estima: vale el último estado, desvanecido. El
+        turno va con la etiqueta "emocional" en la petición: se responde en local.
         """
         from core.afecto import AffectCore, affect_enabled
 
@@ -328,7 +329,8 @@ Contexto del proyecto:
 
         try:
             core = AffectCore(self.settings)
-            return core.instruction(core.observe(typed, self.ask, domain))
+            state = core.observe(typed, self.ask) if domain in (None, "general") else core.recent()
+            return core.instruction(state)
         except Exception:
             # Sin estimación, el tono de siempre; el turno sigue siendo local.
             return ""

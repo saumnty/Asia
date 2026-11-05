@@ -9,6 +9,8 @@ Interfaz (lo que usa el resto de Asia; otro núcleo puede cumplirla igual):
 - AffectCore.observe(texto, ask) -> State: estima el mensaje con el modelo
   local (ask de ProviderRouter, dominio "general": qwen3) y lo suaviza con el
   estado anterior, que se desvanece con las horas.
+- AffectCore.recent() -> State: el último estado, desvanecido, sin llamar al modelo
+  (cuando responde el 7B: estimar con qwen3 lo recargaría y con el 7B tarda 8 s).
 - AffectCore.instruction(state) -> str: la instrucción de tono para el final
   del prompt del chat ("" si no hace falta), según policy.py.
 - AffectCore.correct(texto, ask), state(), clear(): la corrección del usuario

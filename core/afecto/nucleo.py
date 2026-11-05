@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 
 from core import paths
-from core.afecto.estado import Estimate, State, smoothed
+from core.afecto.estado import Estimate, State, faded, smoothed
 from core.afecto.estimacion import estimate
 from core.afecto.politica import instruction, style, zone
 from core.atomic_write import write_json_atomic
@@ -67,6 +67,10 @@ class AffectCore:
         state = smoothed(self.state(), estimate(text, ask, domain), self.now(), self.half_life())
         self.save(state)
         return state
+
+    def recent(self) -> State:
+        """El último estado, desvanecido hasta ahora, sin estimar el mensaje (no llama al modelo)."""
+        return faded(self.state(), self.now(), self.half_life())
 
     def correct(self, text: str, ask) -> State:
         """El estado que dice el usuario, sin suavizar: reemplaza la estimación."""
