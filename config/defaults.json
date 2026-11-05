@@ -75,7 +75,7 @@
         "stt_beam_size": 5,
         "stt_vocabulary_prompt": true,
         "stt_vocabulary": ["Asia", "ROADMAP", "ROADMAP.md", "Bolitabot", "bloc de notas", "proyecto activo",
-                           "Ollama", "Gemini", "Whisper", "Piper", "pytest"],
+                           "Ollama", "Gemini", "Whisper", "Piper", "pytest", "ROS 2", "TCP", "UDP", "grafo bipartito"],
         "stt_hallucinations": ["Subtítulos por la comunidad de Amara.org", "Subtítulos realizados por la comunidad de Amara.org",
                                "Subtitulado por la comunidad de Amara.org", "Gracias por ver el video", "Gracias por ver",
                                "Gracias por su atención", "Suscríbete", "Suscríbete al canal", "No olvides suscribirte",

@@ -103,3 +103,19 @@ def test_asia_esta_en_el_vocabulario_por_defecto(tmp_path):
 
     assert "Asia" in voice["stt_vocabulary"]
     assert "Asia" in build_prompt(FakeSettings(), config(stt_vocabulary=voice["stt_vocabulary"]), apps_file, projects_dir)
+
+
+def test_las_palabras_tecnicas_caben_con_las_apps_reales(tmp_path):
+    from config.settings_manager import read_json
+    from core.paths import APPS_FILE, DEFAULTS_FILE
+
+    words = read_json(DEFAULTS_FILE)["voice"]["stt_vocabulary"]
+    # Las apps de config/apps.json (solo se leen) y una aprendida, como en el equipo.
+    apps_file, projects_dir = data(tmp_path, apps=read_json(APPS_FILE), learned={"outlook": "x"}, projects=["asia"])
+
+    prompt = build_prompt(FakeSettings(), config(stt_vocabulary=words), apps_file, projects_dir)
+
+    assert {"ROS 2", "TCP", "UDP", "grafo bipartito"} <= set(words)
+    # Si no caben, se recortan los verbos: las palabras van enteras.
+    assert len(prompt) <= MAX_CHARS and prompt.endswith(f"Palabras: {', '.join(words)}.")
+    assert prompt.startswith("Órdenes para Asia: abre, muestra")
