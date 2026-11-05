@@ -35,3 +35,5 @@ data/biblioteca/
 # Wikipedia offline: el .zim pesa gigas; la caché se rehace sola.
 data/zim/
 data/wikipedia/
+# Intentos de check_wake --guardar-audio (fase J3): la voz del usuario, no sale del equipo.
+data/wake/

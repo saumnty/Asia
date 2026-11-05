@@ -1,10 +1,57 @@
 """check_wake (fase J3): las partes que no necesitan micrófono ni openWakeWord."""
+import queue
 import sys
+import wave
+from contextlib import contextmanager
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent / "manual"))
 
 import check_wake  # noqa: E402
+from core.voice.wake import CHUNK, Chunker  # noqa: E402
+
+
+class LoudModel:
+    """Puntúa cada tramo por su volumen: 0,9 si es fuerte. Cuenta los reset."""
+
+    def __init__(self):
+        self.resets = 0
+        self.seen = 0
+
+    def reset(self):
+        self.resets += 1
+
+    def predict(self, chunk):
+        self.seen += 1
+        return {"hey_jarvis_v0.1": 0.9 if np.abs(chunk).max() > 16000 else 0.05}
+
+
+class Stream:
+    """Como FrameReader: tramos de 512 en una cola; se puede iterar varias veces."""
+
+    def __init__(self, frames):
+        self.frames = queue.Queue()
+
+        for frame in frames:
+            self.frames.put(frame)
+
+    def __iter__(self):
+        while not self.frames.empty():
+            yield self.frames.get()
+
+
+class Microphone:
+    def __init__(self, frames):
+        self.stream = Stream(frames)
+        self.opened = 0
+
+    @contextmanager
+    def open(self):
+        self.opened += 1
+        yield self.stream
 
 
 def test_falsas_por_hora():
@@ -24,3 +71,123 @@ def test_si_falta_algo_lo_dice(monkeypatch, capsys):
 
     assert check_wake.main() == 2
     assert "Falta openwakeword" in capsys.readouterr().out
+
+
+def frames(seconds, value=0.0):
+    return [np.full(512, value, dtype=np.float32) for _ in range(round(seconds * 16000 / 512))]
+
+
+def test_take_no_pierde_muestras_entre_el_calentamiento_y_la_ventana():
+    stream, chunker = Stream(frames(3.0, 0.1)), Chunker()
+
+    warmup = list(check_wake.take(stream, chunker, 2.0))
+    window = list(check_wake.take(stream, chunker, 0.5))
+
+    assert len(warmup) == 25 and len(window) == 6
+    assert all(len(chunk) == CHUNK for chunk in warmup + window)
+    # 94 tramos de 512 en la cola: lo que no se pidió sigue en la cola o en chunker.
+    left = stream.frames.qsize() * 512 + len(chunker.pending)
+    assert 31 * CHUNK + left == 94 * 512
+
+
+def test_el_calentamiento_no_cuenta_aunque_puntue_alto():
+    model = LoudModel()
+    loud = [np.full(CHUNK, 20000, dtype=np.int16)] * 25
+    quiet = [np.full(CHUNK, 100, dtype=np.int16)] * 75
+
+    row, heard = check_wake.run_trial(model, loud, quiet, 0.5)
+
+    assert row["activó"] is False and row["puntuación máxima"] == 0.05
+    assert model.resets == 1 and model.seen == 100 and len(heard) == 100
+
+
+def test_activa_en_la_ventana_y_da_los_niveles():
+    quiet = [np.zeros(CHUNK, dtype=np.int16)] * 25
+    window = [np.full(CHUNK, 100, dtype=np.int16)] * 70 + [np.full(CHUNK, 32767 // 2, dtype=np.int16)] * 5
+
+    row, _ = check_wake.run_trial(LoudModel(), quiet, window, 0.5)
+
+    assert row["activó"] is True and row["puntuación máxima"] == 0.9
+    assert row["pico_dbfs"] == -6.0 and row["rms_calentamiento_dbfs"] == check_wake.SILENCE_DBFS
+
+
+def test_niveles_en_dbfs():
+    assert check_wake.levels([np.full(CHUNK, 32767, dtype=np.int16)]) == (0.0, 0.0)
+    assert check_wake.levels([np.zeros(CHUNK, dtype=np.int16)]) == (-120.0, -120.0)
+    assert check_wake.levels([]) == (-120.0, -120.0)
+
+
+def test_drain_tira_lo_que_llego_mientras_esperaba():
+    stream = Stream(frames(1.0))
+
+    check_wake.drain(stream)
+
+    assert stream.frames.empty()
+
+
+def test_un_microfono_para_toda_la_prueba_y_guarda_cada_intento(tmp_path, monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")
+    microphone = Microphone([])
+    model = LoudModel()
+
+    # Cada intento: Enter (drain tira lo viejo), y luego 2 s de calentamiento y 6 s de ventana.
+    def refill(stream):
+        while not stream.frames.empty():
+            stream.frames.get()
+
+        for frame in frames(2.0) + frames(1.0) + frames(1.0, 0.9) + frames(4.5):
+            stream.frames.put(frame)
+
+    monkeypatch.setattr(check_wake, "drain", refill)
+    result = check_wake.hits(model, 2, 0.5, tmp_path, microphone)
+
+    assert microphone.opened == 1 and model.resets == 2
+    assert result["aciertos"] == 2 and [row["intento"] for row in result["filas"]] == [1, 2]
+    assert [path.name for path in check_wake.trial_files(tmp_path)] == ["intento_01.wav", "intento_02.wav"]
+
+    with wave.open(str(tmp_path / "intento_01.wav"), "rb") as saved:
+        assert (saved.getframerate(), saved.getnchannels(), saved.getsampwidth()) == (16000, 1, 2)
+        assert saved.getnframes() == 100 * CHUNK
+
+
+def test_repuntuar_lo_guardado_sin_microfono(tmp_path, capsys):
+    quiet = [np.full(CHUNK, 100, dtype=np.int16)]
+    check_wake.save_wav(tmp_path / "intento_01.wav", quiet * 100)
+    check_wake.save_wav(tmp_path / "intento_02.wav", quiet * 60 + [np.full(CHUNK, 20000, dtype=np.int16)] * 5 + quiet * 35)
+    # El volumen alto en el calentamiento no cuenta.
+    check_wake.save_wav(tmp_path / "intento_03.wav", [np.full(CHUNK, 20000, dtype=np.int16)] * 25 + quiet * 75)
+
+    result = check_wake.rescore(LoudModel(), tmp_path, 0.5)
+
+    assert [row["activó"] for row in result["filas"]] == [False, True, False] and result["aciertos"] == 1
+    assert "intento_02.wav: sí" in capsys.readouterr().out
+
+
+def test_repuntuar_rechaza_otro_formato(tmp_path):
+    with wave.open(str(tmp_path / "intento_01.wav"), "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(44100)
+        out.writeframes(b"\0\0" * 100)
+
+    with pytest.raises(ValueError, match="16000 Hz"):
+        check_wake.read_wav(tmp_path / "intento_01.wav")
+
+
+def test_no_pisa_una_grabacion_anterior(tmp_path, monkeypatch, capsys):
+    check_wake.save_wav(tmp_path / "intento_01.wav", [np.zeros(CHUNK, dtype=np.int16)])
+    monkeypatch.setattr(sys, "argv", ["check_wake.py", "--aciertos", "1", "--guardar-audio", str(tmp_path)])
+
+    with pytest.raises(SystemExit):
+        check_wake.main()
+
+    assert "ya hay intentos guardados" in capsys.readouterr().err
+
+
+def test_repuntuar_sin_wav_lo_dice(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["check_wake.py", "--repuntuar", str(tmp_path)])
+
+    with pytest.raises(SystemExit):
+        check_wake.main()
+
+    assert "no hay intento_*.wav" in capsys.readouterr().err
