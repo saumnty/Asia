@@ -37,17 +37,20 @@ def find_start_app(app_name: str):
         apps = [apps]
 
     query = app_name.lower().strip()
+    apps = [app for app in apps if isinstance(app, dict)]
 
-    for app in apps:
+    # El nombre exacto antes que uno que solo lo contiene ("word" no es "WordPad").
+    exact = [app for app in apps if normalize(app.get("Name", "")) == normalize(query)]
+    containing = [app for app in apps if query in app.get("Name", "").lower()]
+
+    for app in exact + containing:
         name = app.get("Name", "")
         app_id = app.get("AppID", "")
-
-        if query in name.lower():
-            return {
-                "name": name,
-                "appid": app_id,
-                "command": f'explorer.exe shell:AppsFolder\\{app_id}'
-            }
+        return {
+            "name": name,
+            "appid": app_id,
+            "command": f'explorer.exe shell:AppsFolder\\{app_id}'
+        }
 
     return None
 

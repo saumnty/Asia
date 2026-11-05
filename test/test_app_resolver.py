@@ -1,8 +1,10 @@
 import hashlib
 import json
+from types import SimpleNamespace
 
 import pytest
 
+import tools.app_resolver as app_tool_resolver
 import tools.app_tool as app_tool
 from core.paths import APPS_FILE
 from tools.app_resolver import clarification, close_app, normalize, resolve_known_app, suggestions
@@ -46,6 +48,10 @@ def tool(tmp_path, monkeypatch):
         assert hashlib.sha256(APPS_FILE.read_bytes()).hexdigest() == real_hash
 
 
+SHOWN = {"notepad": "bloc de notas", "calc": "calculadora", "chrome": "chrome", "code": "vscode",
+         APPS["spotify"]: "spotify", APPS["whatsapp"]: "whatsapp"}
+
+
 @pytest.mark.parametrize(
     "name, command",
     [
@@ -53,6 +59,21 @@ def tool(tmp_path, monkeypatch):
         ("notebook", "notepad"),
         ("blocknote", "notepad"),
         ("Bloc de Notas", "notepad"),
+        ("notepad", "notepad"),
+        ("calculator", "calc"),
+        ("google", "chrome"),
+        ("editor", "code"),
+    ],
+)
+def test_exacta_o_variante_conocida_abre_y_dice_el_nombre(tool, name, command):
+    # "Abriendo notepad." no decía qué app es: se dice el primer nombre de apps.json para ese comando.
+    assert tool.open_app(name) == f"Abriendo {SHOWN[command]}."
+    assert tool.launched == [command]
+
+
+@pytest.mark.parametrize(
+    "name, command",
+    [
         ("block de notas", "notepad"),
         ("bloc notas", "notepad"),
         ("blocdenotas", "notepad"),
@@ -63,12 +84,12 @@ def tool(tmp_path, monkeypatch):
         ("vs code", "code"),
     ],
 )
-def test_variantes_cercanas_abren_la_app_correcta(tool, name, command):
-    # Se dice qué app se abre, no lo que escribió o dedujo el IntentEngine ("blocknote").
-    shown = {"notepad": "bloc de notas", "calc": "calculadora", "chrome": "chrome", "code": "vscode",
-             APPS["spotify"]: "spotify", APPS["whatsapp"]: "whatsapp"}[command]
-    assert tool.open_app(name) == f"Abriendo {shown}."
-    assert tool.launched == [command]
+def test_un_nombre_parecido_pregunta_antes_de_abrir(tool, name, command):
+    assert tool.open_app(name) == f"¿Abro {SHOWN[command]}? s/N"
+    assert tool.launched == []
+
+    assert tool.open_pending(tool.take_pending()) == f"Abriendo {SHOWN[command]}."
+    assert tool.launched == [command] and tool.take_pending() is None
 
 
 def test_variante_aproximada_no_escribe_apps_json(tool):
@@ -165,7 +186,79 @@ def test_apps_learned_roto_o_ausente(tool):
     tool.learned_file.write_text("{ no es json", encoding="utf-8")
 
     assert tool.load_learned() == {}
-    assert tool.open_app("crome") == "Abriendo chrome."
+    assert tool.open_app("chrome") == "Abriendo chrome."
+
+
+# --- Menú Inicio: exacto o solo contenido ("look" en "Outlook") -----------------
+
+OUTLOOK = {"name": "Outlook", "appid": "Microsoft.OutlookForWindows!App"}
+
+
+def test_contenido_en_el_nombre_del_menu_inicio_pregunta_y_no_aprende(tool):
+    # Caso real: "abra el look de notas" -> app_name "look" -> abrió Outlook y aprendió "look".
+    tool.start_menu["look"] = OUTLOOK
+
+    assert tool.open_app("look") == "¿Abro Outlook? s/N"
+    assert tool.launched == [] and tool.load_learned() == {}
+
+    assert tool.open_pending(tool.take_pending()) == "Abriendo Outlook."
+    # Con el sí, se aprende el nombre de la app, no la palabra suelta.
+    assert tool.load_learned() == {"outlook": "explorer.exe shell:AppsFolder\\Microsoft.OutlookForWindows!App"}
+
+
+def test_nombre_exacto_del_menu_inicio_abre_y_aprende(tool):
+    tool.start_menu["outlook"] = OUTLOOK
+
+    assert tool.open_app("outlook") == "Abriendo Outlook."
+    assert list(tool.load_learned()) == ["outlook"]
+
+
+def test_find_start_app_prefiere_el_nombre_exacto(monkeypatch):
+    menu = [{"Name": "WordPad", "AppID": "wordpad"}, {"Name": "Word", "AppID": "word"}]
+    monkeypatch.setattr(app_tool_resolver, "get_start_apps", lambda: json.dumps(menu))
+
+    assert app_tool_resolver.find_start_app("word")["appid"] == "word"
+    assert app_tool_resolver.find_start_app("wordp")["appid"] == "wordpad"
+
+
+# --- La confirmación en el Brain, escrita o dicha ---------------------------------
+
+def brain_with(tool):
+    from test_confidencial import make_brain
+
+    brain = make_brain()
+    brain.tool_registry = SimpleNamespace(app_tool=tool, execute=lambda action, **params: tool.open_app(**params))
+    return brain
+
+
+@pytest.mark.parametrize("yes", ["s", "sí", "Sí.", "Sí, ábrelo.", "dale"])
+def test_con_un_si_abre_lo_que_pregunto(tool, yes):
+    tool.start_menu["look"] = OUTLOOK
+    brain = brain_with(tool)
+
+    assert brain.process("abre look") == "¿Abro Outlook? s/N"
+    # "Sí." es lo que escribe Whisper: con voz se confirma igual.
+    assert brain.process(yes) == "Abriendo Outlook."
+    assert tool.launched == ["explorer.exe shell:AppsFolder\\Microsoft.OutlookForWindows!App"]
+
+
+@pytest.mark.parametrize("no", ["n", "no", "No."])
+def test_con_un_no_no_abre_nada(tool, no):
+    brain = brain_with(tool)
+
+    assert brain.process("abre crome") == "¿Abro chrome? s/N"
+    assert brain.process(no) == "Vale, no abro chrome."
+    assert tool.launched == []
+
+
+def test_la_pregunta_vale_solo_para_el_mensaje_siguiente(tool):
+    brain = brain_with(tool)
+
+    brain.process("abre crome")
+    brain.process("cuéntame un chiste")
+    brain.process("sí")
+
+    assert tool.launched == []
 
 
 def test_apps_learned_en_gitignore():

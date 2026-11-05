@@ -7,7 +7,7 @@ from pathlib import Path
 
 from core.atomic_write import write_json_atomic
 from core.paths import APPS_FILE, APPS_LEARNED_NAME
-from tools.app_resolver import clarification, close_app, find_start_app, resolve_known_app
+from tools.app_resolver import clarification, close_app, find_start_app, normalize, resolve_known_app
 
 
 # "explorer.exe shell:AppsFolder\<AppID>" (o solo "shell:AppsFolder\<AppID>").
@@ -43,6 +43,8 @@ class AppTool:
         # (apps_learned.json, en .gitignore): apps.json es del repositorio y
         # aprenderlas ahí lo dejaba con cambios sin commitear.
         self.learned_file = Path(learned_file) if learned_file else self.config_file.with_name(APPS_LEARNED_NAME)
+        # La app aproximada que espera un "sí" ("¿Abro Outlook? s/N"): (nombre, comando, clave que aprender).
+        self.pending = None
 
     def load_apps(self):
         if not self.config_file.exists():
@@ -77,6 +79,33 @@ class AppTool:
         """apps.json y las aprendidas; si una clave está en los dos, gana apps.json."""
         return {**self.load_learned(), **self.load_apps()}
 
+    def display_name(self, key, apps):
+        """El primer nombre con que apps.json (y luego lo aprendido) abre ese comando:
+        "notepad" se dice "bloc de notas", que va antes en apps.json."""
+        command = apps.get(key)
+        names = [*self.load_apps(), *self.load_learned()]
+        return next((name for name in names if apps.get(name) == command), key)
+
+    def take_pending(self):
+        """La app que esperaba confirmación; se olvida en el mensaje siguiente, diga lo que diga."""
+        pending, self.pending = self.pending, None
+        return pending
+
+    def open_pending(self, pending):
+        shown, command, learn = pending
+
+        if learn:
+            self.learn(learn, command)
+
+        return self.start(shown, command)
+
+    def start(self, shown, command):
+        try:
+            launch(command)
+            return f"Abriendo {shown}."
+        except Exception as e:
+            return f"No pude abrir {shown}. Error: {e}"
+
     def open_app(self, app_name: str):
         """Abre una app de apps.json o del menú Inicio (Get-StartApps).
 
@@ -92,30 +121,35 @@ class AppTool:
         # Primero el nombre exacto o una variante conocida ("notebook"), luego
         # el menú Inicio y, al final, un nombre casi igual de apps.json: así
         # "notepad++", si está instalado, no se abre como "notepad".
+        self.pending = None
         known = resolve_known_app(app_name, apps)
-        command = apps.get(known) if known else None
-        # Lo que se abre de verdad: "Abriendo blocknote" no decía qué app era.
-        shown = known
 
-        if not command:
-            found = find_start_app(app_key)
+        # Exacta o variante conocida: se abre. Se dice qué app es ("bloc de notas", no "notepad").
+        if known:
+            return self.start(self.display_name(known, apps), apps[known])
 
-            if found:
-                command = f"explorer.exe shell:AppsFolder\\{found['appid']}"
-                apps[app_key] = command
+        found = find_start_app(app_key)
+
+        if found:
+            command = f"explorer.exe shell:AppsFolder\\{found['appid']}"
+            name = found.get("name") or app_name
+
+            if normalize(name) == normalize(app_name):
                 self.learn(app_key, command)
-                shown = found.get("name") or app_name
+                return self.start(name, command)
 
-        if not command:
-            close = close_app(app_name, apps)
-            command = apps.get(close) if close else None
-            shown = close
+            # "look" está dentro de "Outlook": se pregunta, y si se confirma se aprende
+            # "outlook", no "look" (abría Outlook al decir "el look de notas").
+            return self.ask(name, command, normalize(name))
 
-        if not command:
-            return clarification(app_name, apps)
+        close = close_app(app_name, apps)
 
-        try:
-            launch(command)
-            return f"Abriendo {shown or app_name}."
-        except Exception as e:
-            return f"No pude abrir {app_name}. Error: {e}"
+        if close:
+            return self.ask(self.display_name(close, apps), apps[close], None)
+
+        return clarification(app_name, apps)
+
+    def ask(self, shown, command, learn):
+        """Una coincidencia aproximada no se abre sin un "sí": "¿Abro Outlook? s/N"."""
+        self.pending = (shown, command, learn)
+        return f"¿Abro {shown}? s/N"

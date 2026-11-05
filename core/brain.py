@@ -8,7 +8,7 @@ from core.actions.code import CodeActions
 from core.actions.explore import ExploreActions
 from core.actions.library import LibraryActions
 from core.actions.memory import MemoryActions, whole_memory_text
-from core.actions.models import ModelActions, model_command
+from core.actions.models import ModelActions, command_text, model_command
 from core.actions.confidential import ConfidentialActions, confidential_command
 from core.actions.tasks import TaskActions
 from core.actions.timing import TimingActions, timing_command
@@ -160,6 +160,24 @@ SHORTCUT_ACTIONS = {
 }
 
 
+OPEN_IT = {"abrelo", "si abrelo", "abre", "si abre", "si por favor abrelo"}
+DONT_OPEN = {"n", "no", "no gracias", "nada", "cancela", "cancelar", "dejalo"}
+
+
+def app_confirmation(text, pending, app_tool):
+    """Respuesta a "¿Abro X? s/N": abre con un sí (escrito o dicho), lo deja con un no;
+    None si el mensaje es otra cosa (y entonces la pregunta se olvida)."""
+    words = " ".join(re.findall(r"\w+", command_text(text or "")))
+
+    if is_affirmative(text) or words in OPEN_IT:
+        return app_tool.open_pending(pending)
+
+    if words in DONT_OPEN:
+        return f"Vale, no abro {pending[0]}."
+
+    return None
+
+
 class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxActions, ModelActions, ConfidentialActions,
             TimingActions, VoiceActions, TaskActions, LibraryActions, AffectActions):
     # Acción del IntentEngine -> método que la atiende (ver core/actions).
@@ -247,6 +265,17 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
     def process_labeled(self, text):
         self.last_action = None
+        # "¿Abro Outlook? s/N" (tools/app_tool.py): vale solo para este mensaje.
+        app_tool = getattr(getattr(self, "tool_registry", None), "app_tool", None)
+        pending_app = app_tool.take_pending() if hasattr(app_tool, "take_pending") else None
+
+        if pending_app:
+            answer = app_confirmation(text, pending_app, app_tool)
+
+            if answer:
+                self.last_action = "open_app"
+                return answer
+
         # Si mientras se escribía empezó a cargarse el modelo de código, la
         # intención de este mensaje va con él (core/early_load.py).
         early = getattr(self, "early_load", None)
