@@ -293,3 +293,31 @@ def test_grabar_necesita_la_frase(monkeypatch, capsys):
         check_wake.main()
 
     assert "--grabar necesita --frase" in capsys.readouterr().err
+
+
+
+def test_negativos_una_frase_tras_otra_en_su_carpeta(tmp_path, monkeypatch, capsys):
+    plan = check_wake.negative_plan(1)
+    monkeypatch.setattr(check_wake, "drain", refill_with(*[clip_frames() for _ in plan]))
+
+    saved = check_wake.record(plan, tmp_path / "negativos", LevelVAD(), 0.5, Microphone([]), ask=answers())
+
+    assert [phrase for phrase, _ in plan] == ["oye", "Asia", "hoy hacia", "oye Alicia", "Asia Menor", "o ya sí a", "hey"]
+    assert sorted(path.name for path in (tmp_path / "negativos").iterdir()) == sorted(
+        ["oye", "asia", "hoy_hacia", "oye_alicia", "asia_menor", "o_ya_si_a", "hey"])
+    assert all(len(rows) == 1 for rows in saved.values())
+    assert (tmp_path / "negativos" / "oye_alicia" / "001.wav").is_file()
+    out = capsys.readouterr().out
+    assert out.index("Habla ahora: «oye»") < out.index("Habla ahora: «Asia Menor»")
+
+
+def test_negativos_por_defecto_tres_por_frase(monkeypatch):
+    plans = []
+    monkeypatch.setattr(check_wake, "record", lambda plan, root, *args, **kwargs: plans.append((plan, root)))
+    monkeypatch.setattr(check_wake, "voice_vad", lambda: LevelVAD())
+    monkeypatch.setattr(sys, "argv", ["check_wake.py", "--negativos"])
+
+    assert check_wake.main() == 0
+
+    [(plan, root)] = plans
+    assert {count for _, count in plan} == {3} and root.name == "negativos" and root.parent.name == "wake"

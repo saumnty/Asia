@@ -35,6 +35,9 @@ duración, el pico y el RMS, avisa si satura o si es muy bajo, y deja repetirlo.
 La numeración sigue la de los clips que ya haya.
 
     .venv\\Scripts\\python.exe test\\manual\\check_wake.py --grabar 20 --frase "oye Asia"
+
+--negativos [N] graba lo mismo (N por frase, 3 si no se dice) para frases parecidas
+que NO deben activarla, mostradas una por una, en data/wake/negativos/<frase>/.
 """
 import argparse
 import json
@@ -67,6 +70,9 @@ SILENCE_DBFS = -120.0
 MARGIN_S = 0.3
 SATURATED = 0.99
 LOW_PEAK_DBFS = -30.0
+# Parecidas a "Oye Asia" que no deben activarla (--negativos).
+NEGATIVE_PHRASES = ["oye", "Asia", "hoy hacia", "oye Alicia", "Asia Menor", "o ya sí a", "hey"]
+NEGATIVES_PER_PHRASE = 3
 
 
 def per_hour(count: int, seconds: float) -> float:
@@ -376,6 +382,10 @@ def record(plan, root, vad, threshold, microphone=None, ask=input):
     return saved
 
 
+def negative_plan(count) -> list:
+    return [(phrase, count) for phrase in NEGATIVE_PHRASES]
+
+
 def voice_vad():
     from core.voice.vad import SileroVAD
 
@@ -395,6 +405,8 @@ def main():
     parser.add_argument("--repuntuar", type=Path, metavar="CARPETA", help="puntúa los WAV guardados, sin micrófono")
     parser.add_argument("--grabar", type=int, metavar="N", help="graba N clips de --frase para entrenar, sin puntuar")
     parser.add_argument("--frase", help="la frase de --grabar (\"oye Asia\")")
+    parser.add_argument("--negativos", type=int, nargs="?", const=NEGATIVES_PER_PHRASE, metavar="N",
+                        help=f"graba N clips de cada frase que no debe activarla ({NEGATIVES_PER_PHRASE} si no se dice)")
     parser.add_argument("--carpeta", type=Path, default=AUDIO_DIR, help="dónde van los clips (por defecto, data/wake)")
     args = parser.parse_args()
 
@@ -406,8 +418,13 @@ def main():
         record([(args.frase, args.grabar)], args.carpeta / "positivos", voice_vad(), config["vad_threshold"])
         return 0
 
+    if args.negativos:
+        config = voice_settings(SettingsManager())
+        record(negative_plan(args.negativos), args.carpeta / "negativos", voice_vad(), config["vad_threshold"])
+        return 0
+
     if not args.aciertos and not args.falsas and not args.repuntuar:
-        parser.error("di --aciertos INTENTOS, --falsas MINUTOS, --repuntuar CARPETA o --grabar N")
+        parser.error("di --aciertos INTENTOS, --falsas MINUTOS, --repuntuar CARPETA, --grabar N o --negativos")
 
     if args.repuntuar and not trial_files(args.repuntuar):
         parser.error(f"no hay intento_*.wav en {args.repuntuar}")
