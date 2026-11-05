@@ -4,6 +4,7 @@ from pathlib import Path
 from core import prompts
 from core.rag.entities import about_entities, missing_names
 from core.rag.glossary import expand
+from core.rag.translation_glossary import load_glossary, terms_in
 from core.rag.instructions import source_notes, with_project_notes
 from core.rag.keywords import (
     DEFAULT_DOMAIN as KEYWORDS_DOMAIN,
@@ -226,7 +227,9 @@ class ExploreActions:
 
         named = named_in_question(question, sources)
         text = without_source(question, named) if named else question
-        return clean_translation(self.provider_router.ask(prompts.translate_question(text), max_tokens=TRANSLATION_TOKENS))
+        # Con los términos técnicos del glosario: "nombre del equipo" es hostname, no "team name".
+        terms = terms_in(text, load_glossary())
+        return clean_translation(self.provider_router.ask(prompts.translate_question(text, terms), max_tokens=TRANSLATION_TOKENS))
 
     def handle_explain_file(self, text, params):
         file_path = params.get("file_path")

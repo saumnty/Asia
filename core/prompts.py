@@ -164,11 +164,18 @@ Contenido:
 """
 
 
-def translate_question(question):
+def translate_question(question, terms=()):
+    """terms: [(término, traducciones)] del glosario de traducción técnica (core/rag/translation_glossary.py)."""
+    glossary = ""
+
+    if terms:
+        lines = "\n".join(f"- {term}: {' / '.join(values)}" for term, values in terms)
+        glossary = f"\nThese are computing terms; translate them like this:\n{lines}\n"
+
     return f"""
 Translate this question into English. Keep code names, commands and file names exactly as written.
 Write only the translation, on one line.
-
+{glossary}
 Question:
 {question}
 """
