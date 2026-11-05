@@ -45,9 +45,9 @@ para poder revisar o revertir los cambios.
 ### Pendientes menores
 
 - "Proyecto activo" es solo un nombre; asociarle una ruta permitiría limitar la escritura al proyecto y no solo a la carpeta actual (detectado en la fase 3).
-- Las respuestas de `debug_project` y la de archivo protegido de `generate_code` llegan al usuario con 12 espacios de indentación en cada línea (heredado de cómo estaban escritas; se conservó en el refactor de la fase E por ser comportamiento).
+- ~~Las respuestas de `debug_project` y la de archivo protegido de `generate_code` llegan al usuario con 12 espacios de indentación en cada línea.~~ Hecho en `0089a8b5` (en el golden cambia solo `debug_project`).
 - "muéstrame un resumen del archivo X" va a `read_file_preview` (las primeras líneas), no a `summarize_file`. Se dejó así en la fase E para no cambiar la acción.
-- `remember`, `recall` y `forget` sin `key` caen al chat sin aviso.
+- ~~`remember`, `recall` y `forget` sin `key` caen al chat sin aviso.~~ Hecho en `c47a66e2`: dicen qué falta, con un ejemplo (en el golden cambia solo `remember_sin_valor`).
 - El diagnóstico de `debug_project` sigue siendo superficial: con "Asia None" señala `launcher.py` y `brain.process` devolviendo `None`, sin llegar a la causa real del bug de la fase 1 (el streaming, ya corregido). En C:\Asia, `tools/debug_context.py` sale entre los primeros archivos porque contiene las búsquedas fijas y "Asia None" en sus comentarios: es ruido propio de este repositorio.
 - `open_app` responde "Abriendo notebook." con el nombre que extrajo el modelo. Debería decir el nombre resuelto ("Abriendo bloc de notas.").
 - La salida no tolera erratas: "salior" va al IntentEngine en lugar de cerrar. Aplicar a "/salir" y sus alias (`core/commands.py`) la misma tolerancia que a los nombres de apps.
@@ -155,7 +155,7 @@ El modelo no añadió casos a los 2 de las reglas (no vio `ciudad`/`vivo_en`). L
 
 Wikipedia (capa 3), la medición que faltaba:
 - "cuál es la capital de Australia en wikipedia": 66 s, sin respuesta directa. "Capital: Camberra" estaba en el primer fragmento y la extracción no la copió.
-- "quién descubrió la penicilina en wikipedia": 47 s, una línea verificada con Fleming y la sección. La frase se corta en "Hospital St.": el troceado toma la abreviatura por fin de frase.
+- "quién descubrió la penicilina en wikipedia": 47 s, una línea verificada con Fleming y la sección. ~~La frase se corta en "Hospital St.": el troceado toma la abreviatura por fin de frase.~~ Hecho en `15126e24`: las abreviaturas y las iniciales no cierran frase.
 - `check_rag --wikipedia 1`: búsqueda 9/12 (la base). Con el modelo, cortada en la pregunta 10 de 12 (RAM a 0,90 GB): 4 correctas de 9 (penicilina, muro de Berlín, 206 huesos, Everest, este por el artículo "Montaña" aunque la búsqueda no trajo "Monte_Everest") y 5 sin respuesta directa (Australia, Quijote, Mona Lisa, agua, Japón); 38 s por pregunta, de 17 a 79. Las trampas no llegaron a correr.
 
 Faltan, o quedaron a medias:
@@ -794,7 +794,7 @@ Pendientes:
 - NINGUNA sale a veces con preguntas válidas, al azar: 2 de 16 en la última medición.
 - "Cómo se cifra la contraseña" y las otras trampas dependen de que el 7B escriba NINGUNA: la cobertura no las separa. Una línea real que no responde pasaría la verificación.
 - En código con poco texto, una pregunta con otras palabras depende del glosario: sin él, "punto desplazado" no se responde. Con él, 1 de 2 corridas.
-- Un archivo sin fragmentos (`__init__.py` vacío) no guarda hash y `/indexar` lo cuenta como reindexado cada vez. No embebe nada; solo infla la cifra.
+- ~~Un archivo sin fragmentos (`__init__.py` vacío) no guarda hash y `/indexar` lo cuenta como reindexado cada vez.~~ Hecho en `85e9adfc`: su hash va en `archivos_vacios.json`, junto al índice.
 - El troceado solo no ayuda: sin el tope por archivo, las secciones del ROADMAP acapararon los resultados.
 
 **Capa 2, documentación técnica (ROS 2, Gazebo y Python hechos):** commits `96736912` (rango de líneas), `a653680b` (FTS5), `f036fd12`, `42807348` (`.rst` y páginas públicas), `8c482fbc` y `3bbd6f34` (medición).
@@ -829,12 +829,12 @@ Respuestas falsas que pasaron todas las comprobaciones, leídas contra el códig
 Python 3.12 (`bfd4812c`, `eedf73ab`): el zip oficial de texto (4 067 636 bytes, `python-3.12-docs-text.zip`, del 2026-10-29, sin suma publicada) en `C:\AsiaDocs\python312`, solo `library/`, `tutorial/`, `reference/` y `howto/`: 372 archivos, 8,2 MB. Los `.txt` son el texto de Sphinx, con los títulos subrayados como en rst: un `.txt` así se trocea por secciones, como un `.rst`, y uno sin títulos sigue por bloques (ningún `.txt` ya indexado tiene títulos así). `/indexar python C:\AsiaDocs\python312 documentacion https://docs.python.org/3.12/{}.html PSF-2.0 idioma=en` y `/publica python sí`: 8515 fragmentos en 1436 s con la GPU (169 ms/fragmento).
 - Sin modelo, sin traducción: el archivo esperado sale 1.º en venv, json y dataclasses; en try/except gana `reference/compound_stmts.txt` (4.º `tutorial/errors.txt`). La trampa (pygame) tiene cobertura 0.
 - Con el 7B, una vez: venv (63 s, una línea verificada que no responde: la de `ensurepip`), try/except (171 s, de `compound_stmts`, no del tutorial), dataclass (89 s) con líneas; JSON sin respuesta directa (21 s) y la trampa sin responder (15 s).
-- Las líneas verificadas de un archivo repiten la cabecera en cada grupo separado por una línea en blanco: en prosa salen 8 cabeceras iguales seguidas. Sin arreglar.
+- ~~Las líneas verificadas de un archivo repiten la cabecera en cada grupo separado por una línea en blanco: en prosa salen 8 cabeceras iguales seguidas.~~ Hecho en `49fb289f`: una cabecera por archivo y sección, con todos los rangos.
 - `check_rag` tiene ahora 4 preguntas de Python y una trampa más: el punta a punta pasa de 20 a 24 preguntas y de 8 a 9 trampas.
 
 Pendientes de la capa 2:
 - QoS y casos parecidos: el glosario lo resuelve pregunta a pregunta; el arreglo general por títulos empeoró el ranking y no se aplicó (abajo). Con otra pregunta sin líneas, mirar el puesto del fragmento correcto antes de culpar a la extracción.
-- "No lo encontré en tus proyectos" suena raro con documentación.
+- ~~"No lo encontré en tus proyectos" suena raro con documentación.~~ Hecho en `98b369bf`: dice dónde buscó (la documentación, Wikipedia, Stack Exchange o tus fuentes).
 
 Una pregunta con "en <fuente>" que el filtro rechaza enseña los fragmentos en lugar de negar, sin pasar por el modelo. Sin fuente nombrada, sigue negando.
 
@@ -926,7 +926,7 @@ Medición real, sin hacer (2026-11-03): había 5,69 GB de RAM libres al empezar,
 
 Falta:
 - ~~La medición real: las dos preguntas.~~ Hecho con la GPU (ver "Mediciones con la GPU"). Falta `check_rag --wikipedia 1` entero: se cortó por RAM.
-- "Capital: Camberra" en el primer fragmento y la extracción no la copió; la frase de Fleming se corta en "St." (abreviatura tomada por fin de frase).
+- "Capital: Camberra" en el primer fragmento y la extracción no la copió; ~~la frase de Fleming se corta en "St." (abreviatura tomada por fin de frase).~~ Hecho en `15126e24`.
 - Para después: cuando una pregunta no se encuentra en los proyectos, Asia ofrece buscar en Wikipedia ("¿Busco en Wikipedia?") en lugar de hacerlo sola, medido aparte en `check_rag`.
 - Wikipedia completa (`maxi`, 13,3 GB): pedir permiso aparte antes de descargarla.
 
