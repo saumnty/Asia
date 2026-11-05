@@ -826,7 +826,7 @@
  },
  "debug_project": {
   "results": [
-   "\n            Diagnóstico de depuración:\n\n            <debug_project>\n\n            Si quieres que proponga un cambio automático, escribe algo como:\n\n            genera el fix para el archivo principal usando este diagnóstico\n            "
+   "Diagnóstico de depuración:\n\n<debug_project>\n\nSi quieres que proponga un cambio automático, escribe algo como:\n\ngenera el fix para el archivo principal usando este diagnóstico"
   ],
   "events": [
    [

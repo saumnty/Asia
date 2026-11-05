@@ -297,16 +297,13 @@ class CodeActions:
         if not file_path or not code:
             return f"Faltan datos para proponer el cambio.\n\nRespuesta recibida:\n{response}"
 
-        # La indentación del mensaje es la que tenía en core/brain.py.
         if is_protected_file(file_path):
-            return f"""
-            Asia generó un cambio para un archivo protegido:
-
-            {file_path}
-
-            Por seguridad no lo aplicaré automáticamente todavía.
-            Primero revisa el cambio manualmente o pide modificar un archivo menos crítico.
-            """
+            return (
+                "Asia generó un cambio para un archivo protegido:\n\n"
+                f"{file_path}\n\n"
+                "Por seguridad no lo aplicaré automáticamente todavía.\n"
+                "Primero revisa el cambio manualmente o pide modificar un archivo menos crítico."
+            )
 
         if old_content == code.strip():
             return f"No se requieren cambios en {file_path}."

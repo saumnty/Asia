@@ -119,16 +119,12 @@ class ReviewActions:
 
         self.last_debug_report = debug_report
 
-        # La indentación del mensaje es la que tenía en core/brain.py.
-        return f"""
-            Diagnóstico de depuración:
-
-            {debug_report}
-
-            Si quieres que proponga un cambio automático, escribe algo como:
-
-            genera el fix para el archivo principal usando este diagnóstico
-            """
+        return (
+            "Diagnóstico de depuración:\n\n"
+            f"{debug_report}\n\n"
+            "Si quieres que proponga un cambio automático, escribe algo como:\n\n"
+            "genera el fix para el archivo principal usando este diagnóstico"
+        )
 
     def handle_review_file_deep(self, text, params):
         file_path = params.get("file_path")
