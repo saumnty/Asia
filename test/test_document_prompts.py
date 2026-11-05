@@ -5,7 +5,9 @@ import pytest
 
 from config.settings_manager import SettingsManager
 from core.actions.explore import ExploreActions
+from core.actions.voice import VOICE_SETTING
 from core.confidential import OutgoingRequest
+from core.voice.speakable import to_speakable
 from providers.ollama_provider import OllamaProvider
 
 
@@ -141,3 +143,49 @@ def test_aviso_si_ollama_corta_por_el_tope(stream):
 
     # Sin tope no hay aviso aunque Ollama diga "length" (num_ctx).
     assert provider.complete([{"role": "user", "content": "x"}]) == "texto"
+
+
+# --- Con la voz activa -------------------------------------------------------------
+
+@pytest.fixture
+def voice_on():
+    # conftest vacía los overrides en cada prueba.
+    SettingsManager.set_overrides({VOICE_SETTING: True})
+
+
+@pytest.mark.parametrize("action, more", [
+    ("explain_file", "Para la explicación completa: explica core/brain.py a fondo."),
+    ("summarize_file", "Para el resumen completo: resume core/brain.py a fondo."),
+])
+def test_con_voz_una_respuesta_corta_y_la_larga_en_pantalla(voice_on, action, more):
+    actions = Actions("def f():\n    return 1\n")
+
+    answer = getattr(actions, f"handle_{action}")("explica core/brain.py", {"file_path": "core/brain.py"})
+
+    [(prompt, kwargs)] = actions.provider_router.calls
+    assert "1 a 3 frases, en un solo párrafo, sin listas" in prompt and "Clases principales" not in prompt
+    assert kwargs == {"max_tokens": SettingsManager().get("answer_limits")[action]["voice_tokens"]} == {"max_tokens": 150}
+    assert answer == f"respuesta\n\n[{more}]"
+    # La línea de cómo pedir la larga solo se ve: no se lee.
+    assert to_speakable(answer) == "respuesta."
+
+
+@pytest.mark.parametrize("action", ["explain_file", "summarize_file"])
+def test_con_voz_a_fondo_vale_la_plantilla_larga(voice_on, action):
+    actions = Actions("def f():\n    return 1\n")
+
+    answer = getattr(actions, f"handle_{action}")("explica core/brain.py a fondo", {"file_path": "core/brain.py"})
+
+    [(prompt, kwargs)] = actions.provider_router.calls
+    assert "1 a 3 frases" not in prompt and answer == "respuesta"
+    assert kwargs == {"max_tokens": SettingsManager().get("answer_limits")[action]["tokens"]}
+
+
+@pytest.mark.parametrize("action", ["explain_file", "summarize_file"])
+def test_sin_voz_nada_cambia(action):
+    actions = Actions("def f():\n    return 1\n")
+
+    answer = getattr(actions, f"handle_{action}")("explica core/brain.py", {"file_path": "core/brain.py"})
+
+    [(prompt, kwargs)] = actions.provider_router.calls
+    assert "1 a 3 frases" not in prompt and answer == "respuesta"

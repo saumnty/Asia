@@ -138,6 +138,22 @@ Contenido:
 """
 
 
+def voice_brief(task, file_path, content):
+    """Con la voz activa (explain_file, summarize_file): poco que leer en voz alta.
+    task: "Explica para qué sirve este archivo", "Resume este archivo"."""
+    return f"""
+{task} en español, en 1 a 3 frases, en un solo párrafo, sin listas ni títulos: se va a leer en voz alta.
+
+Ruta del archivo:
+{file_path}
+
+Contenido:
+{content}
+
+Responde en 1 a 3 frases, en un solo párrafo, sin listas.
+"""
+
+
 def summarize_document(file_path, content, words):
     return f"""
 Resume este documento (no es código) en español, en {words} palabras como máximo.

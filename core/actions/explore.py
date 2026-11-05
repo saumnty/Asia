@@ -35,12 +35,14 @@ from core.rag.quotes import (
     without_decoration,
 )
 from core.tool_output import clip
+from core.actions.voice import VOICE_SETTING
+from providers.provider_router import wants_detail
 from providers.ollama_provider import without_cut_notice
 
 # Los mismos que config/defaults.json, por si falta la clave.
 DEFAULT_ANSWER_LIMITS = {
-    "explain_file": {"words": 150, "tokens": 450},
-    "summarize_file": {"words": 100, "tokens": 300},
+    "explain_file": {"words": 150, "tokens": 450, "voice_tokens": 150},
+    "summarize_file": {"words": 100, "tokens": 300, "voice_tokens": 150},
     "search_quotes": {"tokens": 1024},
     "search_answer": {"tokens": 512},
 }
@@ -77,6 +79,12 @@ class ExploreActions:
             max_chars=self.limit("summarize_file")
         )
         limits = self.answer_limits("summarize_file")
+
+        if self.voice_brief(text):
+            return self.brief_answer(
+                prompts.voice_brief("Resume este archivo", file_path, content), limits,
+                f"Para el resumen completo: resume {file_path} a fondo.",
+            )
 
         if self.is_document(file_path):
             prompt = prompts.summarize_document(file_path, content, limits["words"])
@@ -244,6 +252,12 @@ class ExploreActions:
         )
         limits = self.answer_limits("explain_file")
 
+        if self.voice_brief(text):
+            prompt = with_project_notes(
+                prompts.voice_brief("Explica para qué sirve este archivo", file_path, content), file_path, Library().all()
+            )
+            return self.brief_answer(prompt, limits, f"Para la explicación completa: explica {file_path} a fondo.")
+
         # Un .md o .txt no tiene clases ni métodos: plantilla de documento.
         if self.is_document(file_path):
             prompt = prompts.explain_document(file_path, content, limits["words"])
@@ -253,6 +267,17 @@ class ExploreActions:
         # El ASIA.md de su fuente, si tiene (core/rag/instructions.py).
         prompt = with_project_notes(prompt, file_path, Library().all())
         return self.provider_router.ask(prompt, max_tokens=limits["tokens"])
+
+    def voice_brief(self, text):
+        """Con la voz activa, salvo "a fondo": 1 a 3 frases (sin voz, nada cambia).
+        La plantilla larga con 415 tokens tardaba 65 s en empezar a sonar."""
+        return bool(self.settings.get(VOICE_SETTING)) and not wants_detail(text)
+
+    def brief_answer(self, prompt, limits, more):
+        """La respuesta corta y, solo en pantalla, cómo pedir la larga: entre corchetes,
+        la lectura en voz alta se la salta (core/voice/speakable.py)."""
+        answer = self.provider_router.ask(prompt, max_tokens=limits.get("voice_tokens", limits["tokens"]))
+        return f"{answer}\n\n[{more}]"
 
     def is_document(self, file_path):
         """True si no es código (.md, .txt, .json...): ver code_extensions en config."""
