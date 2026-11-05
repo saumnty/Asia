@@ -1081,11 +1081,11 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
   | Neutral | 4/4 | 4/4 |
   | Total | 23/28 | 24/28 |
 
-  Propuesta sin aplicar: decir en el prompt que nervioso, ansioso o furioso son desagradables (en la calibración, "me tiemblan las manos" ya daba valencia 0), y medirlo con la calibración primero.
-- Con el chat en el 7B, la estimación va con el 7B (`dfcff00e`): no se recarga qwen3. `check_afecto --dominio code`: 28/28, pero 8,1 s de mediana por mensaje (22,1 s el primero), frente a 1,5 s con qwen3 (12,8 s el primero). Con qwen3 en la GPU entera es mucho más rápido; con el 7B, más preciso.
+  Después (`6f9525fc`): el prompt dice que furioso, enojado, nervioso y ansioso son de valencia desagradable. Calibración 19/20 (ahora "me tiemblan las manos" bien; falla "extraño a mi abuela", activación +0,3). `check_afecto`: 24/28 → 26/28, con desagradable y agitado de vuelta a 6/6, agradable y calmado 5/6 y desagradable y calmado 5/6 ("me rechazaron la beca" sigue en agitado).
+- Con el 7B: `check_afecto --dominio code` da 28/28, pero 8,1 s de mediana por mensaje (22,1 s el primero), frente a 1,5 s con qwen3. Por eso (`60f2fb5a`) solo la charla (qwen3) estima; cuando responde el 7B (código) u otro modelo, el tono sale del último estado con su desvanecimiento (`AffectCore.recent`), sin llamar al modelo. `/buscar` y las revisiones no pasan por el chat: no estiman.
 - Límites de la versión 0:
-  - Agradable y calmado se confundía con agitado: ajustado con el conjunto de calibración (2/6 → 5/6), pero bajó desagradable y agitado (6/6 → 4/6).
-  - ~~Si el chat va con el 7B, la estimación con qwen3 cambia de modelo en cada mensaje.~~ Hecho: se estima con el modelo que responde (8,1 s por mensaje con el 7B).
+  - Agradable y calmado se confundía con agitado: ajustado con el conjunto de calibración (2/6 → 5/6); desagradable y agitado, que bajó, volvió a 6/6 con la aclaración de la valencia.
+  - ~~Si el chat va con el 7B, la estimación con qwen3 cambia de modelo en cada mensaje.~~ Hecho: con el 7B no se estima, vale el último estado.
   - Un mensaje solo da poca información; el suavizado ayuda, pero no se midió en conversaciones.
   - Con el afecto activo, el chat siempre responde en local.
 - Fuentes: Russell (1980), "A circumplex model of affect"; Mehrabian y Russell (1974), el modelo PAD; Lazarus (1991), *Emotion and Adaptation*; Scherer (2001), la evaluación por componentes (*appraisal*); Barrett (2017), *La emoción construida*; Hill, *Helping Skills* (explorar, comprender, actuar); Picard (1997), *Affective Computing*.
