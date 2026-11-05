@@ -98,11 +98,17 @@ def vocabulary_prompt(verbs, apps, projects, extra) -> str:
     """Texto para initial_prompt: como lo que se le dijo antes a Asia.
 
     Si no cabe, se recortan los verbos: apps, proyectos y palabras van enteros.
+    Cada palabra sale una vez: si está en stt_vocabulary, solo ahí (con la grafía
+    que se eligió, "Asia"); si no, en la primera lista donde aparece.
     """
+    words = list(unique(extra))
+    seen = {plain(word) for word in words}
+    apps = [app for app in unique(apps) if plain(app) not in seen]
+    seen |= {plain(app) for app in apps}
     names = [
-        ("apps", list(unique(apps))),
-        ("proyectos", list(unique(projects))),
-        ("palabras", list(unique(extra))),
+        ("apps", apps),
+        ("proyectos", [name for name in unique(projects) if plain(name) not in seen]),
+        ("palabras", words),
     ]
     tail = "".join(f" {name.capitalize()}: {', '.join(words)}." for name, words in names if words)
     verbs = list(unique(verbs))

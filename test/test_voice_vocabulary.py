@@ -119,3 +119,10 @@ def test_las_palabras_tecnicas_caben_con_las_apps_reales(tmp_path):
     # Si no caben, se recortan los verbos: las palabras van enteras.
     assert len(prompt) <= MAX_CHARS and prompt.endswith(f"Palabras: {', '.join(words)}.")
     assert prompt.startswith("Órdenes para Asia: abre, muestra")
+
+
+def test_cada_palabra_sale_una_vez():
+    prompt = vocabulary_prompt(["abre"], ["bloc de notas", "chrome", "Asia"], ["asia", "chrome", "bolita"],
+                               ["Asia", "bloc de notas"])
+
+    assert prompt == "Órdenes para Asia: abre. Apps: chrome. Proyectos: bolita. Palabras: Asia, bloc de notas."
