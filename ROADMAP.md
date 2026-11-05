@@ -680,10 +680,17 @@ Paso 1, "Hey Jarvis" ya entrenado (instalado el 2026-11-04):
 - En reposo (silencio a ritmo real durante 60 s, sin micrófono): 7,2 % de un núcleo sin VAD y 9,6 % con VAD (16 núcleos lógicos: menos del 1 % del total); `predict` 5,9 ms de mediana por tramo de 80 ms (7,3 ms con VAD); +154 MB de RAM al cargar (+159 MB con VAD), con la importación de openwakeword y sus dependencias; 5,4 s de carga, la primera vez que se activa `/escucha` en la sesión. El micrófono (sounddevice) no está incluido.
 - `check_wake` con el micrófono (aciertos y falsas activaciones) lo mide el usuario.
 
-Paso 2, entrenar "Oye Asia" (después, con otro permiso):
-- Positivos generados con el Piper que ya está instalado y las tres voces en español, variando hablante, velocidad y ruido: unos miles de clips en `data/wake/`.
-- Negativos: las características de ACAV100M del entrenamiento de openWakeWord (`openwakeword_features_ACAV100M_2000_hrs_16bit.npy`, 17,28 GB, y `validation_set_features.npy`, 0,18 GB; CC BY-NC-SA 4.0), más respuestas de sala y ruido de fondo que descarga el cuaderno de entrenamiento.
-- Dependencias de `openwakeword[full]`: `torch` (ya está), `torchaudio`, `torchinfo`, `torchmetrics`, `speechbrain`, `audiomentations`, `torch-audiomentations`, `acoustics`, `pronouncing`, `datasets`, `deep-phonemizer`, `mutagen`. El `tensorflow-cpu` 2.8.1 que pide solo sirve para exportar a tflite y no instala en Python 3.11: se exporta solo a ONNX. Mejor en un `.venv` aparte para no tocar el de Asia. Pesos y licencias exactos, al pedir el permiso de este paso.
+Paso 2, entrenar "Oye Asia" (plan, 2026-11-04; se hace con otro permiso). En Colab con GPU: el cuaderno de entrenamiento de openWakeWord (`automatic_model_training.ipynb`) usa los 17 GB de negativos y dependencias que aquí no conviene instalar (`openwakeword[full]`; el TensorFlow 2.8.1 que pide no instala en Python 3.11 y solo sirve para tflite).
+
+1. En local, positivos con Piper (unos 30 min en CPU). Un script en `test/manual/` genera "oye Asia" y variantes ("oye, Asia", "¡oye Asia!", "oye Asia, …" con frases cortas detrás) con las tres voces en español (`es_MX-claude-high`, `es_MX-ald-medium`, `es_ES-sharvard-medium`), variando `length_scale` (0,8–1,3), `noise_scale` y `noise_w`. Unos 4000 clips WAV de 16 kHz, mono, de 1–2 s (unos 250 MB). El generador de muestras del cuaderno (`piper-sample-generator`) es de inglés: no se usa.
+2. En local, negativos difíciles con Piper: frases que suenan parecido sin ser la palabra ("oye", "Asia", "hoy hacia", "oye Alicia", "Asia Menor", "o ya sí a"), unos 2000 clips (unos 120 MB). Se generan con las mismas voces para que el modelo no aprenda la voz en lugar de la frase.
+3. Subir a Google Drive solo esos dos `.zip` (unos 350 MB): voz sintética, nada del usuario. Grabaciones de la voz del usuario como positivos extra: opcional, solo si lo pide, porque saldrían de la máquina.
+4. En Colab, con GPU T4: abrir el cuaderno, instalar sus dependencias y descargar allí (no en la laptop) los negativos: `openwakeword_features_ACAV100M_2000_hrs_16bit.npy` (17,28 GB), `validation_set_features.npy` (0,18 GB), respuestas de sala y ruido de fondo (lo que baja el cuaderno). Unos 20–40 min de descargas.
+5. Aumentar los positivos (ruido, reverberación) y calcular sus características: unos 30–60 min. Entrenar con los valores del cuaderno: unos 1–2 h. En total, unas 2–4 h de Colab; la sesión gratuita puede cortarse, así que se guarda en Drive cada paso.
+6. Exportar a ONNX (`oye_asia_v0.1.onnx`, de 0,2 a 1,3 MB, como los de la v0.5.1) y bajarlo de Drive a `data/models/openwakeword/`. Se activa con `voice.wake_word: "oye_asia_v0.1"` y `voice.wake_label: "Oye Asia"` en `settings.json`, sin cambiar código.
+7. Medir en local con `check_wake --modelo oye_asia_v0.1 --aciertos 20` y `--falsas 30`, frente a "Hey Jarvis", y elegir `voice.wake_threshold`. Si hay muchas falsas activaciones: más negativos difíciles y volver a entrenar.
+
+Licencias: el modelo sale de las características de ACAV100M (CC BY-NC-SA 4.0), así que hereda el uso no comercial: personal, no distribuible, como los de la v0.5.1. Las voces de Piper: `claude-high` (datos Apache-2.0), `ald` (Unlicense), `sharvard` (CC BY 3.0, pide atribución).
 
 **J4, servicio en segundo plano:** Asia escuchando sin la terminal abierta (bandeja del sistema o servicio), con el mismo modo confidencial.
 
@@ -961,7 +968,7 @@ Límites conocidos:
 
 Conocimiento, pendientes generales:
 
-- Glosario de traducción técnica para las fuentes en inglés: equipo → computer/hostname, carpeta → folder, contraseña → password, arranque → boot/startup, actualizar → update/upgrade… Va con la pregunta a la traducción del 7B, para que "nombre del equipo" no salga como "team name". Puede reusar el glosario por fuente de hoy (`core/rag/glossary.py`, que ya añade equivalentes a la pregunta) con uno común para todos los sitios en inglés. Medir con `check_rag --preguntas` antes y después.
+- Hecho (2026-11-04, noche, `43026dcb`), `config/glosario_traduccion.json`: los términos de la pregunta van al prompt de traducción, el más largo primero. "Cómo cambio el nombre del equipo" se traduce "How do I change the computer name?" (antes, "team name") y responde con `/etc/hostname` del hilo 9540. `--preguntas 0`, página encontrada: askubuntu 4/5 → 5/5, superuser 3/6 → 4/6, los demás igual. `--preguntas 1`, sitios en inglés, correctas: unix 6/8 → 7/8, askubuntu 2/5 → 3/5, electronics 1/5 → 3/5, superuser 3/6 → 4/6 (12/24 → 17/24), trampas 0/12 en las dos. Glosario de traducción técnica para las fuentes en inglés: equipo → computer/hostname, carpeta → folder, contraseña → password, arranque → boot/startup, actualizar → update/upgrade… Va con la pregunta a la traducción del 7B, para que "nombre del equipo" no salga como "team name". Puede reusar el glosario por fuente de hoy (`core/rag/glossary.py`, que ya añade equivalentes a la pregunta) con uno común para todos los sitios en inglés. Medir con `check_rag --preguntas` antes y después.
 - Knowledge Manager: destilar lo aprendido de proveedores externos, deduplicar y reindexar en una base global.
 - Indexación incremental del RAG por hash y calibración de umbrales del retriever.
 - Detección de código muerto por AST y auto-fix desde el diagnóstico de `DebugAgent`.
@@ -987,7 +994,7 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 **Imágenes en la terminal** (fase V). La terminal no pasa imágenes con Ctrl+V.
 - Comando `/pegar` (se agrega a la tabla de `core/commands.py`): lee la imagen del portapapeles con `PIL.ImageGrab.grabclipboard()` (Pillow ya está instalado), la guarda en una carpeta temporal y la adjunta al mensaje.
 - `@ruta.png` (y otros formatos de imagen) como adjunto, igual que los archivos de texto.
-- Primera opción, para capturas de texto (errores, código, enunciados): OCR local con Tesseract. No necesita modelo de visión.
+- Hecho (2026-11-04, noche, `7a4382b3`): `@ruta.png` (y los demás formatos) y `/pegar <pregunta>` (la imagen del portapapeles, guardada en `%TEMP%\asia_pegado`). El texto se lee con el OCR integrado de Windows (`Windows.Media.Ocr` desde PowerShell, `core/ocr_windows.ps1`, reconocedor es-MX ya instalado): sin instalar nada, unos 1,2 s por imagen. Va al chat como adjunto (etiqueta "adjunto": local por defecto). Una imagen sin texto o rota se avisa y no se manda. Tesseract (Apache-2.0, unos 50–80 MB con el español) queda como alternativa si el de Windows no basta o para Ubuntu.
 - Segunda etapa: modelo de visión local de 3–4B. Con la GPU detectada (Ollama 0.40.14) y la estrategia B, uno de ese tamaño cabe entero en la GPU, como qwen3. Antes de elegir: medir el costo de cambiar de modelo por imagen (con `ollama_one_model_at_a_time`, cada imagen descarga el modelo en uso y lo vuelve a cargar después) y comparar los candidatos pequeños más recientes (`gemma3:4b`, `qwen2.5vl:3b` y los que hayan salido). Preguntar antes de descargar.
 - El OCR local sigue como primera opción para las capturas de texto.
 - Modo confidencial: las imágenes llevan la etiqueta "adjunto", así que son locales por defecto (ni la imagen ni el texto del OCR salen sin autorización).
@@ -1063,9 +1070,22 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 | Total | 23/28 | |
 
 - Tiempo añadido por mensaje: 1,5 s de mediana con qwen3 cargado; 12,3 s el primero, con la carga.
+- Ajuste (2026-11-04, noche), solo con un conjunto de calibración aparte (`check_afecto --calibracion`, 20 mensajes nuevos, 8 de agradable y calmado): definiciones de valencia y activación por separado en el prompt, con ejemplos de calma ("tranquilo", "a gusto", "relajado", "en paz", "sin prisa" = activación baja), y el umbral de activación de 0,2 a 0,3 (de 0,25 a 0,4 dan lo mismo en la calibración). Calibración: 13/20 → 16/20 con el prompt → 19/20 con el umbral.
+
+  | `check_afecto` (sus 28 mensajes, sin tocar) | Antes | Después |
+  |---|---|---|
+  | Desagradable y agitado | 6/6 | 4/6 ("estoy furioso" con valencia +0,8; "muy nervioso" con 0) |
+  | Desagradable y calmado | 5/6 | 5/6 |
+  | Agradable y agitado | 6/6 | 6/6 |
+  | Agradable y calmado | 2/6 | 5/6 |
+  | Neutral | 4/4 | 4/4 |
+  | Total | 23/28 | 24/28 |
+
+  Propuesta sin aplicar: decir en el prompt que nervioso, ansioso o furioso son desagradables (en la calibración, "me tiemblan las manos" ya daba valencia 0), y medirlo con la calibración primero.
+- Con el chat en el 7B, la estimación va con el 7B (`dfcff00e`): no se recarga qwen3. `check_afecto --dominio code`: 28/28, pero 8,1 s de mediana por mensaje (22,1 s el primero), frente a 1,5 s con qwen3 (12,8 s el primero). Con qwen3 en la GPU entera es mucho más rápido; con el 7B, más preciso.
 - Límites de la versión 0:
-  - Agradable y calmado se confunde con agitado. No se ajustó el umbral de activación (0,2) con estos mismos 28 mensajes: haría falta un conjunto aparte (el conjunto "oro" del dataset).
-  - Si el chat va con el 7B (dominio código), la estimación con qwen3 cambia de modelo en cada mensaje (con `ollama_one_model_at_a_time`, unos 8,5 s por cambio, medido en la estrategia B). Opción: estimar con el modelo que va a responder.
+  - Agradable y calmado se confundía con agitado: ajustado con el conjunto de calibración (2/6 → 5/6), pero bajó desagradable y agitado (6/6 → 4/6).
+  - ~~Si el chat va con el 7B, la estimación con qwen3 cambia de modelo en cada mensaje.~~ Hecho: se estima con el modelo que responde (8,1 s por mensaje con el 7B).
   - Un mensaje solo da poca información; el suavizado ayuda, pero no se midió en conversaciones.
   - Con el afecto activo, el chat siempre responde en local.
 - Fuentes: Russell (1980), "A circumplex model of affect"; Mehrabian y Russell (1974), el modelo PAD; Lazarus (1991), *Emotion and Adaptation*; Scherer (2001), la evaluación por componentes (*appraisal*); Barrett (2017), *La emoción construida*; Hill, *Helping Skills* (explorar, comprender, actuar); Picard (1997), *Affective Computing*.
