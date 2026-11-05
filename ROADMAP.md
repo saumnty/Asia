@@ -984,11 +984,12 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 
 ### Extras
 
-**Imágenes en la terminal.** La terminal no pasa imágenes con Ctrl+V.
+**Imágenes en la terminal** (fase V). La terminal no pasa imágenes con Ctrl+V.
 - Comando `/pegar` (se agrega a la tabla de `core/commands.py`): lee la imagen del portapapeles con `PIL.ImageGrab.grabclipboard()` (Pillow ya está instalado), la guarda en una carpeta temporal y la adjunta al mensaje.
 - `@ruta.png` (y otros formatos de imagen) como adjunto, igual que los archivos de texto.
 - Primera opción, para capturas de texto (errores, código, enunciados): OCR local con Tesseract. No necesita modelo de visión.
-- Segunda etapa: modelo de visión local (`gemma3:4b` o `qwen2.5vl:3b`). Antes de elegir, medir el costo de recarga con 4 GB de VRAM: con un solo modelo en memoria a la vez (`ollama_one_model_at_a_time`), cada imagen descarga el 7B y lo vuelve a cargar después. Preguntar antes de descargar.
+- Segunda etapa: modelo de visión local de 3–4B. Con la GPU detectada (Ollama 0.40.14) y la estrategia B, uno de ese tamaño cabe entero en la GPU, como qwen3. Antes de elegir: medir el costo de cambiar de modelo por imagen (con `ollama_one_model_at_a_time`, cada imagen descarga el modelo en uso y lo vuelve a cargar después) y comparar los candidatos pequeños más recientes (`gemma3:4b`, `qwen2.5vl:3b` y los que hayan salido). Preguntar antes de descargar.
+- El OCR local sigue como primera opción para las capturas de texto.
 - Modo confidencial: las imágenes llevan la etiqueta "adjunto", así que son locales por defecto (ni la imagen ni el texto del OCR salen sin autorización).
 
 **Cambio de modelo seguro.**
@@ -1042,6 +1043,13 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 - `sqlite3` de Python, sin instalar nada, con transacciones para los hilos en segundo plano.
 
 **Afecto y cognición social** (fase de afecto).
+- Escucha y empatía, el objetivo central:
+  - Detectar si el usuario quiere desahogarse o resolver algo, o preguntárselo.
+  - Escucha activa: reflejar, preguntar lo justo, sin listas ni consejos genéricos.
+  - Continuidad opcional (la activa el usuario): recordar lo compartido, en local, y retomarlo con naturalidad.
+  - Tono ajustado con la guía destilada y el simulador de respuestas.
+  - Honestidad: desacuerdo con tacto, sin adulación.
+  - Sugerir hablar con alguien de confianza o con un profesional solo ante malestar fuerte o sostenido, sin dejar de acompañar; nunca como respuesta por defecto.
 - Biblioteca de casos del usuario: situación → cómo la leyó → opciones → tono elegido y por qué → resultado. Anonimizar a terceros.
 - Perfil de principios sacado de los casos, revisable por el usuario.
 - Control de tono: elegir entre variantes; más adelante, DPO o LoRA.
@@ -1054,6 +1062,19 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
   - Lo que devuelve el proveedor (patrones, guía de tono, casos de evaluación) se guarda en local; al terminar, opción de borrar las copias exportadas. Después, Asia aplica lo aprendido solo en local.
 - Simulador de respuestas: dado un escenario, Asia genera 2–4 respuestas con tonos distintos y, para cada una, una estimación de cómo podría sentirse el usuario; el usuario elige y corrige. Las elecciones se guardan para mejorar la guía y, más adelante, para DPO o LoRA. Solo texto, sin acciones, marcado como simulación.
 - Todo lo que Asia guarde sobre el usuario son hipótesis visibles, corregibles y borrables.
+- Base científica del afecto (posible colaboración con una especialista en neurociencia):
+  - Valencia y activación (modelo circunflejo, PAD); evaluación de situaciones (*appraisal*: Lazarus, Scherer); emoción construida (Barrett).
+  - Política de respuesta según Clara Hill: explorar, comprender, actuar.
+  - Guía de anotación del dataset y diseño del registro diario; revisión ética; posible proyecto académico.
+  - Lecturas: Picard, *Affective Computing*; Barrett, *La emoción construida*; Butlin et al. (2023), sobre la conciencia en IA.
+- Dataset emocional y aprendizaje iterativo:
+  - Dataset local protegido, en `data/afecto/dataset/`.
+  - Etiquetado inicial por el proveedor solo durante la etapa de entrenamiento; esas etiquetas son un punto de partida, no la verdad.
+  - Un conjunto "oro" verificado por el usuario y un conjunto apartado solo para medir.
+  - Modelos pequeños propios (clasificador sobre embeddings, patrones en el tiempo, agrupamiento), reentrenables en local.
+  - Aprendizaje activo: preguntar solo por los casos dudosos. Cada reentrenamiento se mide contra el apartado y se descarta si no mejora. Nunca se reentrena solo con etiquetas propias.
+  - Los patrones son hipótesis con el número de casos que los apoyan; los preocupantes se tratan con cuidado, sugiriendo hablarlo con alguien.
+- Núcleo afectivo como módulo sustituible: interfaz clara y datos en formatos abiertos. Regla: cualquier paso hacia autonomía o identidad propia requiere revisión ética, mantiene el control humano y siempre se puede pausar. Hoy, todo lo emocional de Asia es una simulación funcional, y se documenta como tal.
 
 **Tareas grandes.**
 - Bucle de agente: planear, dividir en tareas pequeñas, hacer una, verificar (pruebas, sandbox, simulación), corregir, siguiente. El plan se guarda en un archivo para retomarlo.
@@ -1078,6 +1099,13 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 - Nivel 1 (primero): bots que solo combinan herramientas que ya existen. Nivel 2 (después): bots que necesitan una herramienta nueva; su código pasa por el sandbox, el chequeo de imports, las pruebas y la revisión del usuario.
 - Reglas: mínimo privilegio. Un bot no amplía sus permisos ni crea otros bots sin aprobación. Sin nadie presente, lo que preguntaría se niega. Escribir, enviar o borrar, siempre con confirmación. Bitácora de todo. Modo confidencial y guardián en los envíos externos.
 - Depende de: el motor de permisos, el agente de varios pasos (M), MCP (N) y la regla de tareas sin nadie presente.
+- Acceso a servicios externos:
+  - Las cuentas las crea el usuario; Asia no registra cuentas ni resuelve CAPTCHA ni verificaciones.
+  - Credenciales limitadas (tokens o claves por proyecto), generadas por el usuario y guardadas en el Administrador de credenciales de Windows (`keyring`); nunca en archivos del repo, prompts ni bitácoras.
+  - Una credencial por bot y por servicio, con mínimo privilegio, y la lista de dominios permitidos en la ficha del bot.
+  - Se usa la API, la CLI o el servidor MCP oficial del servicio (por ejemplo, Supabase).
+  - Confirmación para las acciones con costo o difíciles de deshacer.
+  - Un comando para listar y revocar las credenciales de cada bot.
 
 **Biblioteca de lecciones** (sandbox y código).
 - Cada fallo resuelto en el sandbox o en las pruebas deja una lección en `data/lecciones/` (qué falló, por qué y cómo se arregló), que Asia lee antes de generar código parecido.
