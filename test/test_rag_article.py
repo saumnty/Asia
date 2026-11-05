@@ -171,3 +171,13 @@ def test_las_respuestas_de_stack_exchange_tambien():
     body = BeautifulSoup("<div><p>See Dr. Smith's answer. It works.</p></div>", "html.parser")
 
     assert post_lines(body) == ["See Dr. Smith's answer.", "It works."]
+
+
+# Decisión: "etc." y una inicial no cortan, aunque a veces sean fin de frase. Cortar
+# en "St." o "A. Fleming" partía nombres; a cambio, estas dos frases quedan en una línea.
+@pytest.mark.parametrize("text", [
+    "Hay ríos, lagos, etc. El clima es templado.",
+    "Es rica en la vitamina A. Después se cocina.",
+])
+def test_etc_y_una_inicial_no_cortan_aunque_cierren_la_frase(text):
+    assert split_sentences(text) == [text]

@@ -28,7 +28,16 @@ def test_recordar_sin_valor_pregunta_por_el():
     brain = make_brain()
     brain.intent_engine = Intent("remember", {"key": "mi color favorito"})
 
-    assert brain.process("recuerda mi color favorito").startswith("¿Qué quieres que recuerde de mi color favorito?")
+    answer = brain.process("recuerda mi color favorito")
+
+    assert answer == "¿Qué quieres que recuerde sobre «mi color favorito»? Ej.: recuerda que mi color favorito es …"
+
+
+def test_recordar_sin_valor_con_una_clave_suelta():
+    brain = make_brain()
+    brain.intent_engine = Intent("remember", {"key": "color"})
+
+    assert brain.process("recuerda el color") == "¿Qué quieres que recuerde sobre «color»? Ej.: recuerda que mi color es …"
 
 
 def test_los_ejemplos_son_frases_que_se_pueden_decir():

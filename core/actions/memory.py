@@ -13,6 +13,12 @@ MISSING_RECALL = "¿Qué dato quieres que busque? Ej.: ¿cuál es mi color favor
 MISSING_FORGET = "¿Qué dato quieres que olvide? Ej.: olvida mi color favorito"
 
 
+def possessive(key: str) -> str:
+    """"color" -> "mi color"; "mi color favorito" queda igual (sin "mi mi")."""
+    words = key.split()
+    return key if words and words[0].lower() in {"mi", "mis", "el", "la", "los", "las"} else f"mi {key}"
+
+
 class MemoryActions:
     HANDLERS = {
         "remember": "handle_remember",
@@ -37,7 +43,7 @@ class MemoryActions:
             return MISSING_REMEMBER
 
         if not value:
-            return f"¿Qué quieres que recuerde de {key}? Ej.: recuerda que {key} es …"
+            return f"¿Qué quieres que recuerde sobre «{key}»? Ej.: recuerda que {possessive(key)} es …"
 
         self.memory.remember(key, value)
         return f"Entendido. Recordaré que {key} es {value}."
