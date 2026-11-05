@@ -1043,6 +1043,30 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 - `sqlite3` de Python, sin instalar nada, con transacciones para los hilos en segundo plano.
 
 **Afecto y cognición social** (fase de afecto).
+
+**Versión 0 hecha (2026-11-04),** sin dataset del usuario y apagada por defecto (`afecto.activo` en `defaults.json`; `/afecto on` la enciende para la sesión). Commit `b29373c5`.
+- `core/afecto/`, módulo sustituible (interfaz `AffectCore`: `observe`, `instruction`, `correct`, `state`, `clear`; datos en JSON, `data/afecto/estado.json`).
+- Estado: valencia y activación de -1 a 1, con confianza, etiqueta y fecha. Cada mensaje del chat se estima con qwen3 (dominio `general`, prompt corto y fijo, JSON con etiqueta y evaluación: importancia, bloqueo, control, urgencia, con confianza). Se suaviza con el estado anterior, pesado por la confianza, que se desvanece a la mitad cada `afecto.vida_media_horas` (3).
+- Política: desagradable y agitado → breve, con calma, validar primero, un solo paso concreto; desagradable y calmado → suave, sin presión, preguntar antes de proponer; agradable y agitado → acompañar la energía; agradable y calmado o neutral → el tono de siempre; con señal desagradable y confianza por debajo de 0,4 → preguntar si quiere desahogarse o resolverlo. Va como una instrucción breve al final del mensaje del chat, solo hacia el modelo local.
+- Controles: `/estado` (la hipótesis, visible), la corrección del usuario ("no, solo estoy concentrado", que reemplaza la estimación con confianza 0,9), `/afecto on|off` y `/afecto borrar`. Con el afecto activo el turno lleva la etiqueta "emocional": nunca sale, ni la estimación ni la respuesta, aunque el proveedor por defecto sea externo.
+- `test/manual/check_afecto.py`: 24 mensajes inventados con su zona (6 por zona) y 4 neutros, cada uno sin el estado anterior, con seed y temperatura 0.
+
+| Zona esperada | Aciertos | Fallos |
+|---|---|---|
+| Desagradable y agitado | 6/6 | — |
+| Desagradable y calmado | 5/6 | "Me rechazaron la beca. Ya no sé qué hacer." → agitado (activación +0,3) |
+| Agradable y agitado | 6/6 | — |
+| Agradable y calmado | 2/6 | 4 → agitado: qwen3 da activación +0,3 a +0,5 a "tranquilo", "a gusto", "descansar", "sin prisas" |
+| Neutral | 4/4 | — |
+| Total | 23/28 | |
+
+- Tiempo añadido por mensaje: 1,5 s de mediana con qwen3 cargado; 12,3 s el primero, con la carga.
+- Límites de la versión 0:
+  - Agradable y calmado se confunde con agitado. No se ajustó el umbral de activación (0,2) con estos mismos 28 mensajes: haría falta un conjunto aparte (el conjunto "oro" del dataset).
+  - Si el chat va con el 7B (dominio código), la estimación con qwen3 cambia de modelo en cada mensaje (con `ollama_one_model_at_a_time`, unos 8,5 s por cambio, medido en la estrategia B). Opción: estimar con el modelo que va a responder.
+  - Un mensaje solo da poca información; el suavizado ayuda, pero no se midió en conversaciones.
+  - Con el afecto activo, el chat siempre responde en local.
+- Fuentes: Russell (1980), "A circumplex model of affect"; Mehrabian y Russell (1974), el modelo PAD; Lazarus (1991), *Emotion and Adaptation*; Scherer (2001), la evaluación por componentes (*appraisal*); Barrett (2017), *La emoción construida*; Hill, *Helping Skills* (explorar, comprender, actuar); Picard (1997), *Affective Computing*.
 - Escucha y empatía, el objetivo central:
   - Detectar si el usuario quiere desahogarse o resolver algo, o preguntárselo.
   - Escucha activa: reflejar, preguntar lo justo, sin listas ni consejos genéricos.
