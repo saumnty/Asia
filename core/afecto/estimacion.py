@@ -13,8 +13,8 @@ def estimate_prompt(text: str) -> str:
     return f"""Estima cómo se siente quien escribe este mensaje. Responde solo con JSON, sin explicar:
 {{"valencia": 0, "activacion": 0, "etiqueta": "neutral", "importancia": 0, "bloqueo": 0, "control": 0, "urgencia": 0, "confianza": 0}}
 
-- valencia: de -1 (desagradable) a 1 (agradable).
-- activacion: de -1 (calmado, cansado) a 1 (agitado, con energía).
+- valencia: qué tan agradable o desagradable es lo que siente, de -1 (desagradable) a 1 (agradable).
+- activacion: cuánta energía o tensión tiene el cuerpo, sin importar si es agradable: de -1 (muy calmado, relajado, cansado) a 1 (muy agitado, nervioso, eufórico). Estar contento no sube la activación: "tranquilo", "a gusto", "relajado", "en paz", "sin prisa" son activación baja (-0.5 o menos); "nervioso", "furioso", "emocionado", "¡no lo puedo creer!" son alta.
 - etiqueta: una palabra (frustrado, triste, contento, entusiasmado, concentrado, neutral...).
 - importancia, bloqueo, control, urgencia: de 0 a 1, cómo ve la persona su situación.
 - confianza: de 0 a 1; baja si el mensaje no dice nada de cómo se siente.

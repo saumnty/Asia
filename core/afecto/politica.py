@@ -3,7 +3,8 @@ from core.afecto.estado import State
 
 # Desde qué valor cuenta una valencia (agradable o desagradable) o una activación alta.
 VALENCE_MARK = 0.2
-AROUSAL_MARK = 0.2
+# 0,3 con el conjunto de calibración (check_afecto --calibracion): de 0,25 a 0,4 dan lo mismo.
+AROUSAL_MARK = 0.3
 # Por debajo, no se sabe lo bastante: se pregunta en vez de suponer.
 MIN_CONFIDENCE = 0.4
 

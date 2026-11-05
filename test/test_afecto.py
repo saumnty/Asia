@@ -49,7 +49,7 @@ def test_sin_json_no_hay_confianza():
 def test_el_prompt_es_corto_y_fijo():
     prompt = estimate_prompt("estoy harto")
 
-    assert prompt.endswith("Mensaje:\nestoy harto") and len(prompt) < 900
+    assert prompt.endswith("Mensaje:\nestoy harto") and len(prompt) < 1400
 
 
 # --- Suavizado ------------------------------------------------------------------------
