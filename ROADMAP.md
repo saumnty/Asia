@@ -49,7 +49,7 @@ para poder revisar o revertir los cambios.
 - "muéstrame un resumen del archivo X" va a `read_file_preview` (las primeras líneas), no a `summarize_file`. Se dejó así en la fase E para no cambiar la acción.
 - ~~`remember`, `recall` y `forget` sin `key` caen al chat sin aviso.~~ Hecho en `c47a66e2`: dicen qué falta, con un ejemplo (en el golden cambia solo `remember_sin_valor`).
 - El diagnóstico de `debug_project` sigue siendo superficial: con "Asia None" señala `launcher.py` y `brain.process` devolviendo `None`, sin llegar a la causa real del bug de la fase 1 (el streaming, ya corregido). En C:\Asia, `tools/debug_context.py` sale entre los primeros archivos porque contiene las búsquedas fijas y "Asia None" en sus comentarios: es ruido propio de este repositorio.
-- `open_app` responde "Abriendo notebook." con el nombre que extrajo el modelo. Debería decir el nombre resuelto ("Abriendo bloc de notas.").
+- ~~`open_app` responde "Abriendo notebook." con el nombre que extrajo el modelo.~~ Hecho en `e6b50557` y `376b3c42`: dice el nombre de la app ("Abriendo bloc de notas.", también con "notepad").
 - La salida no tolera erratas: "salior" va al IntentEngine en lugar de cerrar. Aplicar a "/salir" y sus alias (`core/commands.py`) la misma tolerancia que a los nombres de apps.
 - ~~Flag `--timing`~~ (hecho, ver la tabla). La aceleración se decide con los números de `--timing` en uso real: primera tanda hecha (ver "Velocidad").
 
@@ -663,6 +663,20 @@ Extras de Asia 2.0, junto al modo confidencial:
 **J2, frase por frase e interrupción (hecho):** `core/voice/reading.py`. Cada frase completa del streaming (nunca dentro de un bloque de código ni de una fila de tabla) se genera en un hilo y suena en otro, en orden; la respuesta sigue sonando al volver al prompt. Enter (mientras escribe o al mandar otra línea), Ctrl+C (corta la lectura, no Asia) o volver a escuchar cortan la lectura y vacían la cola. "Te dejo el código en pantalla" se dice una vez al final. `--timing` añade "primer audio".
 - Hasta el primer audio, desde que termina la frase dicha (`check_voz.py --sin-microfono`, con altavoz): "qué es un grafo bipartito" 15,8 s → 9,1 s; "sobre el blog de notas" 29,6 s → 10,2 s (con la brevedad en voz); "cuéntame un chiste" 11,2 s → 9,3 s (respuesta de una frase: casi todo es la intención y el modelo). Voz a texto aparte: 2,7 → 3,1 s.
 
+**J2, prueba con el micrófono (2026-11-04):**
+- Primer audio de la charla: de 3,4 a 5,8 s (antes ~9 s). Voz a texto: 2,6–3,9 s.
+- Enter y Ctrl+C cortan la lectura sin cerrar Asia.
+- Fallos de Whisper vistos: "gravóvio partita" (grafo bipartito), "QDP" (UDP), "los dos" (ROS 2), "look de notas" (bloc de notas, abrió Outlook) y "Subtítulos por la comunidad de Amara.org" con 0 s de voz.
+- `explain_file` por voz: 65,5 s hasta el primer audio (415 tokens con listas, sin streaming).
+- Arreglos:
+  - `c47603b5`: sin voz detectada no se llama a Whisper; sus alucinaciones conocidas (`voice.stt_hallucinations`) cuentan como "no te oí".
+  - `376b3c42`: con un nombre aproximado, `open_app` pregunta "¿Abro X? s/N" (escrito o dicho) y dice el nombre de la app ("Abriendo bloc de notas.", no "notepad").
+  - `8b4ccdf5`: al confirmar, lo dicho queda de alias si es el nombre con un error ("block de notas"), no si es una parte ("look" en "Outlook"). Se borró la entrada "look" de `apps_learned.json`.
+  - `6ebb14c3`: "ROS 2", "TCP", "UDP" y "grafo bipartito" en `voice.stt_vocabulary`.
+  - `db533b1f`: cada palabra sale una vez en el `initial_prompt` (ganan las de `stt_vocabulary`); vuelven a caber "activa", "desactiva", "recuerda" y "lista".
+  - `5aec6954`: "(Lectura cortada.)" sale al terminar la respuesta, en su propia línea.
+  - `6998e532`: con voz, `explain_file` y `summarize_file` responden en 1 a 3 frases (`answer_limits.<acción>.voice_tokens`, 150), con "Para la explicación completa: explica X a fondo" solo en pantalla; con "a fondo", la plantilla larga.
+
 **J3, palabra de activación:** "Hey Jarvis" de openWakeWord para las pruebas; después, "Oye Asia" entrenada. En 1.0 se prueba con el micrófono de la laptop a distancia corta; la activación a distancia queda para cuando haya un micrófono externo.
 
 Paso 1 hecho (2026-11-04), `core/voice/wake.py`:
@@ -679,6 +693,14 @@ Paso 1, "Hey Jarvis" ya entrenado (instalado el 2026-11-04):
 - Modelos de la versión v0.5.1 de openWakeWord, en `data/models/openwakeword/`: `melspectrogram.onnx` 1,09 MB, `embedding_model.onnx` 1,33 MB y `hey_jarvis_v0.1.onnx` 1,27 MB; opcional, `silero_vad.onnx` 1,81 MB (filtro de voz propio). En total 5,5 MB, descargados en `data/models/openwakeword/` (ignorada por git), con el tamaño de la versión (no publica sha256). **Licencia de los modelos: CC BY-NC-SA 4.0, no comercial: uso personal, no distribuibles con Asia.** El código de openwakeword es Apache-2.0.
 - En reposo (silencio a ritmo real durante 60 s, sin micrófono): 7,2 % de un núcleo sin VAD y 9,6 % con VAD (16 núcleos lógicos: menos del 1 % del total); `predict` 5,9 ms de mediana por tramo de 80 ms (7,3 ms con VAD); +154 MB de RAM al cargar (+159 MB con VAD), con la importación de openwakeword y sus dependencias; 5,4 s de carga, la primera vez que se activa `/escucha` en la sesión. El micrófono (sounddevice) no está incluido.
 - `check_wake` con el micrófono (aciertos y falsas activaciones) lo mide el usuario.
+
+Pruebas de "Hey Jarvis" con el micrófono de la laptop (2026-11-04 y 05):
+- Prueba 1: 0/20. El micrófono se abría tras el Enter y no había calentamiento. Control con Zira (SAPI en inglés): 0,999, también a −40 dB, así que el código no era la causa. Cambios: `bf79fee6` (la escucha vacía también el VAD de Silero: `model.reset()` no lo tocaba) y `2506ebb2` (`check_wake` con un micrófono y un modelo para toda la prueba, 2 s de calentamiento, ventana de 6 s, niveles en dBFS, `--guardar-audio` y `--repuntuar`).
+- Prueba 2: 2/20. El "antes" a −120 dBFS (la compuerta de las mejoras de audio de Windows) y saturación en los intentos fuertes.
+- Prueba 3, con las mejoras y la supresión de ruido de Windows desactivadas: ruido real de −58 a −75 dBFS, 11/20 a 0,5. Bimodal (0,96–1,00 o < 0,25): decide la pronunciación, no el nivel ni el umbral. Acierta con "hey DYAR-vis" a la inglesa; falla con la jota.
+- Nivel final: volumen de entrada al 100, sin mejoras ni boost (el driver no lo ofrece). Voz normal: picos de −6 a −5 dBFS, ruido de −53 a −57 dBFS.
+- Decisión: "Hey Jarvis" queda de provisional. "Oye Asia" pasa a ser la prioridad de J3, con positivos de la voz del usuario grabados con el micrófono de la laptop (`check_wake --grabar N --frase "oye Asia"`, `180fc1ed`) además de los de Piper, y negativos parecidos (`--negativos`, `70ae34ee`), en `data/wake/` (ignorada por git). Subirlos a Colab: decisión del usuario, pendiente.
+- Configuración recomendada: mejoras de audio de Windows desactivadas para el micrófono (también afecta a Whisper y al VAD); repetir `/calibrar voz` tras el cambio.
 
 Paso 2, entrenar "Oye Asia" (plan, 2026-11-04; se hace con otro permiso). En Colab con GPU: el cuaderno de entrenamiento de openWakeWord (`automatic_model_training.ipynb`) usa los 17 GB de negativos y dependencias que aquí no conviene instalar (`openwakeword[full]`; el TensorFlow 2.8.1 que pide no instala en Python 3.11 y solo sirve para tflite).
 
@@ -699,6 +721,9 @@ Licencias: el modelo sale de las características de ACAV100M (CC BY-NC-SA 4.0),
 **Licencias de voz:** `piper-tts` 1.3+ es GPL-3.0 (vale para uso personal). Si algún día se distribuye Asia, la alternativa es el Piper anterior con licencia MIT (rhasspy/piper, hasta 1.2). Voces descargadas: `es_MX-claude-high` (datos Apache-2.0), `es_MX-ald-medium` (Unlicense) y `es_ES-sharvard-medium` (CC BY 3.0, exige atribución). `ald` y `sharvard` se afinaron desde `lessac`, cuyos datos probablemente son de uso no comercial: revisarlo antes de distribuir.
 
 **Pendiente:**
+- `check_wake --falsas 30` con "Hey Jarvis".
+- Streaming en las acciones (parte 2 de la propuesta de voz): `ask()` con `on_chunk` y el launcher pasándoselo a Brain, como en la charla, para que la primera frase de `explain_file` suene en cuanto se genere; con voz se leerían 2–3 frases y el resto quedaría en pantalla. Toca el camino de todas las acciones.
+- "cómo va Bolitabot" hizo que qwen3 respondiera como si fuera Bolitabot. Medir aparte.
 - Canal de estado local (Flask-SocketIO) para que el avatar reaccione a hablar, pensar y escuchar.
 - Avatar: perro bóxer.
 
