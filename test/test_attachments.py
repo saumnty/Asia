@@ -77,7 +77,8 @@ def test_mismo_archivo_dos_veces_se_adjunta_una(project):
     "name, data, expected",
     [
         ("carpeta", None, "es una carpeta"),
-        ("foto.png", b"\x89PNG", "es una imagen"),
+        # Una imagen rota: el OCR no la puede leer (core/ocr.py).
+        ("foto.png", b"\x89PNG", "no pude leer el texto de la imagen"),
         ("prog.exe", b"MZ\x00\x00binario", "parece un archivo binario"),
     ],
 )

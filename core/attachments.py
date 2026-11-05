@@ -138,13 +138,32 @@ def corrected_message(text: str, missing) -> str | None:
     return text if missing else None
 
 
+def is_image(path) -> bool:
+    return path is not None and Path(path).suffix.lower() in IMAGE_EXTENSIONS
+
+
+def read_image(path: Path, max_chars: int) -> Attachment | str:
+    """El texto de la imagen con OCR (core/ocr.py); un aviso si no tiene texto o no se puede leer."""
+    from core.ocr import OcrError, image_text
+
+    try:
+        text = image_text(path)
+    except OcrError as e:
+        return f"{path}: no pude leer el texto de la imagen ({e})."
+
+    if not text:
+        return f"{path}: no encontré texto en la imagen; describir fotos necesita un modelo con visión (todavía no)."
+
+    return make_attachment(f"{path} (texto de la imagen, leído con OCR)", text, max_chars, path=path)
+
+
 def read_attachment(path: Path, max_chars: int) -> Attachment | str:
-    """Lee path como texto. Devuelve un aviso (str) si no se puede adjuntar."""
+    """Lee path como texto (una imagen, con OCR). Devuelve un aviso (str) si no se puede adjuntar."""
     if path.is_dir():
         return f"{path} es una carpeta; solo se adjuntan archivos."
 
     if path.suffix.lower() in IMAGE_EXTENSIONS:
-        return f"{path} es una imagen; las imágenes necesitan un modelo con visión (todavía no soportado)."
+        return read_image(path, max_chars)
 
     data = path.read_bytes()
 

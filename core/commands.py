@@ -63,6 +63,9 @@ COMMANDS = [
     Command("archivos y adjuntos", "<< ... FIN",
             "un mensaje que termina en << sigue en varias líneas hasta FIN",
             "explica esto <<  (pega el código y termina con FIN)", syntax=True),
+    Command("archivos y adjuntos", "/pegar <pregunta>",
+            "adjunta la imagen del portapapeles y lee su texto con el OCR de Windows (local)",
+            "/pegar qué dice este error", special="pegar"),
     Command("archivos y adjuntos", "/carpeta", "carpeta desde donde llamaste a Asia",
             "/carpeta", special="carpeta", aliases=("cwd", "donde estoy", "carpeta actual")),
 
@@ -201,8 +204,8 @@ def resolve(text: str):
         if ARG in command.slash:
             prefix = command_text(head(command))
 
-            # "/hecho" sin argumento: lo explica su acción.
-            if normalized == prefix and command.action:
+            # "/hecho" sin argumento: lo explica su acción ("/pegar", el launcher).
+            if normalized == prefix and (command.action or command.special):
                 return Resolved(command)
 
             if normalized.startswith(prefix + " "):
@@ -215,6 +218,12 @@ def resolve(text: str):
 
 def unknown_message(name: str) -> str:
     return f"No conozco el comando {name}. Escribe /opciones para ver los comandos."
+
+
+def launcher_argument(text: str, name: str):
+    """Lo que va tras un comando del launcher con argumento ("/pegar qué dice"); None si no es ese comando."""
+    resolved = resolve(text)
+    return resolved.arg if resolved and resolved.command is not None and resolved.command.special == name else None
 
 
 def is_launcher_command(text: str, name: str) -> bool:

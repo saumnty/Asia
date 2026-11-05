@@ -21,6 +21,7 @@ from core.attachments import (
     extract_attachments,
     file_attachments,
     history_prompt,
+    is_image,
     make_attachment,
     quote_path,
     read_stdin,
@@ -31,7 +32,7 @@ from core.path_completion import make_completer
 from core import timing
 from core.actions.models import command_text
 from core.actions.voice import VOICE_SETTING, WAKE_SETTING
-from core.commands import is_launcher_command, looks_like_exit, options_text
+from core.commands import is_launcher_command, launcher_argument, looks_like_exit, options_text
 from core.recent_facts import is_affirmative
 from core.confidential import LOCAL_MODE, OPEN_MODE, current_mode
 from core.model_selection import model_for
@@ -54,6 +55,8 @@ DEFAULT_ATTACHMENT_MAX_CHARS = 20000
 
 # Instrucción cuando solo llegan archivos (--file) sin texto.
 DEFAULT_FILE_REQUEST = "Explica el contenido de los archivos adjuntos."
+# "/pegar" sin pregunta.
+PASTED_IMAGE_REQUEST = "Lee el texto de esta imagen y dime qué dice"
 
 # Modo multilínea del modo interactivo: "explica esto <<", líneas, "FIN".
 MULTILINE_START = "<<"
@@ -244,6 +247,20 @@ def prepare_message(brain, text, files=(), block=None, block_label=STDIN_LABEL, 
     cwd = Session.get_user_cwd()
     max_chars = brain.settings.get("attachment_max_chars", DEFAULT_ATTACHMENT_MAX_CHARS)
 
+    # "/pegar <pregunta>": la imagen del portapapeles, guardada en una carpeta temporal, como @ruta.
+    question = launcher_argument(text, "pegar") if block is None else None
+
+    if question is not None:
+        from core.ocr import pasted_image
+
+        image = pasted_image()
+
+        if image is None:
+            warn(["No hay una imagen en el portapapeles (copia una captura y vuelve a escribir /pegar)."])
+            return None
+
+        text = f"{question.strip() or PASTED_IMAGE_REQUEST} {at_path(str(image))}"
+
     text, attachments, warnings = extract_attachments(text, cwd, max_chars)
     extra, extra_warnings = file_attachments(files, cwd, max_chars)
     warnings += extra_warnings
@@ -264,7 +281,8 @@ def prepare_message(brain, text, files=(), block=None, block_label=STDIN_LABEL, 
         )
         attachments += extra
 
-    use_actions = True
+    # El texto de una imagen va al chat: las acciones (explicar, revisar) leerían el archivo.
+    use_actions = not any(is_image(a.path) for a in attachments)
     text_label = USUARIO
 
     if block is not None:
