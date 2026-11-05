@@ -107,16 +107,19 @@ def respond(brain, text, prefix="", attachments=(), use_actions=True, text_label
             timing.record_voice("stt", heard.stt_seconds, heard.audio_seconds, heard.recorded_seconds)
 
         reading = start_reading(voice)
+        notice = CutNotice()
 
-        with ctrl_c_stops(reading):
+        with ctrl_c_stops(reading, notice):
             try:
-                answer = respond_in_context(brain, text, attachments, use_actions, reading)
+                answer = respond_in_context(brain, text, attachments, use_actions, reading, notice)
             except KeyboardInterrupt:
                 if not cuttable:
                     raise
 
                 print(RESPONSE_CUT, file=sys.stderr)
                 answer = None
+
+            notice.flush()
 
             timing.mark_answered()
 
@@ -141,6 +144,23 @@ READING_CUT = "\n(Lectura cortada.)"
 RESPONSE_CUT = "\n(Respuesta cortada.)"
 
 
+class CutNotice:
+    """"(Lectura cortada.)" mientras se escribe la respuesta: sale al terminarla, en su
+    propia línea. Impreso al momento partía el texto ("Lo / (Lectura cortada.) / s subtítulos")."""
+
+    def __init__(self):
+        self.pending = False
+
+    def cut(self):
+        self.pending = True
+
+    def flush(self):
+        if self.pending:
+            sys.stdout.flush()
+            print(READING_CUT.strip(), file=sys.stderr, flush=True)
+            self.pending = False
+
+
 def start_reading(voice):
     """La lectura frase por frase de esta respuesta, o None. Un fallo de la voz no pierde la respuesta."""
     if voice is None:
@@ -154,10 +174,11 @@ def start_reading(voice):
 
 
 @contextmanager
-def ctrl_c_stops(reading):
+def ctrl_c_stops(reading, notice=None):
     """Mientras se escribe la respuesta, Ctrl+C corta la lectura (no la respuesta ni Asia).
 
-    Si no hay nada sonando, Ctrl+C hace lo de siempre.
+    Si no hay nada sonando, Ctrl+C hace lo de siempre. notice (CutNotice): el aviso
+    espera a que termine la respuesta; sin él, sale al momento.
     """
     if reading is None or threading.current_thread() is not threading.main_thread():
         yield
@@ -168,7 +189,11 @@ def ctrl_c_stops(reading):
             raise KeyboardInterrupt
 
         reading.stop()
-        print(READING_CUT, file=sys.stderr)
+
+        if notice is not None:
+            notice.cut()
+        else:
+            print(READING_CUT, file=sys.stderr)
 
     previous = signal.signal(signal.SIGINT, handler)
 
@@ -189,8 +214,9 @@ def speak_answer(speak, answer):
         print(f"No pude leer la respuesta en voz alta: {e}", file=sys.stderr)
 
 
-def respond_in_context(brain, text, attachments, use_actions, reading=None):
-    """Imprime la respuesta y la devuelve. reading: cada trozo del streaming se lee en cuanto completa una frase."""
+def respond_in_context(brain, text, attachments, use_actions, reading=None, notice=None):
+    """Imprime la respuesta y la devuelve. reading: cada trozo del streaming se lee en cuanto completa una frase.
+    notice (CutNotice): dónde va el aviso si Enter corta la lectura."""
     def on_chunk(chunk):
         print(chunk, end="", flush=True)
 
@@ -200,7 +226,11 @@ def respond_in_context(brain, text, attachments, use_actions, reading=None):
             # Enter mientras escribe corta la lectura (la respuesta sigue).
             if enter_pressed():
                 reading.stop()
-                print(READING_CUT, file=sys.stderr)
+
+                if notice is not None:
+                    notice.cut()
+                else:
+                    print(READING_CUT, file=sys.stderr)
 
     try:
         response = brain.process(text) if use_actions else None

@@ -1,5 +1,7 @@
 """Lectura frase por frase (J2): suena mientras se escribe; Enter, Ctrl+C o escuchar la cortan."""
+import io
 import signal
+import sys
 import threading
 
 import numpy as np
@@ -223,6 +225,35 @@ def test_enter_mientras_escribe_corta_la_lectura(monkeypatch, capsys):
     # La respuesta se escribe entera.
     assert "Una. Dos. Tres." in out.out
     assert len(voice.tts.texts) <= 1
+
+
+def test_el_aviso_de_lectura_cortada_no_parte_la_respuesta(monkeypatch):
+    # Caso real: "Lo / (Lectura cortada.) / s subtítulos…". Pantalla = stdout y stderr juntos.
+    screen = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", screen)
+    monkeypatch.setattr(sys, "stderr", screen)
+    monkeypatch.setattr(launcher, "enter_pressed", lambda: True)
+    voice, _ = session([])
+    brain = voice_brain(["Lo", "s subtítulos salen. ", "Fin."])
+
+    launcher.interactive_mode(brain, read=patient(["hola", "salir"], voice), voice=voice)
+
+    assert "Los subtítulos salen. Fin.\n(Lectura cortada.)\n" in screen.getvalue()
+    assert screen.getvalue().count("(Lectura cortada.)") == 1
+
+
+def test_ctrl_c_mientras_escribe_avisa_al_terminar_la_respuesta(capsys):
+    notice = launcher.CutNotice()
+    reading = Reading(FakeTTS(), BlockingSpeaker())
+    reading.feed("Una. ")
+
+    with launcher.ctrl_c_stops(reading, notice):
+        signal.raise_signal(signal.SIGINT)
+
+    assert not reading.active and "(Lectura cortada.)" not in capsys.readouterr().err
+    notice.flush()
+    notice.flush()
+    assert capsys.readouterr().err == "(Lectura cortada.)\n"
 
 
 def test_ctrl_c_en_el_prompt_corta_la_lectura_y_asia_sigue(capsys):
