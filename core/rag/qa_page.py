@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
-from core.rag.article import SENTENCE_END, clean, pack
+from core.rag.article import clean, pack, split_sentences
 
 MAX_ANSWERS = 3
 # Una respuesta de más años que esto, frente a la edición del .zim, puede estar desactualizada.
@@ -88,7 +88,7 @@ def post_lines(body) -> list:
         if block.name == "pre":
             lines += [line.rstrip() for line in block.get_text().splitlines() if line.strip()]
         else:
-            lines += [sentence for sentence in SENTENCE_END.split(clean(block.get_text())) if sentence]
+            lines += split_sentences(clean(block.get_text()))
 
     return lines
 

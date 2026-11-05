@@ -18,9 +18,43 @@ NOISE = "style, script, figure, sup.reference, .navbox, .noprint, .mw-editsectio
 MATH = ".mwe-math-element"
 # No son contenido del artículo: lo que hay ahí son enlaces y bibliografía.
 SKIPPED_SECTIONS = {"Véase también", "Notas", "Referencias", "Bibliografía", "Enlaces externos", "Fuentes"}
-SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+SENTENCE_END = re.compile(r"[.!?]\s+")
+# Abreviaturas que no cierran frase ("Hospital St. Mary's" se cortaba en "St."), en
+# minúsculas y sin el punto final. Además: las iniciales ("A. Fleming") y las siglas
+# con puntos ("e.g.", "U.S.").
+ABBREVIATIONS = {
+    "p", "st", "sr", "sra", "srta", "dr", "dra", "ing", "lic", "prof", "etc", "ej", "núm", "num", "pág", "págs",
+    "aprox", "av", "cf", "mr", "mrs", "ms", "jr", "vs",
+}
+LAST_WORD = re.compile(r"([\w.]+)\.$")
+DOTTED = re.compile(r"(?:\w\.)+\w")
 TEX = re.compile(r"^\{\\displaystyle\s*(.*?)\s*\}$", re.DOTALL)
 SPACES = re.compile(r"\s+")
+
+
+def is_abbreviation(piece: str) -> bool:
+    """True si piece termina en una abreviatura, una inicial o una sigla con puntos, no en fin de frase."""
+    found = LAST_WORD.search(piece)
+    word = found.group(1) if found else ""
+    # Una inicial es mayúscula: "3,5 m. Pesa" sí corta.
+    return word.lower() in ABBREVIATIONS or (len(word) == 1 and word.isupper()) or bool(DOTTED.fullmatch(word))
+
+
+def split_sentences(text: str) -> list:
+    """Las frases de text: corta tras ".", "!" o "?" y un espacio, salvo tras una abreviatura."""
+    sentences, start = [], 0
+
+    for end in SENTENCE_END.finditer(text):
+        piece = text[start:end.start() + 1]
+
+        if text[end.start()] == "." and is_abbreviation(piece):
+            continue
+
+        sentences.append(piece)
+        start = end.end()
+
+    sentences.append(text[start:])
+    return [sentence for sentence in sentences if sentence]
 
 
 def clean(text: str) -> str:
@@ -54,7 +88,7 @@ def section_sentences(section) -> list:
 
         # Una fila no es prosa: "564 m s. n. m." no son tres frases.
         text = block_text(block)
-        sentences += [text] if block.name == "tr" else SENTENCE_END.split(text)
+        sentences += [text] if block.name == "tr" else split_sentences(text)
 
     return [sentence for sentence in sentences if sentence]
 

@@ -1,5 +1,9 @@
 """Artículos de Wikipedia a fragmentos, con la estructura real de mwoffliner."""
-from core.rag.article import SEPARATOR, article_chunks
+import pytest
+from bs4 import BeautifulSoup
+
+from core.rag.article import SEPARATOR, article_chunks, split_sentences
+from core.rag.qa_page import post_lines
 from core.rag.chunking import MAX_CHARS
 
 REFERENCE = (
@@ -142,3 +146,28 @@ def test_sin_secciones_no_hay_fragmentos():
 
 def test_el_separador_es_el_de_las_secciones_de_un_documento():
     assert SEPARATOR == " > "
+
+
+# --- Frases: las abreviaturas no cierran frase -------------------------------------
+
+@pytest.mark.parametrize("text, expected", [
+    ("Lo trataron en el Hospital St. Mary's de Londres. Luego volvió.",
+     ["Lo trataron en el Hospital St. Mary's de Londres.", "Luego volvió."]),
+    ("La descubrió A. Fleming en 1928. Fue un hallazgo.", ["La descubrió A. Fleming en 1928.", "Fue un hallazgo."]),
+    ("El Sr. Pérez y la Sra. Gómez. El Dr. Ruiz y la Dra. Luna.",
+     ["El Sr. Pérez y la Sra. Gómez.", "El Dr. Ruiz y la Dra. Luna."]),
+    ("Frutas, p. ej., peras, etc. y más.", ["Frutas, p. ej., peras, etc. y más."]),
+    ("Es el núm. 5 de la serie. ¿Seguro? Sí.", ["Es el núm. 5 de la serie.", "¿Seguro?", "Sí."]),
+    ("Mr. Smith vs. Mrs. Jones. Use a list, e.g. this one, i.e. a short one. Done!",
+     ["Mr. Smith vs. Mrs. Jones.", "Use a list, e.g. this one, i.e. a short one.", "Done!"]),
+    ("Hola. Adiós.", ["Hola.", "Adiós."]),
+    ("Mide 3.5 m. Pesa 2 kg.", ["Mide 3.5 m.", "Pesa 2 kg."]),
+])
+def test_las_abreviaturas_no_cierran_frase(text, expected):
+    assert split_sentences(text) == expected
+
+
+def test_las_respuestas_de_stack_exchange_tambien():
+    body = BeautifulSoup("<div><p>See Dr. Smith's answer. It works.</p></div>", "html.parser")
+
+    assert post_lines(body) == ["See Dr. Smith's answer.", "It works."]
