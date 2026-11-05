@@ -9,13 +9,20 @@ import re
 
 
 # Lo que responde Asia cuando la biblioteca no tiene la respuesta (fase H).
+# Según lo consultado (tools/rag_tool.py, not_found_message): proyectos, reportes y notas;
+# documentación; Wikipedia; Stack Exchange; o "tus fuentes" si hay de varios.
 NOT_FOUND = "No lo encontré en tus proyectos."
+NOT_FOUND_IN_DOCS = "No lo encontré en la documentación."
 NOT_FOUND_IN_WIKIPEDIA = "No lo encontré en Wikipedia."
+NOT_FOUND_IN_QA = "No lo encontré en Stack Exchange."
+NOT_FOUND_IN_SOURCES = "No lo encontré en tus fuentes."
 WIKIPEDIA_MISSING = "No encuentro el archivo de Wikipedia. Mira la ruta en /fuentes."
-# Sin esto no hay nada que pasarle al modelo.
-NOT_FOUND_IN_QA = "No lo encontré en las preguntas y respuestas."
 QA_MISSING = "No encuentro el archivo .zim de preguntas y respuestas. Mira la ruta en /fuentes."
-NOTHING_TO_ANSWER = (NOT_FOUND, NOT_FOUND_IN_WIKIPEDIA, WIKIPEDIA_MISSING, NOT_FOUND_IN_QA, QA_MISSING)
+# Sin esto no hay nada que pasarle al modelo. check_rag cuenta estas negativas como "el código negó".
+NOTHING_TO_ANSWER = (
+    NOT_FOUND, NOT_FOUND_IN_DOCS, NOT_FOUND_IN_WIKIPEDIA, NOT_FOUND_IN_QA, NOT_FOUND_IN_SOURCES,
+    WIKIPEDIA_MISSING, QA_MISSING,
+)
 FROM_WIKIPEDIA = "De Wikipedia, no de tus proyectos:"
 FROM_QA = "De preguntas y respuestas de Stack Exchange, no de tus proyectos:"
 # Lo que encabeza los fragmentos si había material, pero ninguna línea lo responde.

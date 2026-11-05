@@ -1,7 +1,15 @@
 from pathlib import Path
 
 from config.settings_manager import SettingsManager
-from core.prompts import NOT_FOUND, NOT_FOUND_IN_QA, NOT_FOUND_IN_WIKIPEDIA, QA_MISSING, WIKIPEDIA_MISSING
+from core.prompts import (
+    NOT_FOUND,
+    NOT_FOUND_IN_DOCS,
+    NOT_FOUND_IN_QA,
+    NOT_FOUND_IN_SOURCES,
+    NOT_FOUND_IN_WIKIPEDIA,
+    QA_MISSING,
+    WIKIPEDIA_MISSING,
+)
 from core.rag.glossary import glossary_terms
 from core.rag.indexer import ProjectIndexer, unload_chat_models
 from core.rag.library import (
@@ -36,6 +44,22 @@ WIKIPEDIA_URL = "https://{language}.wikipedia.org/wiki/{{}}"
 # Stack Exchange: 2.5, 3.0 o 4.0 según la fecha de cada publicación.
 QA_LICENSE = "CC BY-SA (versión según la fecha)"
 ZIM_SUFFIX = ".zim"
+
+
+# Proyectos, reportes y notas son del usuario: "en tus proyectos", como siempre.
+OWN_KINDS = {"proyecto", "reporte", "notas"}
+NOT_FOUND_BY_KIND = {"documentacion": NOT_FOUND_IN_DOCS, ENCYCLOPEDIA: NOT_FOUND_IN_WIKIPEDIA, QUESTIONS: NOT_FOUND_IN_QA}
+
+
+def not_found_message(searched) -> str:
+    """"No lo encontré en …" según lo consultado; sin fuentes (el proyecto activo), en tus proyectos."""
+    messages = {NOT_FOUND if source.kind in OWN_KINDS else NOT_FOUND_BY_KIND.get(source.kind, NOT_FOUND_IN_SOURCES)
+                for source in searched}
+
+    if not messages:
+        return NOT_FOUND
+
+    return messages.pop() if len(messages) == 1 else NOT_FOUND_IN_SOURCES
 
 
 def group_hits(query, sources, n_results, translated, keywords) -> list:
@@ -130,7 +154,7 @@ class RagTool:
         if (named or group) and hits:
             return LabeledResult(best_fragments(response), label)
 
-        return NOT_FOUND_IN_WIKIPEDIA if in_wikipedia else NOT_FOUND_IN_QA if in_questions else NOT_FOUND
+        return not_found_message(searched)
 
     def index_project(
         self,

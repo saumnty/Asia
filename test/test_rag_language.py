@@ -4,7 +4,7 @@ import pytest
 from config.settings_manager import SettingsManager
 from core import prompts
 from core.actions.library import USAGE, parse_source
-from core.prompts import NOT_FOUND
+from core.prompts import NOT_FOUND_IN_SOURCES
 from core.rag.indexer import ProjectIndexer
 from core.rag.library import Library, Source, clean_translation, needs_translation
 from core.rag.retriever import search_collections
@@ -238,6 +238,7 @@ def test_la_herramienta_pasa_la_traduccion_a_las_fuentes_en_ingles(monkeypatch):
 
     monkeypatch.setattr("tools.rag_tool.search_collections", search)
 
-    assert RagTool().search_project("qué es QoS", "asia", translated="What is QoS?") == NOT_FOUND
+    # Un proyecto y una documentación: "en tus fuentes".
+    assert RagTool().search_project("qué es QoS", "asia", translated="What is QoS?") == NOT_FOUND_IN_SOURCES
     assert seen["translated"] == "What is QoS?"
     assert seen["english"] == ["ros2"] and set(seen["collections"]) == {"ros2", "asia"}

@@ -476,16 +476,16 @@ def test_si_se_nombra_la_fuente_y_el_filtro_rechaza_muestra_los_fragmentos(monke
     assert shown.startswith(prompts.NO_DIRECT_ANSWER) and "Texto lejano." in shown
 
 
-def test_sin_fuente_nombrada_el_filtro_sigue_negando(monkeypatch):
+def test_sin_fuente_nombrada_el_filtro_sigue_negando_con_lo_consultado(monkeypatch):
     filter_rejects(monkeypatch, [FAR])
 
-    assert RagTool().search_project("qué políticas hay", "asia") == NOT_FOUND
+    assert RagTool().search_project("qué políticas hay", "asia") == prompts.NOT_FOUND_IN_DOCS
 
 
 def test_con_la_fuente_nombrada_y_sin_nada_encontrado_niega(monkeypatch):
     filter_rejects(monkeypatch, [])
 
-    assert RagTool().search_project("qué políticas hay en ros2", "asia") == NOT_FOUND
+    assert RagTool().search_project("qué políticas hay en ros2", "asia") == prompts.NOT_FOUND_IN_DOCS
 
 
 def test_los_fragmentos_de_una_fuente_nombrada_no_pasan_por_el_modelo():
@@ -542,3 +542,31 @@ def test_no_son_adorno(line):
     from core.rag.quotes import without_decoration
 
     assert without_decoration(line) == line
+
+
+# --- "No lo encontré en …" según lo consultado -----------------------------------------
+
+def source_of(kind):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(kind=kind)
+
+
+@pytest.mark.parametrize("kinds, expected", [
+    ([], prompts.NOT_FOUND),
+    (["proyecto", "notas", "reporte"], prompts.NOT_FOUND),
+    (["documentacion"], prompts.NOT_FOUND_IN_DOCS),
+    (["enciclopedia"], prompts.NOT_FOUND_IN_WIKIPEDIA),
+    (["preguntas", "preguntas"], prompts.NOT_FOUND_IN_QA),
+    (["proyecto", "documentacion"], prompts.NOT_FOUND_IN_SOURCES),
+])
+def test_no_lo_encontre_dice_donde_busco(kinds, expected):
+    from tools.rag_tool import not_found_message
+
+    assert not_found_message([source_of(kind) for kind in kinds]) == expected
+
+
+def test_check_rag_sigue_contando_todas_las_negativas():
+    for message in (prompts.NOT_FOUND, prompts.NOT_FOUND_IN_DOCS, prompts.NOT_FOUND_IN_WIKIPEDIA,
+                    prompts.NOT_FOUND_IN_QA, prompts.NOT_FOUND_IN_SOURCES):
+        assert message in prompts.NOTHING_TO_ANSWER
