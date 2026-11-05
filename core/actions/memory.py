@@ -8,6 +8,11 @@ from core.provenance import PROYECTO, Fragment, record
 from memory.project_memory import age_notice
 
 
+MISSING_REMEMBER = "¿Qué quieres que recuerde? Ej.: recuerda que mi color favorito es el azul"
+MISSING_RECALL = "¿Qué dato quieres que busque? Ej.: ¿cuál es mi color favorito?"
+MISSING_FORGET = "¿Qué dato quieres que olvide? Ej.: olvida mi color favorito"
+
+
 class MemoryActions:
     HANDLERS = {
         "remember": "handle_remember",
@@ -27,8 +32,12 @@ class MemoryActions:
     def handle_remember(self, text, params):
         key, value = params.get("key"), params.get("value")
 
-        if not (key and value):
-            return None
+        # Sin dato, se dice qué falta (antes caía al chat sin aviso).
+        if not key:
+            return MISSING_REMEMBER
+
+        if not value:
+            return f"¿Qué quieres que recuerde de {key}? Ej.: recuerda que {key} es …"
 
         self.memory.remember(key, value)
         return f"Entendido. Recordaré que {key} es {value}."
@@ -37,7 +46,7 @@ class MemoryActions:
         key = params.get("key")
 
         if not key:
-            return None
+            return MISSING_RECALL
 
         result = self.memory.recall(key)
 
@@ -50,7 +59,7 @@ class MemoryActions:
         key = params.get("key")
 
         if not key:
-            return None
+            return MISSING_FORGET
 
         deleted = self.memory.forget(key)
 
