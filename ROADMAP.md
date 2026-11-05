@@ -720,6 +720,21 @@ Entrenamiento de "Oye Asia" en Colab (2026-11-05):
 - Entrenamiento: 10 000 pasos más dos fases de 1000, unos 10 min en la T4. Modelo: `oye_asia_v0.1.onnx`, 291 KB, entrada [1, 23, 96].
 - Evaluación en Colab: negativos de prueba 0 %; positivos de prueba (con ruido y eco) 24 % a 0,5; falsas activaciones en 5,3 h: 4,5/h a 0,5, 0,75/h a 0,7 y 0/h a 0,9.
 - Pendiente: `check_wake --modelo oye_asia_v0.1 --aciertos 20` y `--falsas 30` con la voz del usuario, y elegir el umbral. Si se queda corto, v0.2: 50 000 pasos, `augmentation_rounds` 2 y más clips del usuario.
+
+`oye_asia_v0.1` en Asia (2026-11-05, `2d7263f`):
+- `core/voice/wake.py` y `/escucha` funcionan sin cambios con la entrada [1, 23, 96]: openWakeWord lee el tamaño del ONNX (`model_inputs` 23). Con un micrófono simulado y "oye Asia, qué hora es" de Piper, el `WakeListener` se activa. Tras `reset()`, el ruido y el silencio no pasan de 0,001 mientras se llenan los buffers.
+- Lo que dependía de 16: el calentamiento de `check_wake`, 2 s fijos. Con 23 embeddings hacen falta 32 tramos (2,56 s: 10 para vaciar el espectrograma y 23 para la ventana). Ahora sale del modelo (`warmup_chunks`); `--repuntuar` completa con silencio delante los WAV grabados con 2 s. La ayuda de `/escucha` ya no dice «Hey Jarvis».
+- Para usarlo, en `settings.json`: `"voice": {"wake_word": "oye_asia_v0.1", "wake_label": "Oye Asia"}` (y `wake_threshold` cuando se elija).
+- Con Piper (sin fondo, o con fondo de −60 a −45 dBFS): "oye Asia" sola da 0,005–0,22 y "oye Asia, qué hora es" 0,76–0,81, pero "hoy hacia" llega a 0,43–0,79 con fondo. Probable causa: 14 de los 19 textos positivos de `generar_wake` llevan una frase detrás, así que el modelo aprendió "voz que sigue tras Asia". Para v0.2: más "oye Asia" sola (la mitad de los positivos, por ejemplo) y "hoy hacia" con más peso entre los negativos.
+
+Cuaderno para v0.2 (`ecd4dc7`): `test/manual/colab/entrenar_oye_asia.ipynb`, para "Ejecutar todo" en Colab con T4.
+- Instalación con versiones fijas (torch 2.8.0 con restricciones para todo lo demás, `datasets>=3,<4`, openwakeword con `--no-deps`, sin TensorFlow, onnx_tf ni piper-phonemize) y modelos de características v0.5.1.
+- Parches con `sed`, comprobados: `set_audio_backend`, `generate_samples = None`, guardar el `state_dict` del mejor modelo antes de exportarlo, y dos más: `val_set_hrs` (fijo en 11,3 h en `auto_train`; con la validación a la mitad contaba la mitad de falsas por hora) y la conversión a tflite (sin TensorFlow fallaba al final con el `.onnx` ya escrito).
+- Datos: MIT RIR, AudioSet `bal_train09` del commit `4e17ae0`, sin FMA; ACAV100M a 1 000 000 filas y la validación a la mitad, recortadas con `dd` (cabecera nueva y los bytes de datos) y borrando los originales.
+- Subida de `sintetico.zip` y `mi_voz.zip`, reparto (10 % de Piper y 15 % del usuario a prueba, los del usuario ×10) y conteos. Configuración arriba (`oye_asia_v0.2`, 50 000 pasos, `augmentation_rounds` 2).
+- Aumento y entrenamiento con `nohup` y log; una celda muestra el progreso, la RAM y la GPU cada minuto hasta que termina. Evaluación de muestra en muestra (batch fijo de 1): positivos y negativos de prueba y falsas activaciones por hora a 0,5/0,7/0,9. Descarga del `.onnx`.
+- Validado aquí: JSON de cuaderno válido y el Python de cada celda compila (sin las líneas `!` y `%`); el recorte con `dd` y los `sed` sobre una copia de `train.py`. No se ha corrido en Colab.
+- `test/manual/empaquetar_mi_voz.py` vuelve a armar `mi_voz.zip` con todo lo grabado (lo corre el usuario).
 - Licencia: hereda el uso no comercial de ACAV100M (CC BY-NC-SA 4.0): personal, no distribuible.
 
 Paso 2, entrenar "Oye Asia" (plan, 2026-11-04; se hace con otro permiso). En Colab con GPU: el cuaderno de entrenamiento de openWakeWord (`automatic_model_training.ipynb`) usa los 17 GB de negativos y dependencias que aquí no conviene instalar (`openwakeword[full]`; el TensorFlow 2.8.1 que pide no instala en Python 3.11 y solo sirve para tflite).
@@ -744,7 +759,7 @@ Licencias: el modelo sale de las características de ACAV100M (CC BY-NC-SA 4.0),
 
 **Pendiente:**
 - `check_wake --falsas 30` con "Hey Jarvis".
-- Streaming en las acciones (parte 2 de la propuesta de voz): `ask()` con `on_chunk` y el launcher pasándoselo a Brain, como en la charla, para que la primera frase de `explain_file` suene en cuanto se genere; con voz se leerían 2–3 frases y el resto quedaría en pantalla. Toca el camino de todas las acciones.
+- ~~Streaming en las acciones (parte 2 de la propuesta de voz).~~ Hecho en `dd56a69`: `ProviderRouter.ask` acepta `on_chunk` (no queda en `last_request`); con voz, el launcher se lo pasa a Brain (`action_stream`) y `explain_file` y `summarize_file` (la corta y la de "a fondo") se escriben y se leen frase por frase mientras llega la respuesta; la línea "[Para la explicación completa…]" sale después y no se lee. Sin voz, la llamada es la de siempre: el golden no cambió. Falta medir el primer audio con el modelo real.
 - "cómo va Bolitabot" hizo que qwen3 respondiera como si fuera Bolitabot. Medir aparte.
 - Canal de estado local (Flask-SocketIO) para que el avatar reaccione a hablar, pensar y escuchar.
 - Avatar: perro bóxer.
