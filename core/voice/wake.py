@@ -126,6 +126,17 @@ def load_model(config):
     return model
 
 
+def reset_model(model):
+    """Vacía lo que openWakeWord guarda de la escucha anterior. model.reset() de 0.6.0
+    no toca el VAD de Silero: su estado y sus últimas puntuaciones seguían ahí."""
+    model.reset()
+    vad = getattr(model, "vad", None)
+
+    if getattr(model, "vad_threshold", 0) > 0 and vad is not None:
+        vad.reset_states()
+        vad.prediction_buffer.clear()
+
+
 def scores(model, frames):
     """La puntuación de cada tramo de 80 ms de frames (tramos del micrófono)."""
     chunker = Chunker()
@@ -176,7 +187,7 @@ class WakeListener:
 
     def listen_once(self) -> bool:
         """Con el micrófono abierto hasta oír la palabra (True), parar o empezar a leer (False)."""
-        self.model.reset()
+        reset_model(self.model)
         found = Activations(self.threshold)
 
         with self.microphone.open() as stream:

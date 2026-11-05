@@ -1,5 +1,6 @@
 """Palabra de activación (fase J3): core/voice/wake.py, "/escucha" y el launcher, sin micrófono ni modelo real."""
 import threading
+from collections import deque
 from contextlib import contextmanager
 
 import numpy as np
@@ -119,6 +120,34 @@ def test_al_oir_la_palabra_suelta_el_microfono_y_avisa():
     listener.stop()
     # on_wake llega con el micrófono ya cerrado: lo abre Whisper.
     assert seen == [False] and microphone.opened == 1
+
+
+class FakeVad:
+    def __init__(self):
+        self.prediction_buffer = deque([0.9, 0.8], maxlen=125)
+        self.resets = 0
+
+    def reset_states(self):
+        self.resets += 1
+
+
+def test_cada_escucha_empieza_con_el_vad_vacio():
+    model = FakeModel()
+    model.vad, model.vad_threshold = FakeVad(), 0.5
+    listener = WakeListener(model, FakeMicrophone(frames=3), 0.5, lambda: None)
+
+    assert listener.listen_once() is False
+    # Con las puntuaciones viejas del VAD, la primera frase se filtraba (o no) por audio de antes.
+    assert model.resets == 1 and model.vad.resets == 1 and list(model.vad.prediction_buffer) == []
+
+
+def test_sin_vad_solo_reinicia_el_modelo():
+    model = FakeModel()
+    model.vad, model.vad_threshold = FakeVad(), 0.0
+
+    wake.reset_model(model)
+
+    assert model.resets == 1 and model.vad.resets == 0
 
 
 def test_stop_corta_la_escucha_sin_avisar():
