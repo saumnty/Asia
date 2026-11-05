@@ -326,19 +326,40 @@ def check_draft(answer: str, quotes: list, question: str = "") -> tuple:
     return shown, uncited, removed
 
 
-def block_of(run: list) -> list:
-    """Un tramo de líneas seguidas: ["core/brain.py:40-45 (Brain.process)", su texto]."""
+def run_cite(run: list) -> str:
+    """"40" o "40-45": las líneas de un tramo."""
     first, last = run[0], run[-1]
-    cite = first.cite if first.line == last.line else f"{first.cite}-{last.line}"
-    # En una página web, los números de línea no significan nada para quien lee.
-    cite = first.origin or cite
+    return str(first.line) if first.line == last.line else f"{first.line}-{last.line}"
+
+
+def run_text(run: list) -> str:
+    return textwrap.indent(textwrap.dedent("\n".join(quote.text for quote in run)), "  ")
+
+
+def block_of(runs: list) -> list:
+    """Los tramos de un archivo y sección bajo una cabecera: ["core/brain.py:40-45, 60 (Brain.process)", texto].
+
+    Con números de línea, los tramos van separados por una línea en blanco. En una
+    página web los números no significan nada para quien lee: la cabecera es la
+    página y "…" marca lo que se salta entre tramos.
+    """
+    first = runs[0][0]
     label = f" ({first.label})" if first.label else ""
-    text = textwrap.dedent("\n".join(quote.text for quote in run))
-    return [f"{cite}{label}", textwrap.indent(text, '  ')]
+
+    if first.origin:
+        return [f"{first.origin}{label}", "\n  …\n".join(run_text(run) for run in runs)]
+
+    lines = ", ".join(run_cite(run) for run in runs if run[0].line)
+    cite = f"{first.path}:{lines}" if lines else first.path
+    return [f"{cite}{label}", "\n\n".join(run_text(run) for run in runs)]
 
 
 def verified_lines(quotes: list) -> str:
-    """Las citas verificadas por archivo, juntando las seguidas. Las escribe el código."""
+    """Las citas verificadas por archivo, juntando las seguidas. Las escribe el código.
+
+    Una cabecera por archivo, sección y origen (antes se repetía en cada tramo: en la
+    documentación de Python salían 8 iguales seguidas).
+    """
     by_file = {}
 
     for quote in quotes:
@@ -358,9 +379,13 @@ def verified_lines(quotes: list) -> str:
             else:
                 runs.append([quote])
 
-        for header, text in map(block_of, runs):
-            # Sin números de línea (una página web), los tramos de una sección tendrían la
-            # misma cabecera: va una vez, y "…" marca lo que se salta entre ellos.
+        by_header = {}
+
+        for run in runs:
+            by_header.setdefault((run[0].label, run[0].origin), []).append(run)
+
+        for header, text in map(block_of, by_header.values()):
+            # Dos archivos con la misma página y sección (los fragmentos de una página web): una cabecera.
             if blocks and blocks[-1][0] == header:
                 blocks[-1][1] += f"\n  …\n{text}"
             else:

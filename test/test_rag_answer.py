@@ -235,10 +235,23 @@ def test_junta_las_lineas_seguidas():
     assert shown == f"{prompts.VERIFIED_LINES}\n\na.py:40-42\n  a = 1\n  b = 2\n  c = 3"
 
 
-def test_las_lineas_salteadas_van_en_tramos_aparte():
+def test_las_lineas_salteadas_van_en_tramos_aparte_bajo_una_cabecera():
     shown = verified_lines([quote("a.py", 40, "uno", "f"), quote("a.py", 45, "dos", "f")])
 
-    assert "a.py:40 (f)\n  uno\n\na.py:45 (f)\n  dos" in shown
+    assert shown.endswith("a.py:40, 45 (f)\n  uno\n\n  dos")
+
+
+def test_una_cabecera_por_archivo_y_seccion_con_varios_grupos():
+    # Como en la documentación de Python: un .txt, una sección, tramos sueltos.
+    quotes = [quote("venv.txt", line, text, "Creating virtual environments")
+              for line, text in ((10, "uno"), (11, "dos"), (20, "tres"), (31, "cuatro"), (40, "cinco"))]
+    quotes.append(quote("venv.txt", 80, "seis", "How venvs work"))
+
+    shown = verified_lines(quotes)
+
+    assert shown.count("venv.txt:") == 2
+    assert "venv.txt:10-11, 20, 31, 40 (Creating virtual environments)\n  uno\n  dos\n\n  tres\n\n  cuatro\n\n  cinco" in shown
+    assert shown.endswith("venv.txt:80 (How venvs work)\n  seis")
 
 
 def test_los_tramos_de_una_pagina_con_la_misma_seccion_van_bajo_una_cabecera():
