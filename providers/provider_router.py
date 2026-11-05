@@ -24,12 +24,14 @@ from core.timing import timed
 from core.secrets_filter import describe as describe_secrets, redact_messages, safe_error
 from core.provenance import (
     DESCONOCIDO,
+    EMOCIONAL,
     MEMORIA,
     NEVER_EXPORT,
     PROYECTO,
     Fragment,
     current_fragments,
     exportable_labels,
+    record,
     labels_of,
     most_restrictive,
 )
@@ -216,6 +218,8 @@ class ProviderRouter:
         externo solo va lo exportable de ese contexto de fondo.
         """
         typed = history_prompt or prompt
+        # Con el núcleo afectivo activo (core/afecto), el turno es "emocional": no sale nunca.
+        tone = self.affect_tone(typed)
         note = memory_note(relevant_memory(typed, self.memory.load()))
         project_context = self.build_project_context()
         system_prompt = f"""{SYSTEM_PROMPT}
@@ -258,6 +262,10 @@ Contexto del proyecto:
         if recap:
             local_message = {"role": "user", "content": f"{recap}\n\n{user_message['content']}"}
 
+        # La instrucción de tono va al final, como el recordatorio de brevedad, y solo en local.
+        if tone:
+            local_message = {"role": "user", "content": local_message["content"] + tone}
+
         messages = [system, *history, local_message]
 
         ambient = []
@@ -269,6 +277,10 @@ Contexto del proyecto:
             ambient.append(Fragment(PROYECTO, project_context))
 
         turn = current_fragments() or [Fragment(DESCONOCIDO, prompt)]
+
+        if tone is not None and EMOCIONAL not in labels_of(turn):
+            turn.append(Fragment(EMOCIONAL, typed))
+
         past = [Fragment(label, m["content"]) for m, label in zip(history, history_labels)]
         self.last_fragments = ambient + past + turn
 
@@ -299,6 +311,25 @@ Contexto del proyecto:
         self.history_labels = self.history_labels[-MAX_HISTORY_MESSAGES:]
 
         return answer
+
+    def affect_tone(self, typed):
+        """La instrucción de tono del núcleo afectivo; None si está apagado ("" si no hace falta).
+
+        La estimación (qwen3) va con la etiqueta "emocional" en la petición: se responde en local.
+        """
+        from core.afecto import AffectCore, affect_enabled
+
+        if not affect_enabled(self.settings):
+            return None
+
+        record(Fragment(EMOCIONAL, typed))
+
+        try:
+            core = AffectCore(self.settings)
+            return core.instruction(core.observe(typed, self.ask))
+        except Exception:
+            # Sin estimación, el tono de siempre; el turno sigue siendo local.
+            return ""
 
     def remember_action(self, text, answer, fragments):
         """Guarda una acción y su resultado (recortado) en el historial de la charla.

@@ -143,6 +143,17 @@ COMMANDS = [
     Command("voz", "/sin escucha", "deja de esperar la palabra de activación",
             "/sin escucha", phrase="desactiva la escucha", aliases=("desactiva la escucha",)),
 
+    Command("afecto", "/afecto on",
+            "estima en local cómo te sientes y ajusta el tono (simulación; nunca sale); /afecto off lo apaga",
+            "/afecto on", phrase="activa el afecto", aliases=("activa el afecto",)),
+    Command("afecto", "/afecto off", "deja de estimar tu estado", "/afecto off", phrase="desactiva el afecto",
+            aliases=("desactiva el afecto",)),
+    Command("afecto", "/estado",
+            "lo que Asia cree de tu estado (una hipótesis); corrígela con \"no, solo estoy concentrado\"",
+            "/estado", phrase="muestra el estado", aliases=("muestra el estado",)),
+    Command("afecto", "/afecto borrar", "borra la estimación guardada", "/afecto borrar", phrase="borra el estado",
+            aliases=("borra el estado",)),
+
     Command("salir", "/opciones", "esta lista", "/opciones", special="opciones"),
     Command("salir", "/salir", "cierra Asia", "/salir", special="salir", aliases=("salir", "exit", "quit")),
 ]

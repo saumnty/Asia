@@ -94,6 +94,11 @@
         "wake_models_dir": "data/models/openwakeword"
     },
 
+    "afecto": {
+        "activo": false,
+        "vida_media_horas": 3
+    },
+
     "rag": {
         "min_coverage": 0.3,
         "max_distance": 392.0,

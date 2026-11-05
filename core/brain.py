@@ -13,6 +13,7 @@ from core.actions.confidential import ConfidentialActions, confidential_command
 from core.actions.tasks import TaskActions
 from core.actions.timing import TimingActions, timing_command
 from core.actions.voice import VoiceActions, voice_command
+from core.actions.affect import AffectActions, affect_command
 from core import timing
 from core.commands import is_launcher_command, options_text, resolve as resolve_command, unknown_message as unknown_command
 from core.session import Session
@@ -160,7 +161,7 @@ SHORTCUT_ACTIONS = {
 
 
 class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxActions, ModelActions, ConfidentialActions,
-            TimingActions, VoiceActions, TaskActions, LibraryActions):
+            TimingActions, VoiceActions, TaskActions, LibraryActions, AffectActions):
     # Acción del IntentEngine -> método que la atiende (ver core/actions).
     HANDLERS = {
         **MemoryActions.HANDLERS,
@@ -319,6 +320,12 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
         if voice_cmd:
             return self.handle_voice_command(voice_cmd)
+
+        # Núcleo afectivo (core/actions/affect.py): /estado, /afecto y la corrección del usuario.
+        affect_cmd = affect_command(text, getattr(self, "settings", None))
+
+        if affect_cmd:
+            return self.handle_affect_command(affect_cmd, text)
 
         timing_cmd = timing_command(text)
 
