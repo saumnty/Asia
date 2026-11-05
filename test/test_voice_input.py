@@ -9,8 +9,8 @@ from config.settings_manager import SettingsManager, read_json
 from core.paths import DEFAULTS_FILE
 from core.voice import DEFAULT_VOICE_SETTINGS, build_stt, voice_settings
 from core.voice.audio import FRAME
-from core.voice.session import VoiceSession
-from core.voice.stt import FasterWhisperSTT, MissingModel
+from core.voice.session import HALLUCINATION, VoiceSession
+from core.voice.stt import FasterWhisperSTT, MissingModel, is_hallucination
 from core.voice.vad import DONE, NO_SPEECH, SPEAKING, TOO_LONG, WAITING, EndOfSpeech, SileroVAD
 from test_launcher import FakeBrain, reader
 
@@ -139,6 +139,45 @@ def test_sin_voz_no_transcribe():
     heard = voice.listen()
 
     assert heard.text == "" and heard.reason == NO_SPEECH and stt.audio == []
+
+
+def test_enter_sin_voz_no_llama_a_whisper():
+    # Caso real: Enter sin hablar, 0,0 s de voz, y Whisper escribió "Subtítulos por la comunidad de Amara.org".
+    voice, stt = session(silence(10), text="Subtítulos por la comunidad de Amara.org")
+    frames = iter(range(1000))
+
+    heard = voice.listen(stop_requested=lambda: next(frames) >= 3)
+
+    assert heard.text == "" and heard.reason == "enter" and stt.audio == []
+
+
+@pytest.mark.parametrize("text", [
+    "Subtítulos por la comunidad de Amara.org",
+    "subtitulos realizados por la comunidad de amara.org.",
+    "¡Gracias por ver el video!",
+    "¡Suscríbete!",
+    "Gracias por ver. Suscríbete al canal.",
+])
+def test_las_alucinaciones_de_whisper_cuentan_como_no_te_oi(text):
+    voice, stt = session(silence(0.3) + speech(1.5) + silence(1), text=text,
+                         stt_hallucinations=read_json(DEFAULTS_FILE)["voice"]["stt_hallucinations"])
+
+    heard = voice.listen()
+
+    assert heard.text == "" and heard.reason == HALLUCINATION and len(stt.audio) == 1
+
+
+@pytest.mark.parametrize("text", ["Gracias por ver el video que te mandé", "gracias", "suscríbeme a la lista"])
+def test_lo_que_se_dijo_de_verdad_no_es_alucinacion(text):
+    assert not is_hallucination(text, read_json(DEFAULTS_FILE)["voice"]["stt_hallucinations"])
+
+
+def test_alucinacion_no_te_oi_en_el_launcher(capsys):
+    voice, _ = session(silence(0.3) + speech(1.5) + silence(1), text="Gracias por ver el video",
+                       stt_hallucinations=["Gracias por ver el video"])
+
+    assert launcher.listen(voice, SettingsManager(), stop_requested=lambda: False) is None
+    assert "No te oí" in capsys.readouterr().err
 
 
 def test_motores_se_crean_al_primer_uso():

@@ -21,6 +21,8 @@ DEFAULT_VOICE_SETTINGS = {
     "stt_beam_size": 5,
     "stt_vocabulary_prompt": True,
     "stt_vocabulary": [],
+    # Lo que Whisper "oye" en silencio o ruido (core/voice/stt.py): cuenta como no te oí.
+    "stt_hallucinations": [],
     "language": "es",
     "tts_engine": "piper",
     "tts_voice": "es_MX-claude-high",

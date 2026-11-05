@@ -6,10 +6,35 @@ corre siempre en CPU (int8): la GPU de 4 GB la ocupa el 7B de Ollama y no
 debe desalojarse. El modelo se lee de models_dir; Asia no lo descarga.
 """
 import os
+import re
+import unicodedata
 
 import numpy as np
 
 from core.voice import project_path
+
+
+def plain_words(text: str) -> str:
+    """Minúsculas, sin acentos ni puntuación: "¡Suscríbete!" -> "suscribete"."""
+    text = unicodedata.normalize("NFKD", (text or "").lower())
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    return " ".join(re.findall(r"\w+", text))
+
+
+def is_hallucination(text: str, phrases) -> bool:
+    """True si text son solo frases de voice.stt_hallucinations ("Subtítulos por la comunidad
+    de Amara.org", "Gracias por ver el video"): lo que Whisper escribe con silencio o ruido.
+    Con algo más ("gracias por ver el video que mandé"), es lo que se dijo."""
+    words = plain_words(text)
+
+    if not words:
+        return False
+
+    # Las más largas primero: "suscribete al canal" antes que "suscribete".
+    for phrase in sorted({plain_words(p) for p in phrases if plain_words(p)}, key=len, reverse=True):
+        words = re.sub(rf"\b{re.escape(phrase)}\b", " ", words)
+
+    return not words.strip()
 
 
 class MissingModel(RuntimeError):

@@ -12,10 +12,13 @@ import numpy as np
 from core import timing
 from core.voice import build_stt, build_tts, voice_settings
 from core.voice.reading import Reading
+from core.voice.stt import is_hallucination
 from core.voice.vocabulary import build_prompt
 from core.voice.audio import FRAME, SAMPLE_RATE
 from core.voice.vad import DONE, NO_SPEECH, SPEAKING, TOO_LONG, EndOfSpeech
 
+# Heard.reason cuando lo transcrito es una alucinación conocida de Whisper.
+HALLUCINATION = "alucinación"
 # Audio que se deja antes y después de la voz al pasarlo a Whisper.
 MARGIN_FRAMES = round(0.3 * SAMPLE_RATE / FRAME)
 
@@ -243,15 +246,21 @@ class VoiceSession:
                     reason = state
                     break
 
-        if not frames or not spoke and reason != "enter":
+        # Sin voz no se llama a Whisper, tampoco con Enter: con 0 s de voz escribía
+        # "Subtítulos por la comunidad de Amara.org".
+        if not frames or not spoke:
             return Heard("", reason)
 
         recorded = len(frames) * FRAME / SAMPLE_RATE
         audio = np.concatenate(speech_part(frames, detector))
         start = time.perf_counter()
         text = self.stt.transcribe(audio, self.vocabulary())
+        seconds = time.perf_counter() - start
 
-        return Heard(text, reason, len(audio) / SAMPLE_RATE, time.perf_counter() - start, recorded)
+        if is_hallucination(text, self.config.get("stt_hallucinations") or []):
+            return Heard("", HALLUCINATION, len(audio) / SAMPLE_RATE, seconds, recorded)
+
+        return Heard(text, reason, len(audio) / SAMPLE_RATE, seconds, recorded)
 
     def calibrate(self, seconds=3.0) -> Calibration:
         """Mide el ruido del cuarto (hay que estar en silencio) y sube el umbral del VAD si hace falta.
