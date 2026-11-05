@@ -5,6 +5,7 @@
 - stt.py: voz a texto (faster-whisper, siempre en CPU int8).
 - tts.py: texto a voz (Piper).
 - session.py: escuchar una frase y leer una respuesta.
+- wake.py: la palabra de activación (openWakeWord).
 
 Los motores se eligen por config ("voice" en config/defaults.json) con los
 registros de abajo: otro motor (o una voz propia de Piper) no cambia el resto.
@@ -31,6 +32,13 @@ DEFAULT_VOICE_SETTINGS = {
     "max_seconds": 30,
     "start_timeout_s": 8,
     "min_speech_ms": 96,
+    # Palabra de activación (core/voice/wake.py): un .onnx de wake_models_dir o una ruta.
+    "wake_word": "hey_jarvis_v0.1",
+    "wake_label": "Hey Jarvis",
+    "wake_threshold": 0.5,
+    # 0: sin el VAD de openWakeWord (Silero); con 0.5, solo cuentan los tramos con voz.
+    "wake_vad_threshold": 0.0,
+    "wake_models_dir": "data/models/openwakeword",
 }
 
 

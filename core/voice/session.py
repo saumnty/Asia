@@ -85,6 +85,7 @@ class VoiceSession:
         self._speaker = speaker
         self.reading = None
         self.voice_preload = None
+        self._wake_model = None
 
     @property
     def tts(self):
@@ -174,6 +175,21 @@ class VoiceSession:
 
         self._stt = self._tts = None
         self.voice_preload = None
+        self._wake_model = None
+
+    def wake_listener(self, on_wake):
+        """La escucha de la palabra de activación (core/voice/wake.py), sin empezar.
+
+        Usa el micrófono de la sesión y no escucha mientras Asia lee en voz alta.
+        El modelo de openWakeWord se carga la primera vez.
+        """
+        from core.voice.wake import WakeListener, load_model, wake_config
+
+        if self._wake_model is None:
+            self._wake_model = load_model(self.config)
+
+        threshold = wake_config(self.config)["wake_threshold"]
+        return WakeListener(self._wake_model, self.microphone, threshold, on_wake, paused=lambda: self.speaking)
 
     @property
     def stt(self):

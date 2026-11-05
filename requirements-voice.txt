@@ -5,3 +5,7 @@ sounddevice==0.5.5
 faster-whisper==1.2.1
 # piper-tts 1.3+ es GPL-3.0 (uso personal). Para distribuir Asia, ver ROADMAP.
 piper-tts==1.8.0
+# Palabra de activación (fase J3). Sus dependencias (onnxruntime, scipy, scikit-learn,
+# tqdm, requests) ya están: se instaló con --no-deps. Modelos en data/models/openwakeword/
+# (v0.5.1, CC BY-NC-SA 4.0: uso personal, no distribuibles).
+openwakeword==0.6.0

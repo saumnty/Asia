@@ -137,6 +137,11 @@ COMMANDS = [
     Command("voz", "/calibrar voz",
             "mide 3 s el ruido del cuarto (quédate en silencio) y ajusta el umbral de voz para la sesión",
             "/calibrar voz", special="calibrar", aliases=("calibra la voz", "calibrar voz")),
+    Command("voz", "/escucha",
+            "espera la palabra de activación («Hey Jarvis») y luego escucha la frase; activa también la voz",
+            "/escucha", phrase="activa la escucha", aliases=("activa la escucha",)),
+    Command("voz", "/sin escucha", "deja de esperar la palabra de activación",
+            "/sin escucha", phrase="desactiva la escucha", aliases=("desactiva la escucha",)),
 
     Command("salir", "/opciones", "esta lista", "/opciones", special="opciones"),
     Command("salir", "/salir", "cierra Asia", "/salir", special="salir", aliases=("salir", "exit", "quit")),

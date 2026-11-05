@@ -86,7 +86,12 @@
         "silence_ms": 800,
         "max_seconds": 30,
         "start_timeout_s": 8,
-        "min_speech_ms": 96
+        "min_speech_ms": 96,
+        "wake_word": "hey_jarvis_v0.1",
+        "wake_label": "Hey Jarvis",
+        "wake_threshold": 0.5,
+        "wake_vad_threshold": 0.0,
+        "wake_models_dir": "data/models/openwakeword"
     },
 
     "rag": {

@@ -665,18 +665,20 @@ Extras de Asia 2.0, junto al modo confidencial:
 
 **J3, palabra de activación:** "Hey Jarvis" de openWakeWord para las pruebas; después, "Oye Asia" entrenada. En 1.0 se prueba con el micrófono de la laptop a distancia corta; la activación a distancia queda para cuando haya un micrófono externo.
 
-Diseño propuesto (2026-11-04), sin instalar nada todavía:
+Paso 1 hecho (2026-11-04), `core/voice/wake.py`:
 - `core/voice/wake.py`, un `WakeListener` en un hilo: abre el micrófono de siempre (`Microphone`, tramos de 512 muestras float32), junta tramos de 80 ms en int16 (1280 muestras) y se los pasa a openWakeWord con ONNX (en Windows no hay tflite).
-- Se activa cuando la puntuación pasa `voice.wake_threshold` (0,5 por defecto), con 2 s de refractario para que una frase no cuente varias veces. `voice.wake_word`: `hey_jarvis` o la ruta de un `.onnx` propio. `voice.wake_enabled`, falso por defecto; `/escucha` lo enciende o lo apaga para la sesión.
-- Aviso visible: mientras espera, el prompt dice `[esperando «Hey Jarvis»]`; al activarse, "Escuchando…" por stderr (y un pitido corto si se quiere), como al pulsar Enter en una línea vacía.
+- Se activa cuando la puntuación pasa `voice.wake_threshold` (0,5 por defecto), con 2 s de refractario para que una frase no cuente varias veces. `voice.wake_word`: `hey_jarvis_v0.1` (un `.onnx` de `voice.wake_models_dir`) o la ruta de un `.onnx` propio. Valor de sesión, apagado al abrir Asia: `/escucha` lo enciende (y la voz con él), `/sin escucha` y `/sin voz` lo apagan. `voice.wake_vad_threshold` (0 por defecto) enciende el VAD de Silero de openWakeWord.
+- Aviso visible: mientras espera, el prompt dice `[esperando «Hey Jarvis»]`; al activarse, "Escuchando…" por stderr, como al pulsar Enter en una línea vacía.
 - Un solo dueño del micrófono: al activarse, el `WakeListener` suelta el micrófono y empieza el `listen()` de hoy (Silero VAD + Whisper). Al terminar la frase (o la lectura de la respuesta), vuelve a escuchar. Mientras Asia lee en voz alta no escucha la palabra, para que Piper no la active; Enter y Ctrl+C siguen cortando la lectura.
-- El prompt se interrumpe desde el hilo con `prompt_toolkit` (`app.exit` con `call_soon_threadsafe`), como si se hubiera pulsado Enter en una línea vacía.
+- El prompt se interrumpe desde el hilo con `prompt_toolkit` (`app.exit` con `call_soon_threadsafe`, `PromptReader` en el launcher); si la palabra llega antes de que empiece el prompt, la siguiente lectura la devuelve. Sin terminal (`input()`), no hay palabra de activación.
 - Con Whisper en CPU: Whisper no corre mientras se espera la palabra, solo después de activarse. En espera solo trabaja openWakeWord (espectrograma, embeddings y el modelo de la palabra, todo pequeño); medir su CPU y su RAM con `check_wake`. Whisper `small` int8 sigue cargado como hoy.
 - Medición: `test/manual/check_wake.py --aciertos N` (frases dichas por el usuario) y `--falsas MINUTOS` (escuchando sin llamarla, tasa por hora), con `--umbral` para elegir el valor.
 
-Paso 1, "Hey Jarvis" ya entrenado (pendiente de confirmar la instalación):
+Paso 1, "Hey Jarvis" ya entrenado (instalado el 2026-11-04):
 - `openwakeword==0.6.0` (código Apache-2.0, rueda de 61 KB). Sus dependencias ya están en el `.venv`: `onnxruntime` 1.26.0, `scipy`, `scikit-learn`, `tqdm` y `requests`. En Windows no pide `tflite-runtime`. Instalarla con `--no-deps`, para que pip no cambie versiones.
-- Modelos de la versión v0.5.1 de openWakeWord, en `data/models/openwakeword/`: `melspectrogram.onnx` 1,09 MB, `embedding_model.onnx` 1,33 MB y `hey_jarvis_v0.1.onnx` 1,27 MB; opcional, `silero_vad.onnx` 1,81 MB (filtro de voz propio). En total 3,7 MB (5,5 MB con el VAD). Licencia de los modelos: CC BY-NC-SA 4.0, no comercial; vale para uso personal, no para distribuir Asia.
+- Modelos de la versión v0.5.1 de openWakeWord, en `data/models/openwakeword/`: `melspectrogram.onnx` 1,09 MB, `embedding_model.onnx` 1,33 MB y `hey_jarvis_v0.1.onnx` 1,27 MB; opcional, `silero_vad.onnx` 1,81 MB (filtro de voz propio). En total 5,5 MB, descargados en `data/models/openwakeword/` (ignorada por git), con el tamaño de la versión (no publica sha256). **Licencia de los modelos: CC BY-NC-SA 4.0, no comercial: uso personal, no distribuibles con Asia.** El código de openwakeword es Apache-2.0.
+- En reposo (silencio a ritmo real durante 60 s, sin micrófono): 7,2 % de un núcleo sin VAD y 9,6 % con VAD (16 núcleos lógicos: menos del 1 % del total); `predict` 5,9 ms de mediana por tramo de 80 ms (7,3 ms con VAD); +154 MB de RAM al cargar (+159 MB con VAD), con la importación de openwakeword y sus dependencias; 5,4 s de carga, la primera vez que se activa `/escucha` en la sesión. El micrófono (sounddevice) no está incluido.
+- `check_wake` con el micrófono (aciertos y falsas activaciones) lo mide el usuario.
 
 Paso 2, entrenar "Oye Asia" (después, con otro permiso):
 - Positivos generados con el Piper que ya está instalado y las tres voces en español, variando hablante, velocidad y ruido: unos miles de clips en `data/wake/`.

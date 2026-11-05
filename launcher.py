@@ -30,7 +30,7 @@ from config.settings_manager import SettingsManager
 from core.path_completion import make_completer
 from core import timing
 from core.actions.models import command_text
-from core.actions.voice import VOICE_SETTING
+from core.actions.voice import VOICE_SETTING, WAKE_SETTING
 from core.commands import is_launcher_command, looks_like_exit, options_text
 from core.recent_facts import is_affirmative
 from core.confidential import LOCAL_MODE, OPEN_MODE, current_mode
@@ -304,7 +304,44 @@ def make_reader(on_text=None):
     if on_text:
         session.default_buffer.on_text_changed += lambda buffer: on_text(buffer.text)
 
-    return session.prompt
+    return PromptReader(session)
+
+
+# Lo que devuelve la lectura cuando la corta la palabra de activación, no el usuario.
+WAKE_LINE = "\x00palabra de activación"
+
+
+class PromptReader:
+    """session.prompt, con interrupt(): la palabra de activación corta la línea desde otro hilo.
+
+    Si llega antes de que empiece el prompt, la siguiente lectura la devuelve sin esperar.
+    """
+
+    def __init__(self, session):
+        self.session = session
+        self.pending = None
+        self.lock = threading.Lock()
+
+    def __call__(self, prompt=""):
+        with self.lock:
+            pending, self.pending = self.pending, None
+
+        if pending is not None:
+            return pending
+
+        return self.session.prompt(prompt)
+
+    def interrupt(self, result=WAKE_LINE):
+        app = self.session.app
+        loop = getattr(app, "loop", None)
+
+        if loop is None or not app.is_running:
+            with self.lock:
+                self.pending = result
+
+            return
+
+        loop.call_soon_threadsafe(lambda: app.exit(result=result) if app.is_running else None)
 
 
 class MessageReader:
@@ -407,9 +444,48 @@ def fixed_paths(missing) -> str:
 
 
 def user_prompt(settings) -> str:
-    """"Tú: ", o "Tú [abierto]: " / "Tú [local]: " si el modo confidencial no es el normal."""
+    """"Tú: ", o "Tú [abierto]: " / "Tú [local]: " si el modo confidencial no es el normal.
+
+    Con "/escucha", también lo que se espera: "Tú [esperando «Hey Jarvis»]: ".
+    """
     mode = current_mode(settings)
-    return f"\nTú [{mode}]: " if mode in {OPEN_MODE, LOCAL_MODE} else "\nTú: "
+    marks = [mode] if mode in {OPEN_MODE, LOCAL_MODE} else []
+
+    if wake_enabled(settings):
+        marks.append(f"esperando «{wake_label(settings)}»")
+
+    return "\nTú" + "".join(f" [{mark}]" for mark in marks) + ": "
+
+
+def wake_enabled(settings) -> bool:
+    """Valor de sesión: lo activa "/escucha" (core/voice/wake.py)."""
+    return bool(settings.get(WAKE_SETTING))
+
+
+def wake_label(settings) -> str:
+    from core.voice import voice_settings
+
+    return voice_settings(settings)["wake_label"]
+
+
+def start_wake(voice, read, settings):
+    """Escucha la palabra mientras se espera el mensaje; None si no toca o no se puede.
+
+    Al oírla corta la lectura del prompt (read.interrupt) con el micrófono ya libre.
+    """
+    if not wake_enabled(settings) or voice is None or not hasattr(read, "interrupt"):
+        return None
+
+    try:
+        return voice.wake_listener(read.interrupt).start()
+    except Exception as e:
+        print(f"No puedo escuchar la palabra de activación: {e}", file=sys.stderr)
+        return None
+
+
+def stop_wake(listener):
+    if listener is not None:
+        listener.stop()
 
 
 
@@ -433,9 +509,9 @@ def enter_pressed() -> bool:
     return False
 
 
-def listen(voice, settings, stop_requested=enter_pressed):
+def listen(voice, settings, stop_requested=enter_pressed, notice="[Escuchando: habla; termina con un silencio o con Enter]"):
     """Escucha una frase y la muestra como si se hubiera escrito. None si no se oyó nada."""
-    print("[Escuchando: habla; termina con un silencio o con Enter]", file=sys.stderr, flush=True)
+    print(notice, file=sys.stderr, flush=True)
 
     try:
         heard = voice.listen(stop_requested)
@@ -584,6 +660,10 @@ def interactive_mode(brain=None, read=None, voice=None):
                 if hasattr(voice, "preload_voice"):
                     voice.preload_voice()
 
+            # Con "/escucha", la palabra de activación se espera mientras se escribe
+            # (no mientras suena la respuesta: el listener se pausa solo).
+            wake = start_wake(voice, read, brain.settings)
+
             # La respuesta anterior puede seguir sonando: Ctrl+C la corta (sin
             # cerrar Asia) y cualquier Enter también, antes de atender la línea.
             try:
@@ -594,15 +674,19 @@ def interactive_mode(brain=None, read=None, voice=None):
                     continue
 
                 raise
+            finally:
+                # El micrófono queda libre para Whisper.
+                stop_wake(wake)
 
             stop_speaking(voice)
             heard = None
+            woken = block is None and user == WAKE_LINE
 
-            # Modo voz: Enter en una línea vacía escucha; lo dictado es "usuario",
-            # igual que lo tecleado.
-            if block is None and not user.strip() and voice_enabled(brain.settings):
+            # Modo voz: Enter en una línea vacía (o la palabra de activación) escucha;
+            # lo dictado es "usuario", igual que lo tecleado.
+            if woken or block is None and not user.strip() and voice_enabled(brain.settings):
                 summarizer.interrupt()
-                heard = listen(voice, brain.settings)
+                heard = listen(voice, brain.settings, notice="Escuchando…") if woken else listen(voice, brain.settings)
                 user = heard.text if heard else ""
 
             if block is None and is_launcher_command(user, "salir"):
