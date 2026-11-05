@@ -108,3 +108,17 @@ def test_no_transcribe_dos_veces(dataset, monkeypatch, capsys):
         tool.main(transcriber=Turbo())
 
     assert "ya tiene texto_turbo" in capsys.readouterr().err
+
+
+def test_sin_tope_sigue_aunque_vaya_lento(dataset):
+    rows = tool.read_rows(dataset) * 6
+    now = [0.0]
+
+    def slow_whisper(audio):
+        now[0] += 6
+        return "x", 0, 0, 0
+
+    results, seconds = tool.transcribe_all(dataset, rows, slow_whisper, clock=lambda: now[0], log=lambda *a, **k: None,
+                                           max_slowdown=float("inf"))
+
+    assert len(results) == 24 and seconds == 144

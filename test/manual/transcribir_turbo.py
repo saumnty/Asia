@@ -5,7 +5,7 @@
 Transcribe cada wavs/NNNN.wav con faster-whisper large-v3-turbo (data/models), en
 CPU int8, language="es", beam_size 5, con las métricas de preparar_voz. Si las
 primeras 20 frases tardan más de 2 veces lo que duran, se detiene y dice cuánto
-tardaría todo, sin tocar nada.
+tardaría todo, sin tocar nada; --sin-tope lo corre entero de todos modos.
 
 Reescribe revisar.csv con, junto a cada frase, texto_small y texto_turbo, las
 métricas de los dos, los motivos de "revisar" de cada uno y "coinciden"
@@ -79,7 +79,7 @@ def phrase_from(row, text, logprob, no_speech, compression) -> Phrase:
                   saturadas_pct=float(row["saturadas_pct"]))
 
 
-def transcribe_all(dataset, rows, transcribe, clock=time.perf_counter, log=print):
+def transcribe_all(dataset, rows, transcribe, clock=time.perf_counter, log=print, max_slowdown=MAX_SLOWDOWN):
     """[(texto, avg_logprob, no_speech_prob, compression_ratio)] por fila, y los segundos que tardó.
 
     TooSlow si las primeras PROBE frases tardan más de MAX_SLOWDOWN veces su duración.
@@ -94,7 +94,7 @@ def transcribe_all(dataset, rows, transcribe, clock=time.perf_counter, log=print
             heard = sum(float(r["segundos"]) for r in rows[:PROBE])
             ratio = (clock() - started) / heard if heard else 0.0
 
-            if ratio > MAX_SLOWDOWN:
+            if ratio > max_slowdown:
                 raise TooSlow(ratio, ratio * total_audio)
 
             log(f"{PROBE} frases a {ratio:.2f}× su duración: unos {ratio * total_audio / 60:.0f} min en total.", flush=True)
@@ -149,6 +149,7 @@ def summary(rows, seconds) -> str:
 def main(transcriber=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=Path, required=True, help="la carpeta de preparar_voz (wavs/, revisar.csv)")
+    parser.add_argument("--sin-tope", action="store_true", help=f"no se detiene aunque vaya a más de {MAX_SLOWDOWN:g}×")
     args = parser.parse_args()
     rows = read_rows(args.dataset)
 
@@ -156,7 +157,8 @@ def main(transcriber=None):
         parser.error("revisar.csv ya tiene texto_turbo; el de small está en revisar_small.csv")
 
     try:
-        results, seconds = transcribe_all(args.dataset, rows, transcriber or WhisperTranscriber(MODEL))
+        results, seconds = transcribe_all(args.dataset, rows, transcriber or WhisperTranscriber(MODEL),
+                                          max_slowdown=float("inf") if args.sin_tope else MAX_SLOWDOWN)
     except TooSlow as slow:
         print(f"Detenido: las primeras {PROBE} frases van a {slow.ratio:.1f}× su duración; "
               f"todo tardaría unos {slow.estimate_s / 60:.0f} min. No se cambió nada.")
