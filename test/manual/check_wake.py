@@ -26,12 +26,23 @@ voice.wake_vad_threshold, los modelos de voice.wake_models_dir). --modelo cambia
 el umbral del VAD de openWakeWord (0 lo apaga). --guardar escribe el resultado en
 JSON. Solo carga openWakeWord: ni Whisper ni Ollama. Sin --guardar-audio, el audio
 no se guarda en disco.
+
+Grabar ejemplos para entrenar "Oye Asia" (sin puntuar ni cargar openWakeWord):
+--grabar N --frase "oye Asia" graba N clips con el mismo calentamiento y "Habla
+ahora", recortados a la voz (Silero VAD) con 0,3 s de margen, en
+data/wake/positivos/<frase>/ (--carpeta cambia data/wake). De cada clip da la
+duración, el pico y el RMS, avisa si satura o si es muy bajo, y deja repetirlo.
+La numeración sigue la de los clips que ya haya.
+
+    .venv\\Scripts\\python.exe test\\manual\\check_wake.py --grabar 20 --frase "oye Asia"
 """
 import argparse
 import json
 import queue
+import re
 import sys
 import time
+import unicodedata
 import wave
 from pathlib import Path
 
@@ -40,7 +51,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from core.voice.audio import SAMPLE_RATE, Microphone
+from core.voice.audio import FRAME, SAMPLE_RATE, Microphone
 
 from config.settings_manager import SettingsManager
 from core.voice import voice_settings
@@ -52,6 +63,10 @@ WARMUP_S = 2.0
 WINDOW_S = 6.0
 AUDIO_DIR = ROOT / "data" / "wake"
 SILENCE_DBFS = -120.0
+# Clips para entrenar (--grabar): margen alrededor de la voz y avisos de nivel.
+MARGIN_S = 0.3
+SATURATED = 0.99
+LOW_PEAK_DBFS = -30.0
 
 
 def per_hour(count: int, seconds: float) -> float:
@@ -254,6 +269,119 @@ def false_alarms(model, minutes, threshold):
     return {"falsas": len(found.times), "segundos": round(seconds), "por_hora": round(rate, 2), "en_s": found.times}
 
 
+def slug(phrase: str) -> str:
+    """"oye Asia" -> "oye_asia": el nombre de la carpeta de una frase."""
+    text = unicodedata.normalize("NFKD", phrase.lower())
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    return "_".join(re.findall(r"[a-z0-9]+", text)) or "frase"
+
+
+def next_index(folder) -> int:
+    """El número del clip siguiente: sigue los NNN.wav que ya haya."""
+    numbers = [int(path.stem) for path in Path(folder).glob("*.wav") if path.stem.isdigit()]
+    return max(numbers, default=0) + 1
+
+
+def take_frames(stream, seconds) -> list:
+    """Los tramos del micrófono (float32, FRAME muestras) de seconds de audio."""
+    frames = []
+
+    for frame in stream:
+        frames.append(np.asarray(frame, dtype=np.float32))
+
+        if len(frames) * FRAME >= seconds * SAMPLE_RATE:
+            break
+
+    return frames
+
+
+def trim_to_voice(warmup, window, vad, threshold, margin_s=MARGIN_S):
+    """La voz de window con margin_s antes y después, según el VAD; None si no hubo voz.
+
+    El calentamiento solo asienta el estado del VAD: no entra en el clip.
+    """
+    vad.reset()
+
+    for frame in warmup:
+        vad.probability(frame)
+
+    voiced = [index for index, frame in enumerate(window) if vad.probability(frame) >= threshold]
+
+    if not voiced:
+        return None
+
+    margin = round(margin_s * SAMPLE_RATE / FRAME)
+    return np.concatenate(window[max(0, voiced[0] - margin):voiced[-1] + 1 + margin])
+
+
+def clip_report(samples) -> dict:
+    peak = float(np.max(np.abs(samples))) if len(samples) else 0.0
+    rms = float(np.sqrt(np.mean(samples.astype(np.float64) ** 2))) if len(samples) else 0.0
+    return {
+        "segundos": round(len(samples) / SAMPLE_RATE, 2), "pico_dbfs": dbfs(peak), "rms_dbfs": dbfs(rms),
+        "satura": peak >= SATURATED, "bajo": dbfs(peak) < LOW_PEAK_DBFS,
+    }
+
+
+def describe_clip(report) -> str:
+    warnings = [*(["satura: aléjate o baja la voz"] if report["satura"] else []),
+                *(["muy bajo: acércate o sube la voz"] if report["bajo"] else [])]
+    text = f"{report['segundos']:.2f} s, pico {report['pico_dbfs']:.1f} dBFS, RMS {report['rms_dbfs']:.1f} dBFS"
+    return f"{text}. ¡Aviso: {'; '.join(warnings)}!" if warnings else text
+
+
+def to_int16(samples) -> np.ndarray:
+    """Como Chunker (core/voice/wake.py): recorte a ±1 y escala ×32767."""
+    return (np.clip(samples, -1.0, 1.0) * 32767).astype(np.int16)
+
+
+def record(plan, root, vad, threshold, microphone=None, ask=input):
+    """Graba los clips de plan, [(frase, cuántos)], en root/<frase>/NNN.wav.
+
+    Por clip: Enter, 2 s de calentamiento, "Habla ahora" y 6 s; se recorta a la voz.
+    Devuelve {frase: [informe de cada clip guardado]}.
+    """
+    saved = {}
+
+    with (microphone or Microphone()).open() as stream:
+        for phrase, count in plan:
+            folder = Path(root) / slug(phrase)
+            folder.mkdir(parents=True, exist_ok=True)
+            rows = saved.setdefault(phrase, [])
+
+            while len(rows) < count:
+                ask(f"[«{phrase}» {len(rows) + 1}/{count}] Enter y dilo cuando diga «Habla ahora»… ")
+                drain(stream)
+                warmup = take_frames(stream, WARMUP_S)
+                print(f"    Habla ahora: «{phrase}»", flush=True)
+                clip = trim_to_voice(warmup, take_frames(stream, WINDOW_S), vad, threshold)
+
+                if clip is None:
+                    print("    No oí voz: otra vez.", flush=True)
+                    continue
+
+                report = clip_report(clip)
+                print(f"    {describe_clip(report)}", flush=True)
+
+                if ask("    Enter lo guarda; r y Enter lo repite: ").strip().lower().startswith("r"):
+                    continue
+
+                path = folder / f"{next_index(folder):03d}.wav"
+                save_wav(path, [to_int16(clip)])
+                rows.append({"archivo": path.name, **report})
+
+    for phrase, rows in saved.items():
+        print(f"«{phrase}»: {len(rows)} clips en {Path(root) / slug(phrase)}")
+
+    return saved
+
+
+def voice_vad():
+    from core.voice.vad import SileroVAD
+
+    return SileroVAD()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--aciertos", type=int, metavar="INTENTOS", help="intentos diciendo la frase de activación")
@@ -265,10 +393,21 @@ def main():
     parser.add_argument("--guardar-audio", type=Path, nargs="?", const=AUDIO_DIR, metavar="CARPETA",
                         help="guarda cada intento de --aciertos como WAV de 16 kHz (por defecto, data/wake)")
     parser.add_argument("--repuntuar", type=Path, metavar="CARPETA", help="puntúa los WAV guardados, sin micrófono")
+    parser.add_argument("--grabar", type=int, metavar="N", help="graba N clips de --frase para entrenar, sin puntuar")
+    parser.add_argument("--frase", help="la frase de --grabar (\"oye Asia\")")
+    parser.add_argument("--carpeta", type=Path, default=AUDIO_DIR, help="dónde van los clips (por defecto, data/wake)")
     args = parser.parse_args()
 
+    if args.grabar:
+        if not args.frase:
+            parser.error("--grabar necesita --frase")
+
+        config = voice_settings(SettingsManager())
+        record([(args.frase, args.grabar)], args.carpeta / "positivos", voice_vad(), config["vad_threshold"])
+        return 0
+
     if not args.aciertos and not args.falsas and not args.repuntuar:
-        parser.error("di --aciertos INTENTOS, --falsas MINUTOS o --repuntuar CARPETA")
+        parser.error("di --aciertos INTENTOS, --falsas MINUTOS, --repuntuar CARPETA o --grabar N")
 
     if args.repuntuar and not trial_files(args.repuntuar):
         parser.error(f"no hay intento_*.wav en {args.repuntuar}")

@@ -191,3 +191,105 @@ def test_repuntuar_sin_wav_lo_dice(tmp_path, monkeypatch, capsys):
         check_wake.main()
 
     assert "no hay intento_*.wav" in capsys.readouterr().err
+
+
+
+# --- Grabar clips para entrenar ----------------------------------------------------
+
+class LevelVAD:
+    """Voz si el tramo pasa de 0,05 (los tramos de prueba son constantes)."""
+
+    def __init__(self):
+        self.resets = 0
+
+    def reset(self):
+        self.resets += 1
+
+    def probability(self, frame):
+        return 0.9 if abs(frame[0]) > 0.05 else 0.0
+
+
+def clip_frames(level=0.3, voice_s=1.0):
+    """Lo que da el micrófono en un clip: 2 s de calentamiento y 6 s de ventana con voz a 1 s."""
+    return frames(2.0) + frames(1.0) + frames(voice_s, level) + frames(6.0 - 1.0 - voice_s)
+
+
+def refill_with(*clips):
+    """drain de mentira: en cada clip, la cola tiene lo de ese clip."""
+    pending = list(clips)
+
+    def refill(stream):
+        while not stream.frames.empty():
+            stream.frames.get()
+
+        for frame in pending.pop(0):
+            stream.frames.put(frame)
+
+    return refill
+
+
+def answers(*values):
+    values = list(values)
+    return lambda prompt="": values.pop(0) if values else ""
+
+
+def test_slug_y_numeracion(tmp_path):
+    assert check_wake.slug("Oye Asia") == "oye_asia" and check_wake.slug("¿O ya sí a?") == "o_ya_si_a"
+    assert check_wake.next_index(tmp_path) == 1
+
+    for name in ("001.wav", "007.wav", "nota.wav"):
+        (tmp_path / name).write_bytes(b"")
+
+    assert check_wake.next_index(tmp_path) == 8
+
+
+def test_recorta_a_la_voz_con_margen():
+    window = frames(1.0) + frames(1.0, 0.3) + frames(1.0)
+
+    clip = check_wake.trim_to_voice(frames(2.0, 0.3), window, LevelVAD(), 0.5)
+
+    # 31 tramos de voz y 9 (0,3 s) a cada lado; el calentamiento no entra.
+    assert len(clip) == (31 + 2 * 9) * 512
+    assert check_wake.trim_to_voice([], frames(2.0), LevelVAD(), 0.5) is None
+
+
+def test_avisa_si_satura_o_si_es_muy_bajo():
+    loud = check_wake.clip_report(np.full(16000, 0.995, dtype=np.float32))
+    quiet = check_wake.clip_report(np.full(16000, 0.01, dtype=np.float32))
+    fine = check_wake.clip_report(np.full(16000, 0.3, dtype=np.float32))
+
+    assert loud["satura"] and not loud["bajo"] and "satura" in check_wake.describe_clip(loud)
+    assert quiet["bajo"] and not quiet["satura"] and "muy bajo" in check_wake.describe_clip(quiet)
+    assert not fine["satura"] and not fine["bajo"] and "Aviso" not in check_wake.describe_clip(fine)
+    assert fine["segundos"] == 1.0 and fine["pico_dbfs"] == -10.5
+
+
+def test_graba_repite_y_sigue_la_numeracion(tmp_path, monkeypatch, capsys):
+    folder = tmp_path / "positivos" / "oye_asia"
+    folder.mkdir(parents=True)
+    check_wake.save_wav(folder / "004.wav", [np.zeros(CHUNK, dtype=np.int16)])
+    # Clip 1 sin voz (se repite solo), clip 2 lo repite el usuario, clips 3 y 4 se guardan.
+    monkeypatch.setattr(check_wake, "drain", refill_with(frames(8.0), clip_frames(), clip_frames(), clip_frames(0.995)))
+    microphone = Microphone([])
+
+    saved = check_wake.record([("oye Asia", 2)], tmp_path / "positivos", LevelVAD(), 0.5, microphone,
+                              ask=answers("", "", "r", "", "", "", ""))
+
+    assert microphone.opened == 1
+    assert [row["archivo"] for row in saved["oye Asia"]] == ["005.wav", "006.wav"]
+    assert saved["oye Asia"][1]["satura"] is True
+    out = capsys.readouterr().out
+    assert "No oí voz" in out and "Habla ahora: «oye Asia»" in out and "satura" in out
+
+    with wave.open(str(folder / "005.wav"), "rb") as clip:
+        assert (clip.getframerate(), clip.getnchannels(), clip.getsampwidth()) == (16000, 1, 2)
+        assert clip.getnframes() == (31 + 2 * 9) * 512
+
+
+def test_grabar_necesita_la_frase(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["check_wake.py", "--grabar", "3"])
+
+    with pytest.raises(SystemExit):
+        check_wake.main()
+
+    assert "--grabar necesita --frase" in capsys.readouterr().err
