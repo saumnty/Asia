@@ -303,3 +303,14 @@ def test_la_palabra_escucha_la_frase_y_la_manda(capsys):
     err = capsys.readouterr().err
     assert "Escuchando…" in err and voice.listened == 1
     assert brain.processed == ["qué hora es"]
+
+
+
+@pytest.mark.parametrize("inputs, chunks", [({"hey_jarvis_v0.1": 16}, 25), ({"oye_asia_v0.1": 23}, 32), (None, 25)])
+def test_el_calentamiento_depende_de_la_entrada_del_modelo(inputs, chunks):
+    model = FakeModel()
+
+    if inputs is not None:
+        model.model_inputs = inputs
+
+    assert wake.warmup_chunks(model) == chunks

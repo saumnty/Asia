@@ -321,3 +321,36 @@ def test_negativos_por_defecto_tres_por_frase(monkeypatch):
 
     [(plan, root)] = plans
     assert {count for _, count in plan} == {3} and root.name == "negativos" and root.parent.name == "wake"
+
+
+
+def test_con_23_entradas_el_calentamiento_es_de_2_56_s(tmp_path, monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")
+    model = LoudModel()
+    model.model_inputs = {"oye_asia_v0.1": 23}
+
+    def refill(stream):
+        while not stream.frames.empty():
+            stream.frames.get()
+
+        for frame in frames(2.56) + frames(1.0) + frames(1.0, 0.9) + frames(4.5):
+            stream.frames.put(frame)
+
+    monkeypatch.setattr(check_wake, "drain", refill)
+    check_wake.hits(model, 1, 0.5, tmp_path, Microphone([]))
+
+    # 32 tramos de calentamiento y 75 de ventana.
+    with wave.open(str(tmp_path / "intento_01.wav"), "rb") as saved:
+        assert saved.getnframes() == (32 + 75) * CHUNK
+
+
+def test_repuntuar_completa_el_calentamiento_con_silencio(tmp_path):
+    quiet = [np.full(CHUNK, 100, dtype=np.int16)]
+    check_wake.save_wav(tmp_path / "intento_01.wav", quiet * 100)
+    model = LoudModel()
+    model.model_inputs = {"oye_asia_v0.1": 23}
+
+    check_wake.rescore(model, tmp_path, 0.5)
+
+    # 7 tramos de silencio delante de los 25 del archivo, y los 75 de la ventana.
+    assert model.seen == 7 + 100

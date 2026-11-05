@@ -20,6 +20,10 @@ from core.voice.audio import SAMPLE_RATE
 CHUNK = 1280
 # Una frase dispara varios tramos seguidos: cuenta una activación cada REFRACTORY_S.
 REFRACTORY_S = 2.0
+# Tras reset(), las 76 filas falsas del espectrograma tardan 10 tramos en salir (8 filas
+# por tramo), y la palabra mira los últimos model_inputs embeddings (uno por tramo).
+MEL_FLUSH_CHUNKS = 10
+DEFAULT_MODEL_INPUTS = 16
 MISSING_PACKAGE = "Falta openwakeword: .venv\\Scripts\\python.exe -m pip install openwakeword==0.6.0 --no-deps"
 MISSING_MODELS = "Faltan los modelos de openWakeWord en {folder}: {names} (versión v0.5.1)."
 
@@ -135,6 +139,13 @@ def reset_model(model):
     if getattr(model, "vad_threshold", 0) > 0 and vad is not None:
         vad.reset_states()
         vad.prediction_buffer.clear()
+
+
+def warmup_chunks(model) -> int:
+    """Tramos de 80 ms tras reset() hasta que la puntuación es solo de audio real:
+    25 (2 s) con hey_jarvis (16 embeddings), 32 (2,56 s) con oye_asia_v0.1 (23)."""
+    inputs = getattr(model, "model_inputs", None) or {}
+    return MEL_FLUSH_CHUNKS + max(inputs.values(), default=DEFAULT_MODEL_INPUTS) - 1
 
 
 def scores(model, frames):

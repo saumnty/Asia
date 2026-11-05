@@ -3,8 +3,9 @@
 Aciertos: dices la frase de activación cuando lo pide, una vez por intento, y
 cuenta en cuántos intentos se activa (y con qué puntuación máxima). El micrófono y
 el modelo quedan abiertos toda la prueba; antes de cada intento se reinicia el
-modelo y se le dan 2 s de audio sin contar (sus buffers tardan eso en llenarse),
-y solo entonces dice "Habla ahora": 6 s de ventana. Da el pico y el RMS del audio.
+modelo y se le da audio sin contar hasta que sus buffers se llenan (2 s con "Hey
+Jarvis", 2,56 s con oye_asia_v0.1: core/voice/wake.py, warmup_chunks), y solo
+entonces dice "Habla ahora": 6 s de ventana. Da el pico y el RMS del audio.
 
     .venv\\Scripts\\python.exe test\\manual\\check_wake.py --aciertos 20
 
@@ -58,10 +59,11 @@ from core.voice.audio import FRAME, SAMPLE_RATE, Microphone
 
 from config.settings_manager import SettingsManager
 from core.voice import voice_settings
-from core.voice.wake import CHUNK, Activations, Chunker, load_model as load_wake_model, missing, reset_model, wake_config
+from core.voice.wake import (CHUNK, Activations, Chunker, load_model as load_wake_model, missing, reset_model,
+                             wake_config, warmup_chunks)
 
-# Tras reset(), openWakeWord tarda 25 tramos (2 s) en tener solo audio real: 10 para
-# vaciar el espectrograma inicial y 16 embeddings para la ventana de la palabra.
+# El calentamiento de --grabar (sin modelo) y el que llevan los WAV de --guardar-audio
+# grabados antes de que dependiera del modelo. Con modelo, warmup_chunks(model).
 WARMUP_S = 2.0
 WINDOW_S = 6.0
 AUDIO_DIR = ROOT / "data" / "wake"
@@ -229,7 +231,8 @@ def hits(model, trials, threshold, audio_dir=None, microphone=None):
             drain(stream)
             chunker = Chunker()
             row, heard = run_trial(
-                model, take(stream, chunker, WARMUP_S), take(stream, chunker, WINDOW_S), threshold,
+                model, take(stream, chunker, warmup_chunks(model) * CHUNK / SAMPLE_RATE),
+                take(stream, chunker, WINDOW_S), threshold,
                 on_ready=lambda: print(f"    Habla ahora ({WINDOW_S:.0f} s)…", flush=True),
             )
 
@@ -243,13 +246,18 @@ def hits(model, trials, threshold, audio_dir=None, microphone=None):
 
 
 def rescore(model, folder, threshold):
-    """Puntúa los intentos guardados con --guardar-audio, sin micrófono."""
+    """Puntúa los intentos guardados con --guardar-audio, sin micrófono.
+
+    Los WAV traen WARMUP_S de calentamiento; si el modelo pide más (oye_asia_v0.1), se
+    completa con silencio delante: lo que llena sus buffers es audio, no tiene que ser voz.
+    """
     rows = []
     warm = chunk_count(WARMUP_S)
+    padding = [np.zeros(CHUNK, dtype=np.int16)] * max(0, warmup_chunks(model) - warm)
 
     for path in trial_files(folder):
         chunks = split_chunks(read_wav(path))
-        row, _ = run_trial(model, chunks[:warm], chunks[warm:], threshold)
+        row, _ = run_trial(model, padding + chunks[:warm], chunks[warm:], threshold)
         rows.append({"archivo": path.name, **row})
         print(f"{path.name}: {describe(row)}", flush=True)
 
