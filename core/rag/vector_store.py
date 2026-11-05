@@ -1,10 +1,16 @@
+import json
 import re
+from pathlib import Path
 
+from core.atomic_write import write_json_atomic
 from core.paths import CHROMA_DIR
 from core.rag.word_index import WordIndex
 
 
 BATCH_SIZE = 1000
+# Los archivos sin fragmentos no tienen dónde llevar su hash en Chroma: van aquí,
+# {colección: {ruta: hash}}, junto al índice.
+EMPTY_FILES = "archivos_vacios.json"
 # Chroma 1.5: tras escribir dos colecciones nuevas en un proceso, en ~1 % de los casos
 # la primera ya no se lee. El disco está bien: se cura reabriendo, no reintentando.
 STALE_SEGMENT = "Nothing found on disk"
@@ -94,14 +100,43 @@ class VectorStore:
         return len(ids)
 
     def file_hashes(self) -> dict:
-        """{ruta: hash} de lo indexado. Los índices viejos no guardan hash."""
+        """{ruta: hash} de lo indexado, también de los archivos sin fragmentos. Los índices viejos no guardan hash."""
         existing = self.collection.get(include=["metadatas"])
 
         return {
-            metadata["file_path"]: metadata["file_hash"]
-            for metadata in existing["metadatas"]
-            if metadata and metadata.get("file_hash")
+            **self.empty_hashes(),
+            **{
+                metadata["file_path"]: metadata["file_hash"]
+                for metadata in existing["metadatas"]
+                if metadata and metadata.get("file_hash")
+            },
         }
+
+    def empty_files_path(self) -> Path:
+        return Path(self.folder) / EMPTY_FILES
+
+    def empty_hashes(self) -> dict:
+        """{ruta: hash} de los archivos de esta colección que no dieron ningún fragmento."""
+        try:
+            return json.loads(self.empty_files_path().read_text(encoding="utf-8")).get(self.name, {})
+        except (OSError, ValueError, AttributeError):
+            return {}
+
+    def save_empty_hashes(self, hashes: dict):
+        path = self.empty_files_path()
+
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+
+        if hashes:
+            data[self.name] = hashes
+        else:
+            data.pop(self.name, None)
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_json_atomic(path, data)
 
     def all_documents(self) -> dict:
         return self.collection.get(include=["documents", "metadatas"])

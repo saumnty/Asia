@@ -298,3 +298,37 @@ def test_no_toca_lo_de_otras_carpetas_de_la_coleccion(tmp_path, project, embeddi
     indexer.index_project()
 
     assert "de otra carpeta" in documents_of(indexer)
+
+
+def test_un_archivo_vacio_guarda_su_hash_y_no_se_reindexa(tmp_path, project, embeddings):  # noqa: F811
+    (project / "__init__.py").write_text("", encoding="utf-8")
+    first = indexer_of(project, tmp_path)
+    first.index_project()
+
+    again = indexer_of(project, tmp_path)
+    again.index_project()
+
+    assert first.changed == 3 and (again.changed, again.unchanged) == (0, 3)
+    assert (project / "__init__.py").as_posix() in again.store.empty_hashes()
+
+
+def test_un_archivo_vacio_que_se_llena_se_indexa(tmp_path, project, embeddings):  # noqa: F811
+    (project / "__init__.py").write_text("", encoding="utf-8")
+    indexer_of(project, tmp_path).index_project()
+    (project / "__init__.py").write_text("def tres():\n    return 3\n", encoding="utf-8")
+
+    indexer = indexer_of(project, tmp_path)
+
+    assert indexer.index_project() == 3 and indexer.changed == 1
+    assert indexer.store.empty_hashes() == {}
+
+
+def test_un_archivo_vacio_borrado_sale_de_la_lista(tmp_path, project, embeddings):  # noqa: F811
+    (project / "__init__.py").write_text("", encoding="utf-8")
+    indexer_of(project, tmp_path).index_project()
+    (project / "__init__.py").unlink()
+
+    indexer = indexer_of(project, tmp_path)
+    indexer.index_project()
+
+    assert indexer.store.empty_hashes() == {} and (indexer.changed, indexer.unchanged) == (0, 2)

@@ -108,7 +108,8 @@ class ProjectIndexer:
         current = {path.as_posix(): content_hash(text) for path, text in files.items()}
 
         changed = [path for path in files if stored.get(path.as_posix()) != current[path.as_posix()]]
-        fragments = [fragment for path in changed for fragment in self.fragments_of(path, files[path])]
+        by_file = {path.as_posix(): self.fragments_of(path, files[path]) for path in changed}
+        fragments = [fragment for found in by_file.values() for fragment in found]
 
         ids = [fragment[0] for fragment in fragments]
         documents = [fragment[1] for fragment in fragments]
@@ -127,6 +128,12 @@ class ProjectIndexer:
 
         if ids:
             self.store.add_documents(ids, documents, embeddings, metadatas)
+
+        # Un __init__.py vacío no da fragmentos: sin su hash, cada /indexar lo reindexaba.
+        previous = self.store.empty_hashes()
+        empty = {path: current[path] for path in current if path in by_file and not by_file[path]}
+        empty.update({path: digest for path, digest in previous.items() if path in current and path not in by_file})
+        self.store.save_empty_hashes(empty)
 
         self.changed = len(changed)
         self.unchanged = len(files) - len(changed)
