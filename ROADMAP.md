@@ -1033,6 +1033,8 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 - Preparar los audios: juntar todos, separar por origen, limpiar (Demucs, DeepFilterNet con moderación), cortar y transcribir con Whisper.
 - Con 15–30 min limpios, fine-tuning directo de Piper en Colab; con menos, generar frases sintéticas con XTTS-v2 y entrenar Piper con ellas.
 - La voz base del fine-tuning debe coincidir en género y acento con la final.
+- TTS expresivo: evaluar uno con control de emoción o de estilo que, conectado al núcleo afectivo (`core/afecto`), ajuste la velocidad, las pausas y la energía según el estado: más calmado ante el estrés, más animado ante el entusiasmo. Medir si cabe junto a qwen3 en la GPU, frente a Piper (que va en CPU).
+- Opcional: generar una sola vez sonidos cortos propios (activación de J3, aviso) y guardarlos como archivos.
 
 **SQLite como almacenamiento** (Asia 2.0), por partes.
 - Historial completo de sesiones con búsqueda ("¿qué hablamos del PID la semana pasada?"). Base para R y para la fase de afecto.
