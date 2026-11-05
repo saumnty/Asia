@@ -707,6 +707,21 @@ Clips para "Oye Asia" (2026-11-05):
 - Sintéticos con Piper (`test/manual/generar_wake.py`, `462d2d4e`): 4000 positivos (117,8 min; "oye Asia", "oye, Asia", "¡oye Asia!", "¿oye Asia?", "oye Asia." y "oye Asia, <frase corta>") y 2000 negativos difíciles (36,8 min; "hoy hacia", "oye Alicia", "Malasia", "fantasía", "Anastasia"…), con las cuatro voces (claude-high, ald y los dos hablantes de sharvard) y length_scale 0,8–1,3, noise_scale 0,4–0,9 y noise_w 0,5–1,1 al azar. WAV de 16 kHz mono de 1 a 3 s (116 cortados a 3 s). 14,6 min de generación en CPU.
 - Paquetes en `C:\AsiaVoz\wake\` (fuera del repositorio): `sintetico.zip` (251,5 MB, con `clips.csv`), `mi_voz.zip` (4,4 MB) y `LEEME.txt` con los conteos, las licencias de las voces y la herencia no comercial de ACAV100M. Subirlos a Drive lo decide el usuario.
 
+Entrenamiento de "Oye Asia" en Colab (2026-11-05):
+- Cuaderno: copia de `automatic_model_training.ipynb` de openWakeWord en Colab gratuito con T4 (Python 3.13). Incompatibilidades resueltas:
+  - `datasets` 2.14.6 con el pyarrow nuevo: `datasets` 3.6.0.
+  - `openwakeword` con `--no-deps` (`speexdsp-ns` no existe para 3.13), más `onnxruntime`, `ai-edge-litert` y `onnx` a mano.
+  - `torch_audiomentations` 0.11 con torchaudio 2.11: torch, torchaudio y torchvision 2.8.0/2.8.0/0.23.0, y la línea `set_audio_backend` comentada.
+  - `train.py` importa `generate_samples` siempre: desactivado, sin `--generate_clips`.
+  - AudioSet movió sus archivos: commit fijo `4e17ae0`.
+  - FMA saltado (el streaming de zip no está soportado).
+- Memoria: el proceso moría por falta de RAM (12 GB) en las validaciones (paso ~53 de la fase 2, o al 75 % de la fase 1). Solución: negativos de ACAV100M recortados a 1 000 000 filas (3 GB) y validación a la mitad (~5,3 h). Pico observado: ~6,5 GB.
+- Datos: 4000 positivos y 2000 negativos sintéticos (Piper); 80 positivos y 21 negativos de la voz del usuario (×10 en entrenamiento, 15 % a prueba). Fondos: 685 clips de AudioSet; respuestas de sala de MIT RIR.
+- Entrenamiento: 10 000 pasos más dos fases de 1000, unos 10 min en la T4. Modelo: `oye_asia_v0.1.onnx`, 291 KB, entrada [1, 23, 96].
+- Evaluación en Colab: negativos de prueba 0 %; positivos de prueba (con ruido y eco) 24 % a 0,5; falsas activaciones en 5,3 h: 4,5/h a 0,5, 0,75/h a 0,7 y 0/h a 0,9.
+- Pendiente: `check_wake --modelo oye_asia_v0.1 --aciertos 20` y `--falsas 30` con la voz del usuario, y elegir el umbral. Si se queda corto, v0.2: 50 000 pasos, `augmentation_rounds` 2 y más clips del usuario.
+- Licencia: hereda el uso no comercial de ACAV100M (CC BY-NC-SA 4.0): personal, no distribuible.
+
 Paso 2, entrenar "Oye Asia" (plan, 2026-11-04; se hace con otro permiso). En Colab con GPU: el cuaderno de entrenamiento de openWakeWord (`automatic_model_training.ipynb`) usa los 17 GB de negativos y dependencias que aquí no conviene instalar (`openwakeword[full]`; el TensorFlow 2.8.1 que pide no instala en Python 3.11 y solo sirve para tflite).
 
 1. En local, positivos con Piper (unos 30 min en CPU). Un script en `test/manual/` genera "oye Asia" y variantes ("oye, Asia", "¡oye Asia!", "oye Asia, …" con frases cortas detrás) con las tres voces en español (`es_MX-claude-high`, `es_MX-ald-medium`, `es_ES-sharvard-medium`), variando `length_scale` (0,8–1,3), `noise_scale` y `noise_w`. Unos 4000 clips WAV de 16 kHz, mono, de 1–2 s (unos 250 MB). El generador de muestras del cuaderno (`piper-sample-generator`) es de inglés: no se usa.
@@ -1078,7 +1093,7 @@ El monólogo interno y la reflexión nocturna siguen sin fecha, en 2.0 (ver "Pos
 Dataset de la voz propia (2026-11-05), fuera del repositorio (nada de audio, texto ni nombres en el repo):
 - Fuente: 19 notas de voz de WhatsApp (`separar_audios_voz.py`, `a744bfb7`); 39,9 min de voz neta (`inventario_voz.py`, `3a45f10b`). 17 de los 19 traen picos por encima de 0 dBFS.
 - Frases (`preparar_voz.py`, `09b497ee`): Silero VAD de faster-whisper (silencios de 0,3 s, margen de 0,15 s), unidas o partidas a 2–15 s; WAV mono de 16 bits a 48 kHz, formato LJSpeech. 750 frases (52,7 min), 336 aceptadas (24,0 min); 414 a revisar, casi todas por avg_logprob < −0,6 (391) y 66 por saturación. Transcripción con Whisper small en CPU int8: 40,7 min. Incluso las aceptadas tienen errores de transcripción: hay que escucharlas todas.
-- Segunda transcripción con large-v3-turbo (`transcribir_turbo.py`, `86d8346f`; modelo descargado a `data/models/faster-whisper-large-v3-turbo`, 1,62 GB, de `dropbox-dash/faster-whisper-large-v3-turbo` en Hugging Face, el antiguo `mobiuslabsgmbh`, sha256 comprobado): se detuvo sola en las primeras 20 frases, a 2,6× su duración; las 750 tardarían unos 138 min en CPU. Pendiente: decidir si se corre.
+- Segunda transcripción con large-v3-turbo (`transcribir_turbo.py`, `86d8346f`; modelo descargado a `data/models/faster-whisper-large-v3-turbo`, 1,62 GB, de `dropbox-dash/faster-whisper-large-v3-turbo` en Hugging Face, el antiguo `mobiuslabsgmbh`, sha256 comprobado): en CPU int8, a 2,6× la duración del audio (se detiene sola si pasa de 2×; `--sin-tope`, `a0847c7`, la corre entera). 139,8 min para las 750 frases. Coinciden con small (sin mayúsculas, acentos ni puntuación) 147 de 750. Pasan los umbrales con turbo 592 frases (41,4 min), frente a 336 con small; avg_logprob < −0,6 baja de 391 a 102. Pasan con turbo y además coinciden con small: 126 (7,6 min).
 - Página de revisión (`pagina_revision.py`, `33804126`): `revisar.html` junto al dataset, un solo archivo que abre con file://. Por frase, el audio, los motivos, small y turbo con las diferencias marcadas y el texto editable; Aceptar, Descartar y Saltar (espacio, Enter, D, flechas). Primero las dudosas, luego las aceptadas y al final las peores; filtros, contador, avance en el navegador y "Exportar" (metadata.csv y revision.json). Regla: lo que se oye, con los números en letra.
 - Pendiente: elegir 16 o 22 kHz para el entrenamiento, y si los audios de ella se suben a Colab para el fine-tuning.
 
