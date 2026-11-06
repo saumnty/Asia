@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orbe de Asia</title>
+<style>
+/* Paleta: la misma que PALETTE en el script y docs/IDENTIDAD_VISUAL.md. Ningún tono por debajo de 44° de matiz. */
+:root {
+  --nucleo: #FFD54A;
+  --brillo: #FFE89A;
+  --fragmentos: #F6CA46;
+  --sombras: #C29A24;
+  --fondo: #0F0F0F;
+  --apagado: #8C7E52;
+  --texto: #ECE8DC;
+  --texto-suave: #A39E90;
+  --borde: #2A2A31;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--fondo); color: var(--texto); font: 15px/1.4 system-ui, sans-serif; }
+main { min-height: 100%; display: grid; grid-template-rows: 1fr auto; }
+.stage { position: relative; min-height: 320px; }
+canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.state-name { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center; color: var(--texto-suave); letter-spacing: .04em; }
+.controls { padding: 14px 16px 20px; display: flex; flex-wrap: wrap; gap: 8px 10px; justify-content: center; align-items: center;
+            border-top: 1px solid var(--borde); }
+button { font: inherit; color: var(--texto); background: #171717; border: 1px solid var(--borde); border-radius: 999px;
+         padding: 6px 14px; cursor: pointer; }
+button[aria-pressed="true"] { border-color: var(--sombras); color: var(--brillo); background: #1E1B12; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--brillo); outline-offset: 2px; }
+label { color: var(--texto-suave); display: inline-flex; gap: 8px; align-items: center; }
+input[type=range] { accent-color: var(--fragmentos); width: 160px; }
+.hint { flex-basis: 100%; text-align: center; color: var(--texto-suave); font-size: 13px; margin: 0; }
+</style>
+</head>
+<body>
+<main>
+  <div class="stage">
+    <canvas id="orb" aria-label="Orbe de Asia" role="img"></canvas>
+    <div class="state-name" id="state-name" aria-live="polite"></div>
+  </div>
+  <div class="controls" role="group" aria-label="Estados">
+    <button data-state="reposo">1 · Reposo</button>
+    <button data-state="esperando">2 · Esperando</button>
+    <button data-state="escuchando">3 · Escuchando</button>
+    <button data-state="pensando">4 · Pensando</button>
+    <button data-state="hablando">5 · Hablando</button>
+    <button data-state="error">6 · Error</button>
+    <label>Volumen del micrófono <input type="range" id="volume" min="0" max="100" value="35"></label>
+    <label><input type="checkbox" id="reduced"> Menos movimiento</label>
+    <p class="hint">Teclas 1–6 para los estados. "Menos movimiento" sigue la preferencia del sistema (prefers-reduced-motion).</p>
+  </div>
+</main>
+<script>
+"use strict";
+// La paleta (matiz de 44° a 47°: amarillo cálido, nunca naranja).
+const PALETTE = {
+  nucleo: "#FFD54A",
+  brillo: "#FFE89A",
+  fragmentos: "#F6CA46",
+  sombras: "#C29A24",
+  fondo: "#0F0F0F",
+  apagado: "#8C7E52",
+};
+
+// Cada estado: respiración del núcleo, velocidad y dispersión de los fragmentos, brillo.
+const STATES = {
+  reposo:     { label: "En reposo",                      breathPeriod: 5.0, breathDepth: 0.035, spin: 0.05, spread: 1.00, jitter: 0.02, glow: 0.55 },
+  esperando:  { label: "Esperando «Oye Asia»",           breathPeriod: 2.4, breathDepth: 0.05,  spin: 0.08, spread: 1.00, jitter: 0.03, glow: 0.65, pulse: true },
+  escuchando: { label: "Escuchando",                     breathPeriod: 3.0, breathDepth: 0.03,  spin: 0.12, spread: 1.05, jitter: 0.05, glow: 0.75, followsVolume: true },
+  pensando:   { label: "Pensando",                       breathPeriod: 1.6, breathDepth: 0.03,  spin: 0.55, spread: 0.95, jitter: 0.04, glow: 0.70, regroup: true },
+  hablando:   { label: "Hablando",                       breathPeriod: 3.0, breathDepth: 0.02,  spin: 0.10, spread: 1.02, jitter: 0.03, glow: 0.80, followsVoice: true },
+  error:      { label: "Algo falló: vuelvo en un momento", breathPeriod: 6.0, breathDepth: 0.01, spin: 0.02, spread: 1.10, jitter: 0.01, glow: 0.20, dims: true },
+};
+
+const canvas = document.getElementById("orb");
+const ctx = canvas.getContext("2d");
+const volumeInput = document.getElementById("volume");
+const reducedInput = document.getElementById("reduced");
+const nameBox = document.getElementById("state-name");
+const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+let state = "reposo";
+let stateSince = 0;
+let width = 0, height = 0, scale = 1;
+// Valores suavizados (lo que se dibuja sigue al objetivo del estado sin saltos).
+const smooth = { spin: 0.05, spread: 1, jitter: 0.02, glow: 0.55, level: 0, voice: 0, dim: 0, regroup: 0 };
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function mix(a, b, t) {
+  const x = hexToRgb(a), y = hexToRgb(b);
+  return x.map((v, i) => Math.round(v + (y[i] - v) * t));
+}
+
+function rgba(rgb, alpha) {
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+}
+
+// Fragmentos: cuadrados pequeños en órbitas inclinadas, cada uno con su fase.
+const random = (() => { let seed = 7; return () => (seed = (seed * 16807) % 2147483647) / 2147483647; })();
+const FRAGMENTS = Array.from({ length: 42 }, (_, i) => ({
+  orbit: 1.35 + random() * 0.9,
+  angle: random() * Math.PI * 2,
+  speed: (0.6 + random() * 0.8) * (i % 2 ? 1 : -1),
+  tilt: 0.35 + random() * 0.5,
+  size: 0.045 + random() * 0.05,
+  phase: random() * Math.PI * 2,
+  turn: random() * Math.PI,
+}));
+
+function resize() {
+  const box = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  width = box.width; height = box.height;
+  canvas.width = Math.round(width * ratio);
+  canvas.height = Math.round(height * ratio);
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  scale = Math.min(width, height) * 0.16;
+}
+
+function reducedMotion() {
+  return reducedInput.checked;
+}
+
+function setState(next, now = performance.now() / 1000) {
+  state = next;
+  stateSince = now;
+  nameBox.textContent = STATES[next].label;
+  document.querySelectorAll("button[data-state]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.state === next)));
+}
+
+// "Voz de Piper" simulada: sílabas de 120–260 ms con pausas, para el estado hablando.
+let syllableEnd = 0, syllableLevel = 0;
+function voiceEnvelope(now) {
+  if (now > syllableEnd) {
+    const pause = random() < 0.18;
+    syllableLevel = pause ? 0 : 0.45 + random() * 0.55;
+    syllableEnd = now + (pause ? 0.25 + random() * 0.3 : 0.12 + random() * 0.14);
+  }
+  return syllableLevel;
+}
+
+function approach(current, target, rate, dt) {
+  return current + (target - current) * (1 - Math.exp(-rate * dt));
+}
+
+let last = performance.now() / 1000;
+function frame(nowMs) {
+  const now = nowMs / 1000;
+  const dt = Math.min(0.05, now - last);
+  last = now;
+  const s = STATES[state];
+  const still = reducedMotion();
+  const elapsed = now - stateSince;
+
+  const mic = volumeInput.value / 100;
+  smooth.level = approach(smooth.level, s.followsVolume ? mic : 0, 12, dt);
+  smooth.voice = approach(smooth.voice, s.followsVoice ? voiceEnvelope(now) * (0.6 + mic * 0.6) : 0, 18, dt);
+  smooth.spin = approach(smooth.spin, s.spin, 3, dt);
+  // Con menos movimiento, el volumen y la voz se ven en el brillo, no en el tamaño ni en la posición.
+  smooth.spread = approach(smooth.spread, s.spread + (still ? 0 : smooth.level * 0.35), 6, dt);
+  smooth.jitter = approach(smooth.jitter, still ? 0 : s.jitter + smooth.level * 0.12, 6, dt);
+  // Error: se apaga rápido y vuelve despacio; luego pasa solo a reposo.
+  const dimTarget = s.dims ? (elapsed < 0.25 ? 1 : Math.max(0, 1 - (elapsed - 0.25) / 1.6) * 0.7) : 0;
+  smooth.dim = approach(smooth.dim, dimTarget, 10, dt);
+  smooth.glow = approach(smooth.glow, s.glow + smooth.voice * 0.25 + smooth.level * 0.15, 6, dt);
+  // Pensando: cada 1,8 s los fragmentos se juntan cerca del núcleo y se vuelven a abrir.
+  const regroupTarget = s.regroup && !still ? 0.5 - 0.5 * Math.cos(elapsed * Math.PI * 2 / 1.8) : 0;
+  smooth.regroup = approach(smooth.regroup, regroupTarget, 5, dt);
+
+  if (s.dims && elapsed > 2.2) setState("reposo", now);
+
+  draw(now, s, still);
+  requestAnimationFrame(frame);
+}
+
+function draw(now, s, still) {
+  const cx = width / 2, cy = height / 2 - 14;
+  ctx.fillStyle = PALETTE.fondo;
+  ctx.fillRect(0, 0, width, height);
+
+  const t = still ? 0 : now;
+  const breath = still ? 0 : Math.sin(t * Math.PI * 2 / s.breathPeriod) * s.breathDepth;
+  const beat = still ? 0 : smooth.voice * 0.16;
+  const radius = scale * (1 + breath + beat + (still ? 0 : smooth.level * 0.06));
+  // Apagado: el amarillo se acerca a un dorado gris (mismo matiz), nunca a rojo ni naranja.
+  const core = mix(PALETTE.nucleo, PALETTE.apagado, smooth.dim);
+  const light = mix(PALETTE.brillo, PALETTE.apagado, smooth.dim);
+  const shard = mix(PALETTE.fragmentos, PALETTE.apagado, smooth.dim);
+  const edge = mix(PALETTE.sombras, PALETTE.apagado, smooth.dim);
+  const glow = smooth.glow * (1 - smooth.dim * 0.8);
+
+  // Halo.
+  const halo = ctx.createRadialGradient(cx, cy, radius * 0.4, cx, cy, radius * 3.2);
+  halo.addColorStop(0, rgba(light, 0.35 * glow));
+  halo.addColorStop(0.45, rgba(core, 0.12 * glow));
+  halo.addColorStop(1, rgba(core, 0));
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(cx, cy, radius * 3.2, 0, Math.PI * 2); ctx.fill();
+
+  // Pulso de "esperando": un anillo que se abre y se desvanece.
+  if (s.pulse) {
+    const cycle = still ? 0.35 : ((now - stateSince) % 2.4) / 2.4;
+    ctx.strokeStyle = rgba(light, 0.45 * (1 - cycle));
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, radius * (1.15 + cycle * 1.4), 0, Math.PI * 2); ctx.stroke();
+  }
+
+  // Fragmentos de atrás (los de delante se dibujan después del núcleo).
+  const placed = FRAGMENTS.map(f => place(f, t, cx, cy, radius));
+  placed.filter(p => p.depth < 0).forEach(p => drawShard(p, shard, edge, glow));
+
+  // Núcleo: esfera con luz arriba a la izquierda y contorno en la sombra.
+  const body = ctx.createRadialGradient(cx - radius * 0.35, cy - radius * 0.4, radius * 0.1, cx, cy, radius);
+  body.addColorStop(0, rgba(light, 1));
+  body.addColorStop(0.55, rgba(core, 1));
+  body.addColorStop(1, rgba(edge, 1));
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
+
+  placed.filter(p => p.depth >= 0).forEach(p => drawShard(p, shard, edge, glow));
+}
+
+function place(f, t, cx, cy, radius) {
+  const angle = f.angle + t * f.speed * smooth.spin * 2;
+  const wobble = Math.sin(t * 1.3 + f.phase) * smooth.jitter;
+  const orbit = (f.orbit * smooth.spread + wobble) * (1 - smooth.regroup * 0.42);
+  const x = Math.cos(angle) * orbit;
+  const z = Math.sin(angle) * orbit;
+  const y = z * f.tilt * 0.55 + Math.sin(t * 0.7 + f.phase) * 0.05;
+  return { x: cx + x * radius, y: cy + y * radius, depth: z, size: f.size * radius * (1 + z * 0.12),
+           turn: f.turn + t * f.speed * 0.6 };
+}
+
+function drawShard(p, color, edge, glow) {
+  const alpha = (0.55 + 0.45 * Math.max(0, p.depth / 2)) * (0.6 + glow * 0.5);
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.turn);
+  ctx.fillStyle = rgba(color, Math.min(1, alpha));
+  ctx.strokeStyle = rgba(edge, Math.min(1, alpha));
+  ctx.lineWidth = 1;
+  ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+  ctx.strokeRect(-p.size / 2, -p.size / 2, p.size, p.size);
+  ctx.restore();
+}
+
+document.querySelectorAll("button[data-state]").forEach(button =>
+  button.addEventListener("click", () => setState(button.dataset.state)));
+document.addEventListener("keydown", event => {
+  const names = Object.keys(STATES);
+  const index = Number(event.key) - 1;
+  if (index >= 0 && index < names.length && event.target.tagName !== "INPUT") setState(names[index]);
+});
+
+reducedInput.checked = motionQuery.matches;
+motionQuery.addEventListener("change", () => { reducedInput.checked = motionQuery.matches; });
+window.addEventListener("resize", resize);
+resize();
+setState("reposo");
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

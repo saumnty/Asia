@@ -779,6 +779,7 @@ Licencias: el modelo sale de las características de ACAV100M (CC BY-NC-SA 4.0),
 - "cómo va Bolitabot" hizo que qwen3 respondiera como si fuera Bolitabot. Medir aparte.
 - Canal de estado local (Flask-SocketIO) para que el avatar reaccione a hablar, pensar y escuchar.
 - Avatar: perro bóxer.
+- Identidad visual: orbe amarillo cálido (Asia 2.0, con el avatar; `docs/IDENTIDAD_VISUAL.md`, prototipo `test/manual/visual/asia_orbe.html`). Un núcleo esférico de luz con fragmentos cuadrados que orbitan, se separan y se reagrupan. Paleta de 44° a 47° de matiz, nunca naranja; el fondo pasa a gris neutro `#0F0F0F` porque el `#0E0E12` azulado bajaba los bordes del halo a 40°. Estados: en reposo (respira lento), esperando la palabra (pulso suave), escuchando (los fragmentos siguen el volumen del micrófono), pensando (giran y se reagrupan más rápido), hablando (el núcleo late con la voz de Piper) y error (se apaga un momento, sin rojo), con `prefers-reduced-motion`. Se conecta por el canal de estado local: eventos `{estado, nivel}` solo en 127.0.0.1 y sin el texto de los mensajes. El orbe y el bóxer conviven: el orbe como indicador de estado, siempre visible y pequeño; el bóxer como avatar en una ventana propia. Los dos leen el mismo canal.
 
 ### Biblioteca de conocimiento offline (fase H, Asia 1.0): terminada (2026-11-04)
 
