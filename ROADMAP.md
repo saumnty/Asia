@@ -727,6 +727,22 @@ Entrenamiento de "Oye Asia" en Colab (2026-11-05):
 - Para usarlo, en `settings.json`: `"voice": {"wake_word": "oye_asia_v0.1", "wake_label": "Oye Asia"}` (y `wake_threshold` cuando se elija).
 - Con Piper (sin fondo, o con fondo de −60 a −45 dBFS): "oye Asia" sola da 0,005–0,22 y "oye Asia, qué hora es" 0,76–0,81, pero "hoy hacia" llega a 0,43–0,79 con fondo. Probable causa: 14 de los 19 textos positivos de `generar_wake` llevan una frase detrás, así que el modelo aprendió "voz que sigue tras Asia". Para v0.2: más "oye Asia" sola (la mitad de los positivos, por ejemplo) y "hoy hacia" con más peso entre los negativos.
 
+Diagnóstico del v0.1 y reparto para v0.2 (2026-11-05):
+- `test/manual/comparar_wake.py` (prueba manual para comparar modelos: `--modelo oye_asia_v0.1 --modelo oye_asia_v0.2`) pasa frases de Piper por el camino del micrófono, tras calentar el modelo con el fondo de cada caso. Con el v0.1, la máxima por voz (claude, sharvard M, sharvard F):
+
+  | Caso | ¿Debe? | claude | sharv-M | sharv-F |
+  |---|---|---|---|---|
+  | "oye Asia" sola, fondo −60 dBFS | sí | 0,100 | 0,649 | 0,508 |
+  | "oye Asia" sola, sin fondo | sí | 0,007 | 0,221 | 0,032 |
+  | con frase detrás | sí | 0,751 | 0,813 | 0,807 |
+  | con frase delante ("bueno, oye Asia") | sí | 0,479 | 0,680 | 0,128 |
+  | "hoy hacia", sin fondo | no | 0,519 | 0,120 | 0,014 |
+  | "hoy hacia", fondo −60 dBFS | no | 0,787 | 0,646 | 0,116 |
+  | "hoy hacia", fondo −45 dBFS | no | 0,793 | 0,606 | 0,089 |
+
+  Lo que más lo activa es la voz que sigue tras "Asia", no la palabra: 14 de los 19 textos positivos llevaban una frase detrás. Y "hoy hacia" lo engaña tanto como "oye Asia" sola.
+- Reparto nuevo de `generar_wake.py` (`sintetico_v01.zip` guarda el anterior): 5000 positivos, 50 % "oye Asia" sola y sus variantes ("oye, Asia", "¡oye Asia!", "¿oye Asia?", "oye... Asia", "oye Asia.") con 0,3–1 s de silencio después, 35 % "oye Asia, <frase corta>" y 15 % "<frase corta>, oye Asia" (si pasa de 3 s, se corta por delante). 3000 negativos: la mitad para los que engañaban al v0.1 ("hoy hacia", "hoy hacía frío", "oye Alicia", "o ya sí a", "Asia", "oye, así"; 250 cada uno, la mitad con una frase detrás, como "hoy hacia el centro, ¿vienes?"), la otra mitad para las demás parecidas. 8000 clips en 17,0 min; `sintetico.zip` de 301,6 MB, con el grupo de cada clip en `clips.csv`.
+
 Cuaderno para v0.2 (`ecd4dc7`): `test/manual/colab/entrenar_oye_asia.ipynb`, para "Ejecutar todo" en Colab con T4.
 - Instalación con versiones fijas (torch 2.8.0 con restricciones para todo lo demás, `datasets>=3,<4`, openwakeword con `--no-deps`, sin TensorFlow, onnx_tf ni piper-phonemize) y modelos de características v0.5.1.
 - Parches con `sed`, comprobados: `set_audio_backend`, `generate_samples = None`, guardar el `state_dict` del mejor modelo antes de exportarlo, y dos más: `val_set_hrs` (fijo en 11,3 h en `auto_train`; con la validación a la mitad contaba la mitad de falsas por hora) y la conversión a tflite (sin TensorFlow fallaba al final con el `.onnx` ya escrito).
