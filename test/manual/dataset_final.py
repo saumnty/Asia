@@ -8,7 +8,7 @@
 - Recorta el silencio de los extremos con el Silero VAD de faster-whisper, dejando
   PAD_S, y normaliza el pico a PEAK_DBFS (una ganancia, sin compresión).
 - Dos versiones, 22 050 y 16 000 Hz, cada una con wavs/NNNN.wav y metadata.csv
-  (id|texto, formato LJSpeech), y un zip por versión, listo para subir a Colab.
+  (NNNN.wav|texto, como lo lee piper1-gpl), y un zip por versión, listo para subir a Colab.
 - Avisa de dígitos (deben ir en letra), símbolos raros y duraciones fuera de
   1–15 s; las frases vacías no entran. Escribe resumen.txt.
 
@@ -192,7 +192,8 @@ def build(dataset, metadata, destination, revision=None, segments=silero_segment
 
     for version in RATES:
         folder = destination / str(version)
-        (folder / "metadata.csv").write_text("".join(f"{item.id}|{item.text}\n" for item in items), encoding="utf-8")
+        # piper1-gpl lee el nombre del archivo en la primera columna (wavs/0001.wav -> "0001.wav").
+        (folder / "metadata.csv").write_text("".join(f"{item.id}.wav|{item.text}\n" for item in items), encoding="utf-8")
 
         with zipfile.ZipFile(destination / f"{destination.name}_{version}.zip", "w", zipfile.ZIP_DEFLATED) as archive:
             archive.write(folder / "metadata.csv", "metadata.csv")

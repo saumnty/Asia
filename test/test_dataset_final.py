@@ -67,7 +67,8 @@ def test_solo_las_aceptadas_con_su_texto_y_sin_las_vacias(dataset, tmp_path):
 
     for version in (22050, 16000):
         lines = (tmp_path / "final" / str(version) / "metadata.csv").read_text(encoding="utf-8").splitlines()
-        assert lines == ["0001|Hola, ¿cómo estás?", "0002|Tengo 2 perros y un gato", "0003|Ya."]
+        # Con el nombre del archivo, como lo pide piper1-gpl.
+        assert lines == ["0001.wav|Hola, ¿cómo estás?", "0002.wav|Tengo 2 perros y un gato", "0003.wav|Ya."]
 
     assert result["frases"] == 3 and result["fuera"] == ["0004: texto vacío, no entra"]
 
