@@ -64,14 +64,19 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
     --aciertos 20 y --falsas 30, comparar, configurar el umbral).
 - Voz propia:
   - 19 audios de una persona que dio permiso (uso privado), 750
-    frases transcritas con small y turbo; revisadas a mano: 746
-    aceptadas, 52,4 min. Exportado en
+    frases transcritas con small y turbo; revisadas a mano: 747
+    aceptadas y 3 descartadas. Exportado en
     C:\AsiaVoz\dataset\fa\exportado\.
-  - dataset_final.py listo (sin correr con mis datos).
+  - Dataset final (11-nov-2026), a 22 050 Hz y fuera del repo, en
+    C:\AsiaVoz\dataset\fa\: fa_normal y fa_atenuado (silencios
+    internos -24 dB), cada una con 747 frases, 52,2 min y su zip
+    (~108 MB). Validadas: mono, 22 050 Hz, metadata cuadra.
+  - Cuaderno test/manual/colab/entrenar_voz_propia.ipynb (sin
+    probar en Colab) y pasos en docs/VOZ_PROPIA.md, sección 6.
   - Decidido: 22 050 Hz; base es_MX/ald/medium, plan B sharvard F.
-  - Falta: dataset final (con y sin atenuar silencios), cuaderno de
-    entrenamiento, confirmarle a ella que sus audios irán a Colab, y
-    entrenar.
+  - Falta: confirmarle a ella que sus audios irán a Colab, subir
+    el zip a Drive, entrenar (3–12 h en 2–3 sesiones), probar la voz
+    con voice.tts_voice y vaciar la Papelera de Drive.
 - Cierre de 1.0 (docs/CIERRE_1.0.md, 2026-11-10):
   - Primer audio de las acciones: explain_file 4,2 s y
     summarize_file 5,0 s sin micrófono (antes 21,5 y 21,1), con
@@ -130,7 +135,10 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
 - Entrenar "Oye Asia" v0.2 en Colab y probarlo con docs/J3_V02.md.
 - check_voz.py --timing con "explica el archivo launcher.py" dicho.
 - Grabar la demo (docs/DEMO.md).
-- Confirmarle a la persona de la voz que sus audios irán a Colab.
+- Confirmarle a la persona de la voz que sus audios irán a Colab; luego
+  seguir docs/VOZ_PROPIA.md, sección 6 (subir fa_normal_22050.zip a
+  Drive, entrenar, copiar la voz a data/voices/ y poner voice.tts_voice
+  en config/settings.json).
 - Revisar el orbe en el navegador y decir qué ajustar.
 - Audios del JSON de Facebook (cuando lleguen).
 - Elegir el acrónimo de A.S.I.A.
