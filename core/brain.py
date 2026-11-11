@@ -211,6 +211,8 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         self.pending_run = PendingRun()
         # El dato que espera un sí para borrarse ("¿Borro «color»? s/N"), o None.
         self.pending_forget = None
+        # True si "confirmar cambio" no escribió porque el archivo cambió y espera un sí para volver a proponer.
+        self.pending_repropose = None
         # Qué hizo el último mensaje (resumen de la sesión): una acción, "chat" o
         # None si fue un comando de sesión.
         self.last_action = None
@@ -291,6 +293,16 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
             if answer:
                 self.last_action = "forget"
+                return answer
+
+        # "El archivo cambió desde la propuesta… ¿Vuelvo a proponer? s/N" (core/actions/code.py): vale solo para este mensaje.
+        pending_repropose, self.pending_repropose = getattr(self, "pending_repropose", None), None
+
+        if pending_repropose:
+            answer = self.repropose_confirmation(text)
+
+            if answer:
+                self.last_action = "apply_change"
                 return answer
 
         # "Hay varios timing.py… ¿Cuál?" (core/file_lookup.py): vale solo para este mensaje.

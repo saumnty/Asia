@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from core import prompts
+from core.confirm import confirmation
 from core.paths import PROJECT_ROOT
 from core.rag.instructions import with_project_notes
 from core.rag.library import Library
@@ -311,7 +312,24 @@ class CodeActions:
         return self.propose(file_path, code, explanation)
 
     def handle_apply_change(self, text, params):
-        return self.tool_registry.get_apply_changes_tool().apply_pending_change()
+        tool = self.tool_registry.get_apply_changes_tool()
+        answer = tool.apply_pending_change()
+        # Si el archivo cambió, la respuesta pregunta "¿Vuelvo a proponer? s/N" (repropose_confirmation).
+        self.pending_repropose = bool(getattr(tool, "stale", False))
+        return answer
+
+    def repropose_confirmation(self, text):
+        """Respuesta a "¿Vuelvo a proponer el cambio? s/N": con un sí, el mismo cambio con el archivo
+        actual; con un no, sigue pendiente; None si el mensaje es otra cosa."""
+        answer = confirmation(text)
+
+        if answer:
+            return self.tool_registry.get_apply_changes_tool().repropose_pending_change()
+
+        if answer is False:
+            return "Vale, el cambio sigue pendiente: «cancelar cambio» lo descarta."
+
+        return None
 
     def handle_cancel_change(self, text, params):
         return self.tool_registry.get_apply_changes_tool().cancel_pending_change()

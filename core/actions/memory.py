@@ -1,21 +1,19 @@
 """Memoria personal, memoria del proyecto y ajustes (provider, proyecto activo)."""
-import re
 from pathlib import Path
 
 from core import prompts
-from core.actions.models import command_text, set_session
+from core.actions.models import set_session
+from core.confirm import confirmation
 from core.project_history import read_roadmap, recent_commits
 from core.provenance import PROYECTO, Fragment, record
-from core.recent_facts import is_affirmative
 from memory.project_memory import age_notice
 
 
 MISSING_REMEMBER = "¿Qué quieres que recuerde? Ej.: recuerda que mi color favorito es el azul"
 MISSING_RECALL = "¿Qué dato quieres que busque? Ej.: ¿cuál es mi color favorito?"
 MISSING_FORGET = "¿Qué dato quieres que olvide? Ej.: olvida mi color favorito"
-# Como "¿Abro X? s/N" (core/brain.py: OPEN_IT y DONT_OPEN): un sí, escrito o dicho, lo borra; un no, lo deja.
+# Como "¿Abro X? s/N" (core/brain.py: OPEN_IT): un sí, escrito o dicho, lo borra; un no (core/confirm.py), lo deja.
 FORGET_IT = {"borralo", "si borralo", "olvidalo", "si olvidalo"}
-DONT_FORGET = {"n", "no", "no gracias", "nada", "cancela", "cancelar", "dejalo"}
 SHOWN_CHARS = 200
 
 
@@ -88,15 +86,15 @@ class MemoryActions:
     def forget_confirmation(self, text, key):
         """Respuesta a "¿Borro «X»? s/N": con un sí lo borra, con un no lo deja; None si el mensaje
         es otra cosa (y entonces la pregunta se olvida y el dato se queda)."""
-        words = " ".join(re.findall(r"\w+", command_text(text or "")))
+        answer = confirmation(text, FORGET_IT)
 
-        if is_affirmative(text) or words in FORGET_IT:
+        if answer:
             if self.memory.forget(key):
                 return f"Listo. Olvidé el dato: {key}."
 
             return f"No tenía guardado ningún dato para: {key}."
 
-        if words in DONT_FORGET:
+        if answer is False:
             return f"Vale, no borro «{key}»."
 
         return None
