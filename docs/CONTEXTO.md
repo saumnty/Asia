@@ -71,11 +71,18 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
     C:\AsiaVoz\dataset\fa\: fa_normal y fa_atenuado (silencios
     internos -24 dB), cada una con 747 frases, 52,2 min y su zip
     (~108 MB). Validadas: mono, 22 050 Hz, metadata cuadra.
+  - numeros_a_palabras.csv (32 frases con dígitos o %, columna
+    "final" para corregir a mano; 5 con nota para escuchar el
+    audio) en C:\AsiaVoz\dataset\fa\. dataset_final.py --reemplazos
+    lo aplica al regenerar las variantes; todavía no regeneradas.
   - Cuaderno test/manual/colab/entrenar_voz_propia.ipynb (sin
-    probar en Colab) y pasos en docs/VOZ_PROPIA.md, sección 6.
+    probar en Colab), con modo humo (SMOKE = True: 20 frases, ✅/❌
+    de max_time, reanudar y exportar/sintetizar), y pasos en
+    docs/VOZ_PROPIA.md, sección 6.
   - Decidido: 22 050 Hz; base es_MX/ald/medium, plan B sharvard F.
-  - Falta: confirmarle a ella que sus audios irán a Colab, subir
-    el zip a Drive, entrenar (3–12 h en 2–3 sesiones), probar la voz
+  - Falta: corregir el CSV, regenerar las variantes con
+    --reemplazos, confirmarle a ella que sus audios irán a Colab,
+    subir el zip a Drive, correr el modo humo, entrenar (3–12 h en 2–3 sesiones), probar la voz
     con voice.tts_voice y vaciar la Papelera de Drive.
 - Cierre de 1.0 (docs/CIERRE_1.0.md, 2026-11-10):
   - Primer audio de las acciones: explain_file 4,2 s y
@@ -120,7 +127,9 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
 
 ### Asia 2.0 · 2027
 - Motor de permisos y M (agente de varios pasos), delegando la
-  programación grande a OpenCode o Claude Code.
+  programación grande a OpenCode o Claude Code. Diseño escrito en
+  docs/DISENO_PERMISOS.md, con 10 decisiones abiertas y su opción
+  recomendada; sin código.
 - Programación: check_code, arnés (contexto, ediciones pequeñas,
   ruff, tipos, pytest en el ciclo), ruteo a modelos fuertes.
 - Proveedores: OpenRouter, control de gastos y créditos con avisos.
@@ -135,6 +144,10 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
 - Entrenar "Oye Asia" v0.2 en Colab y probarlo con docs/J3_V02.md.
 - check_voz.py --timing con "explica el archivo launcher.py" dicho.
 - Grabar la demo (docs/DEMO.md).
+- Corregir a mano C:\AsiaVoz\dataset\fa\numeros_a_palabras.csv
+  (columna final) y avisarme para regenerar las variantes.
+- Responder las decisiones abiertas de docs/DISENO_PERMISOS.md,
+  sección 9 (si no, se usa la recomendada).
 - Confirmarle a la persona de la voz que sus audios irán a Colab; luego
   seguir docs/VOZ_PROPIA.md, sección 6 (subir fa_normal_22050.zip a
   Drive, entrenar, copiar la voz a data/voices/ y poner voice.tts_voice
