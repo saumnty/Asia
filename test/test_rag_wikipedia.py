@@ -504,3 +504,53 @@ def test_lo_de_tus_proyectos_no_lleva_el_aviso_de_wikipedia():
 
 def test_el_prompt_no_dice_que_wikipedia_son_sus_proyectos():
     assert "proyectos" not in prompts.answer_from_quotes("q", "[a.wiki:1] línea")
+
+
+def test_la_fusion_sube_lo_que_sale_en_varias_busquedas():
+    from core.rag.wikipedia import fused
+
+    assert fused([["a", "b", "c"], ["d", "c", "e"]])[0] == "c"
+    assert fused([["a", "b", "a", "c"]]) == ["a", "b", "c"]
+    assert fused([[], ["x"]]) == ["x"]
+
+
+class ByText:
+    """Una búsqueda de texto falsa: cada texto da sus rutas."""
+
+    def __init__(self, found):
+        self.found = found
+
+    def __call__(self, archive, text):
+        paths = self.found.get(text)
+        return Fixed(paths) if paths else None
+
+
+class Fixed:
+    def __init__(self, paths):
+        self.paths = paths
+
+    def get_results(self, start, count):
+        return [Result(path) for path in self.paths[start:start + count]]
+
+
+def test_las_palabras_clave_y_la_pregunta_se_unen(zim, monkeypatch):
+    # Todas las palabras clave juntas traen Fotosíntesis, que antes iba primero; Camberra
+    # sale con cada una por separado y con la pregunta: con un solo artículo, gana ella.
+    search = ByText({"uno": ["Camberra"], "dos": ["Camberra"], "uno dos": ["Fotosíntesis"],
+                     "la pregunta": ["Camberra"]})
+    monkeypatch.setattr("core.rag.wikipedia.search_for", search)
+    monkeypatch.setattr("core.rag.wikipedia.title_paths", lambda archive, text: [])
+
+    found = found_articles(archive_of(zim), "la pregunta", count=1, keywords=["uno", "dos"])
+
+    assert [path for path, _, _ in found] == ["Camberra"]
+
+
+def test_la_union_no_pasa_del_tope_ni_repite(zim, monkeypatch):
+    search = ByText({"k": ["Fotosíntesis", "Camberra"], "la pregunta": ["Canberra", "Fotosíntesis"]})
+    monkeypatch.setattr("core.rag.wikipedia.search_for", search)
+    monkeypatch.setattr("core.rag.wikipedia.title_paths", lambda archive, text: ["Camberra"])
+
+    found = [path for path, _, _ in found_articles(archive_of(zim), "la pregunta", keywords=["k"])]
+
+    assert sorted(found) == ["Camberra", "Fotosíntesis"]

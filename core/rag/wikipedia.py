@@ -20,6 +20,8 @@ ARTICLES = 3
 SEARCH_RESULTS = 10
 # Títulos por palabra clave: con más, "Yen" trae "Donnie_Yen".
 TITLE_RESULTS = 2
+# Fusión de rangos recíprocos: el valor habitual; entre 1 y 60 da lo mismo en check_rag.
+FUSION_K = 60
 # Por artículo: 40 fragmentos por pregunta. Un artículo largo pasa de 500.
 ARTICLE_FRAGMENTS = 13
 NOT_IN_TAG = re.compile(r"_*[^\w.-]+_*")
@@ -80,15 +82,34 @@ def title_paths(archive, text: str, limit: int = TITLE_RESULTS) -> list:
     return [getattr(result, "path", result) for result in found.get_results(0, limit)]
 
 
-def candidate_paths(archive, question: str, keywords=()) -> list:
-    """Rutas en orden: títulos de las palabras clave, su búsqueda de texto y la de la pregunta (respaldo)."""
-    paths = [path for keyword in keywords for path in title_paths(archive, keyword)]
+def candidate_lists(archive, question: str, keywords=()) -> list:
+    """Listas de rutas, cada una en su orden: los títulos de las palabras clave, la búsqueda de
+    texto de cada una, la de todas juntas y la de la pregunta original."""
+    lists = [[path for keyword in keywords for path in title_paths(archive, keyword)]]
+    texts = [*keywords, " ".join(keywords)] if keywords else []
 
-    for text in ([" ".join(keywords)] if keywords else []) + [question]:
+    for text in dict.fromkeys(texts + [question]):
         found = search_for(archive, text)
-        paths += [result.path for result in found.get_results(0, SEARCH_RESULTS)] if found else []
+        lists.append([result.path for result in found.get_results(0, SEARCH_RESULTS)] if found else [])
 
-    return paths
+    return lists
+
+
+def fused(lists: list) -> list:
+    """Las claves de todas las listas, sin duplicados, por fusión de rangos recíprocos.
+
+    Lo que sale en varias búsquedas sube: con palabras clave que se desvían, la pregunta
+    original todavía aporta su artículo ("Esqueleto_humano" para "cuántos huesos…").
+    Con una sola lista, el orden no cambia. Empate: el que apareció antes.
+    """
+    score, first = {}, {}
+
+    for found in lists:
+        for rank, key in enumerate(dict.fromkeys(found)):
+            score[key] = score.get(key, 0.0) + 1.0 / (FUSION_K + rank + 1)
+            first.setdefault(key, len(first))
+
+    return sorted(score, key=lambda key: (-score[key], first[key]))
 
 
 def found_articles(archive, question: str, count: int = ARTICLES, path_pattern=None, keywords=()) -> list:
@@ -96,23 +117,33 @@ def found_articles(archive, question: str, count: int = ARTICLES, path_pattern=N
 
     path_pattern: solo rutas que encajan (una regex compilada; en un .zim de Stack
     Exchange, las páginas de pregunta: la búsqueda también trae usuarios y etiquetas).
-    keywords: búsquedas cortas de core/rag/keywords.py; sin ellas, solo la pregunta.
+    keywords: búsquedas cortas de core/rag/keywords.py; se unen con la de la pregunta
+    (fused), con el mismo número final de artículos.
     """
-    articles = {}
+    entries = {}
+    lists = []
 
-    for path in candidate_paths(archive, question, keywords):
-        try:
-            entry = archive.get_entry_by_path(path)
-        except KeyError:
-            continue
+    for paths in candidate_lists(archive, question, keywords):
+        resolved = []
 
-        entry = entry.get_redirect_entry() if entry.is_redirect else entry
-        wanted = path_pattern is None or path_pattern.match(entry.path)
+        for path in paths:
+            try:
+                entry = archive.get_entry_by_path(path)
+            except KeyError:
+                continue
 
-        if wanted and entry.path not in articles and len(articles) < count:
-            articles[entry.path] = (entry.path, entry.title, bytes(entry.get_item().content).decode("utf-8"))
+            entry = entry.get_redirect_entry() if entry.is_redirect else entry
 
-    return list(articles.values())
+            if path_pattern is None or path_pattern.match(entry.path):
+                entries.setdefault(entry.path, entry)
+                resolved.append(entry.path)
+
+        lists.append(resolved)
+
+    return [
+        (path, entries[path].title, bytes(entries[path].get_item().content).decode("utf-8"))
+        for path in fused(lists)[:count]
+    ]
 
 
 def closest_chunks(chunks: list, question: str, count: int = ARTICLE_FRAGMENTS, language: str = SPANISH) -> list:
