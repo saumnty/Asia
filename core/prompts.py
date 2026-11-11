@@ -138,13 +138,13 @@ Contenido:
 """
 
 
-def voice_brief(task, file_path, content):
-    """Con la voz activa (explain_file, summarize_file): poco que leer en voz alta.
-    task: "Explica para qué sirve este archivo", "Resume este archivo"."""
+def voice_brief(task, file_path, content, what="del archivo"):
+    """Con la voz activa (explain_file, summarize_file, summarize_folder): poco que leer en voz alta.
+    task: "Explica para qué sirve este archivo", "Resume este archivo"; what: "del archivo" o "de la carpeta"."""
     return f"""
 {task} en español, en 1 a 3 frases, en un solo párrafo, sin listas ni títulos: se va a leer en voz alta.
 
-Ruta del archivo:
+Ruta {what}:
 {file_path}
 
 Contenido:

@@ -98,6 +98,7 @@ class AskRouter:
 
     def ask(self, prompt, **options):
         self.prompts.append(prompt)
+        self.options = options
         return self.answer
 
 
@@ -170,3 +171,15 @@ def test_vale_la_fuente_mas_interna(tmp_path):
 
     assert source_of(inner / "test_pid.py", Library().all()).name == "bolitabot-pruebas"
     assert source_of(outer / "pid.py", Library().all()).name == "Bolitabot"
+
+
+def test_revisar_con_voz_a_trozos_y_sin_voz_entera(tmp_path, monkeypatch):
+    brain = project_brain(tmp_path, monkeypatch)
+
+    brain.handle_review_file("revisa pid.py", {"file_path": "pid.py"})
+    assert brain.provider_router.options == {"review": True}
+
+    chunks = []
+    brain.action_stream = chunks.append
+    brain.handle_review_file("revisa pid.py", {"file_path": "pid.py"})
+    assert brain.provider_router.options == {"review": True, "on_chunk": chunks.append}

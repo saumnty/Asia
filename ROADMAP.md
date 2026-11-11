@@ -1277,7 +1277,7 @@ Asia 1.0 se cierra cuando se cumplen todos, medidos en el commit final con la co
 | J3, falsas | `check_wake --falsas 30` con el mismo umbral: ≤ 0,5 por hora, con habla y ruido normales del cuarto | ⏳ Sin medir con el micrófono. v0.1 en la validación de Colab (5,3 h): 4,5/h a 0,5, 0,75/h a 0,7 y 0/h a 0,9 |
 | J3, umbral | `voice.wake_threshold` elegido con las dos mediciones de arriba y escrito en `settings.json` | ⏳ |
 | Voz, charla | Primer audio de la charla ≤ 6 s desde que termina la frase dicha (`--timing`, micrófono real) | ✅ 3,4–5,8 s (2026-11-04) |
-| Voz, acciones | Primer audio de `explain_file` y `summarize_file` con voz ≤ 15 s | ⏳ 65,5 s antes del streaming; con el streaming (`dd56a69`) y las respuestas cortas (`6998e532`), sin medir |
+| Voz, acciones | Primer audio de `explain_file` y `summarize_file` con voz ≤ 15 s | ✅ sin micrófono (`check_primer_audio`, 2026-11-10): 4,2 s y 5,0 s (antes 21,5 y 21,1 s); falta sumar la voz a texto (≤ 4 s) con el micrófono |
 | Voz, entrada | Voz a texto ≤ 4 s por frase; sin voz detectada, "no te oí" (nunca una alucinación de Whisper) | ✅ 2,6–3,9 s (2026-11-04); "no te oí" con prueba (`c47603b5`) |
 | Voz, interrupción | Enter y Ctrl+C cortan la lectura sin cerrar Asia | ✅ prueba con el micrófono (2026-11-04) |
 | Pruebas | `pytest` completo en verde, con código 0 | ✅ 1978 pasadas (`b8f9aee`) |

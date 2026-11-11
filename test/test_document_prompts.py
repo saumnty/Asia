@@ -164,7 +164,9 @@ def test_con_voz_una_respuesta_corta_y_la_larga_en_pantalla(voice_on, action, mo
 
     [(prompt, kwargs)] = actions.provider_router.calls
     assert "1 a 3 frases, en un solo párrafo, sin listas" in prompt and "Clases principales" not in prompt
-    assert kwargs == {"max_tokens": SettingsManager().get("answer_limits")[action]["voice_tokens"]} == {"max_tokens": 150}
+    # Al modelo ya cargado (qwen3, "general"): cabe en su contexto (brief_domain).
+    assert kwargs == {"max_tokens": SettingsManager().get("answer_limits")[action]["voice_tokens"], "domain": "general"}
+    assert kwargs["max_tokens"] == 150
     assert answer == f"respuesta\n\n[{more}]"
     # La línea de cómo pedir la larga solo se ve: no se lee.
     assert to_speakable(answer) == "respuesta."
@@ -189,3 +191,68 @@ def test_sin_voz_nada_cambia(action):
 
     [(prompt, kwargs)] = actions.provider_router.calls
     assert "1 a 3 frases" not in prompt and answer == "respuesta"
+
+
+@pytest.mark.parametrize("action", ["explain_file", "summarize_file"])
+def test_con_voz_si_no_cabe_en_el_contexto_de_qwen3_va_al_7b(voice_on, action):
+    # 2400 caracteres caben en los 4096 de qwen3; 13 200 (~4800 tokens con el margen) no.
+    small = Actions("x = 1\n" * 400)
+    big = Actions("x = 1\n" * 2200)
+
+    getattr(small, f"handle_{action}")("explica core/brain.py", {"file_path": "core/brain.py"})
+    getattr(big, f"handle_{action}")("explica core/brain.py", {"file_path": "core/brain.py"})
+
+    assert small.provider_router.calls[0][1]["domain"] == "general"
+    assert big.provider_router.calls[0][1]["domain"] == "code"
+
+
+def test_brief_domain_lee_el_contexto_del_modelo_y_la_configuracion(voice_on):
+    actions = Actions()
+    prompt = "a" * 9000  # ~2727 tokens estimados, ~3270 con el margen
+
+    assert actions.brief_domain(prompt, 150) == "general"
+    assert actions.brief_domain(prompt, 900) == "code"  # 3270 + 900 > 4096
+
+    SettingsManager.set_overrides({VOICE_SETTING: True, "voice_brief_domain": "code"})
+    assert actions.brief_domain("corto", 150) == "code"
+
+
+class FolderActions(Actions):
+    def __init__(self):
+        super().__init__()
+        self.read = []
+        self.tool_registry = SimpleNamespace(execute=lambda *a, **k: self.read.append(k) or "archivo.py: x = 1")
+
+    def limit(self, name):
+        return {"max_files": 12, "max_chars_per_file": 1200}
+
+
+def test_carpeta_con_voz_breve_con_menos_de_cada_archivo(voice_on):
+    actions = FolderActions()
+
+    answer = actions.handle_summarize_folder("resume la carpeta docs", {"folder_path": "docs"})
+
+    [(prompt, kwargs)] = actions.provider_router.calls
+    assert actions.read[0]["max_chars_per_file"] == SettingsManager().get("context_limits")["summarize_folder_voice"]["max_chars_per_file"] == 250
+    assert "1 a 3 frases" in prompt and "Ruta de la carpeta:\ndocs" in prompt
+    assert kwargs == {"max_tokens": 150, "domain": "general"}
+    assert answer == "respuesta\n\n[Para el resumen completo: resume la carpeta docs a fondo.]"
+
+
+@pytest.mark.parametrize("text", ["resume la carpeta docs", "resume la carpeta docs a fondo"])
+def test_carpeta_sin_voz_o_a_fondo_como_siempre(text):
+    if "a fondo" in text:
+        SettingsManager.set_overrides({VOICE_SETTING: True})
+    actions = FolderActions()
+
+    answer = actions.handle_summarize_folder(text, {"folder_path": "docs"})
+
+    [(prompt, kwargs)] = actions.provider_router.calls
+    assert actions.read[0]["max_chars_per_file"] == 1200 and "1 a 3 frases" not in prompt
+    assert kwargs == {} and answer == "respuesta"
+
+
+def test_voice_brief_de_archivo_sigue_igual():
+    from core import prompts
+
+    assert "Ruta del archivo:\nx.py" in prompts.voice_brief("Resume este archivo", "x.py", "")

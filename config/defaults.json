@@ -135,6 +135,7 @@
         "debug_project_tokens": 6000,
         "search_text": 6000,
         "summarize_folder": {"max_files": 12, "max_chars_per_file": 1200},
+        "summarize_folder_voice": {"max_files": 12, "max_chars_per_file": 250},
         "save_project_summary": {"max_files": 15, "max_chars_per_file": 1500},
         "map_project": {"max_files": 30, "max_chars_per_file": 800},
         "generate_code_project": {"max_files": 25, "max_chars_per_file": 800}

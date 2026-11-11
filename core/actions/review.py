@@ -62,7 +62,10 @@ class ReviewActions:
 
         # El ASIA.md de su fuente, si tiene (core/rag/instructions.py).
         prompt = with_project_notes(prompts.review_file(file_path, content), file_path, Library().all())
-        return self.provider_router.ask(prompt, review=True)
+        # Con voz, a trozos (action_stream, del launcher): suena mientras el 7B escribe.
+        on_chunk = getattr(self, "action_stream", None)
+        options = {"on_chunk": on_chunk} if on_chunk is not None else {}
+        return self.provider_router.ask(prompt, review=True, **options)
 
     def handle_review_project(self, text, params):
         folder_path = params.get("folder_path", ".")

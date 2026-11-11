@@ -36,8 +36,9 @@ from core.rag.quotes import (
 )
 from core.tool_output import clip
 from core.actions.voice import VOICE_SETTING
-from providers.provider_router import wants_detail
-from providers.ollama_provider import without_cut_notice
+from core.model_selection import model_for
+from providers.provider_router import SYSTEM_PROMPT, wants_detail
+from providers.ollama_provider import estimate_tokens, model_options, without_cut_notice
 
 # Los mismos que config/defaults.json, por si falta la clave.
 DEFAULT_ANSWER_LIMITS = {
@@ -52,6 +53,13 @@ RAG_FRAGMENTS = 5
 SEARCH_TEXT_CHARS = 6000
 # Una pregunta en inglés: si no cabe aquí, no es una traducción.
 TRANSLATION_TOKENS = 80
+# La respuesta breve por voz va al modelo de este dominio si cabe en su contexto (brief_domain).
+VOICE_BRIEF_DOMAIN_SETTING = "voice_brief_domain"
+DEFAULT_VOICE_BRIEF_DOMAIN = "general"
+# La estimación de tokens (3,3 caracteres por token) se queda corta con código denso.
+BRIEF_ESTIMATE_MARGIN = 1.2
+# Los mismos que context_limits.summarize_folder_voice en config/defaults.json.
+DEFAULT_FOLDER_VOICE_LIMITS = {"max_files": 12, "max_chars_per_file": 250}
 
 
 class ExploreActions:
@@ -95,12 +103,22 @@ class ExploreActions:
 
     def handle_summarize_folder(self, text, params):
         folder_path = params.get("folder_path", ".")
+        brief = self.voice_brief(text)
+        # Con voz, el principio de cada archivo: cabe en el contexto del modelo ya cargado.
+        voice_limits = (self.settings.get("context_limits") or {}).get("summarize_folder_voice")
+        limits = (voice_limits or DEFAULT_FOLDER_VOICE_LIMITS) if brief else self.limit("summarize_folder")
 
         content = self.tool_registry.execute(
             "read_folder_context",
             folder_path=folder_path,
-            **self.limit("summarize_folder")
+            **limits
         )
+
+        if brief:
+            return self.brief_answer(
+                prompts.voice_brief("Resume de qué trata esta carpeta", folder_path, content, what="de la carpeta"),
+                self.answer_limits("summarize_file"), f"Para el resumen completo: resume la carpeta {folder_path} a fondo.",
+            )
 
         return self.provider_router.ask(prompts.summarize_folder(folder_path, content))
 
@@ -276,8 +294,26 @@ class ExploreActions:
     def brief_answer(self, prompt, limits, more):
         """La respuesta corta y, solo en pantalla, cómo pedir la larga: entre corchetes,
         la lectura en voz alta se la salta (core/voice/speakable.py)."""
-        answer = self.ask_streaming(prompt, max_tokens=limits.get("voice_tokens", limits["tokens"]))
+        max_tokens = limits.get("voice_tokens", limits["tokens"])
+        answer = self.ask_streaming(prompt, max_tokens=max_tokens, domain=self.brief_domain(prompt, max_tokens))
         return f"{answer}\n\n[{more}]"
+
+    def brief_domain(self, prompt, max_tokens) -> str:
+        """El dominio del modelo de la respuesta breve por voz.
+
+        voice_brief_domain (por defecto "general": qwen3, el del IntentEngine, que ya
+        está cargado) si el prompt y la respuesta caben en su contexto; si no, "code"
+        (el 7B, con 16384). Cambiar de modelo costaba ~10 s de carga del 7B antes de
+        la primera palabra, y el primer audio de las acciones pasaba de 15 s.
+        """
+        domain = self.settings.get(VOICE_BRIEF_DOMAIN_SETTING) or DEFAULT_VOICE_BRIEF_DOMAIN
+
+        if domain == "code":
+            return domain
+
+        num_ctx = model_options(self.settings, model_for(self.settings, domain)).get("num_ctx")
+        needed = estimate_tokens([{"content": SYSTEM_PROMPT}, {"content": prompt}]) * BRIEF_ESTIMATE_MARGIN + max_tokens
+        return domain if num_ctx and needed <= num_ctx else "code"
 
     def ask_streaming(self, prompt, **options):
         """ask con el on_chunk que dejó el launcher (action_stream, solo con voz): la respuesta
