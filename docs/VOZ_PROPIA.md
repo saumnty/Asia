@@ -129,7 +129,9 @@ Estado: **no probado en Colab** (no tengo acceso). Lo que escribí sale de TRAIN
 
 1. **Antes de subir nada:** confirma con la persona de la voz que sus audios irán a tu Drive y a Colab (ver Pendientes de `docs/CONTEXTO.md`).
 2. En Drive, crea `MyDrive/asia_voz/entrada/` y sube `fa_normal_22050.zip`.
-3. Abre el cuaderno en Colab (Archivo → Subir cuaderno), **T4 GPU**, y ejecuta las secciones 0 a 4 en orden (la 4 es el entrenamiento). La primera sesión baja la base (846 MB, con sha256 comprobado) a `asia_voz/base/`.
+3. Abre el cuaderno en Colab (Archivo → Subir cuaderno) con **T4 GPU**.
+   - **Primero, la prueba de humo:** pon `SMOKE = True` y ejecuta todo. Usa 20 frases (unos 10–15 min más las instalaciones) y imprime ✅/❌ para tres puntos: (a) `max_time` se respeta (entrena con un límite de 3 min y debe parar solo), (b) se reanuda con `--ckpt_path` desde el `last.ckpt` de Drive y el contador sigue subiendo, (c) se exporta el `.onnx` y se sintetiza una frase que suena. Usa rutas propias (`checkpoints_humo`, `/content/humo`) y no toca los checkpoints ni el zip reales. Con algún ❌, no sigas.
+   - Con todo ✅, pon `SMOKE = False`, reinicia el entorno y ejecuta las secciones 0 a 4 en orden (la 4 es el entrenamiento). La primera sesión baja la base (846 MB, con sha256 comprobado) a `asia_voz/base/`.
 4. La sección 4 para sola a las 3 h 30 (`SESSION_MAX_TIME`) o al llegar a `MAX_EPOCHS`. Para escuchar un avance (300, 500 y 1000 épocas) ejecuta entonces la sección 5.
 5. Para seguir entrenando, vuelve a ejecutar las secciones 0 a 4 en una sesión nueva: reanuda desde `asia_voz/checkpoints/last.ckpt`. `MAX_EPOCHS` es el total, no por sesión.
 6. Sección 5: exporta `es_MX-propia-medium.onnx` y su `.onnx.json` a `asia_voz/salida/` y los descarga.
