@@ -131,3 +131,62 @@ def test_main_lee_lo_exportado_y_no_pisa(dataset, tmp_path, monkeypatch, capsys)
     with pytest.raises(SystemExit):
         tool.main()
     assert "ya tiene archivos" in capsys.readouterr().err
+
+
+# --- Silencios atenuados y una sola frecuencia ----------------------------------------
+
+def runs_segments(audio16, min_gap=0.3):
+    """VAD de mentira con varios tramos: las rachas con |x| > 0,01 separadas por más de min_gap s."""
+    voiced = np.flatnonzero(np.abs(audio16) > 0.01)
+
+    if not len(voiced):
+        return []
+
+    cuts = np.flatnonzero(np.diff(voiced) > min_gap * 16000)
+    starts = np.concatenate([[voiced[0]], voiced[cuts + 1]])
+    ends = np.concatenate([voiced[cuts], [voiced[-1]]]) + 1
+    return [(int(a), int(b)) for a, b in zip(starts, ends)]
+
+
+def with_pause(pause_s, level=0.2, noise=0.005):
+    """1 s de voz, una pausa con ruido de fondo y otro segundo de voz, a 48 kHz."""
+    t = np.arange(RATE) / RATE
+    voice = level * np.sin(2 * np.pi * 220 * t)
+    gap = noise * np.sin(2 * np.pi * 50 * np.arange(int(pause_s * RATE)) / RATE)
+    return np.concatenate([voice, gap, voice]).astype(np.float32)
+
+
+def test_una_pausa_larga_se_atenua_sin_recortar_nada():
+    audio = with_pause(1.0)
+    out = tool.attenuate_silences(audio, RATE, runs_segments)
+
+    assert len(out) == len(audio)
+    middle = slice(int(1.5 * RATE), int(1.6 * RATE))
+    assert np.max(np.abs(out[middle])) < 0.1 * np.max(np.abs(audio[middle]))
+    # La voz queda igual, y también lo que rodea a la voz (0,1 s).
+    assert np.allclose(out[: int(0.9 * RATE)], audio[: int(0.9 * RATE)], atol=1e-4)
+    assert np.allclose(out[int(1.05 * RATE): int(1.08 * RATE)], audio[int(1.05 * RATE): int(1.08 * RATE)], atol=1e-4)
+
+
+def test_una_pausa_corta_se_deja():
+    audio = with_pause(0.3)
+
+    assert np.array_equal(tool.attenuate_silences(audio, RATE, runs_segments), audio)
+
+
+def test_sin_voz_no_cambia():
+    audio = np.zeros(RATE, dtype=np.float32)
+
+    assert np.array_equal(tool.attenuate_silences(audio, RATE, runs_segments), audio)
+
+
+def test_variante_atenuada_y_solo_22050(dataset, tmp_path):
+    tool.write_wav(dataset / "wavs" / "0001.wav", np.concatenate([np.zeros(RATE), with_pause(1.0), np.zeros(RATE)]).astype(np.float32), RATE)
+    normal = tool.build(dataset, METADATA, tmp_path / "normal", segments=runs_segments, rates=(22050,))
+    quiet = tool.build(dataset, METADATA, tmp_path / "atenuado", segments=runs_segments, rates=(22050,), quiet=True)
+
+    assert not (tmp_path / "normal" / "16000").exists() and list(quiet["zips"]) == [22050]
+    assert normal["frases"] == quiet["frases"] == 3 and normal["minutos"] == pytest.approx(quiet["minutos"], abs=0.01)
+    peak = lambda folder: np.max(np.abs(tool.read_wav(tmp_path / folder / "22050" / "wavs" / "0001.wav")[0][int(1.7 * 22050): int(1.9 * 22050)]))
+    assert peak("atenuado") < 0.15 * peak("normal")
+    assert (tmp_path / "normal" / "22050" / "metadata.csv").read_text(encoding="utf-8") == (tmp_path / "atenuado" / "22050" / "metadata.csv").read_text(encoding="utf-8")

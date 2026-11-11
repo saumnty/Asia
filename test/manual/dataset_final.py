@@ -9,6 +9,8 @@
   PAD_S, y normaliza el pico a PEAK_DBFS (una ganancia, sin compresión).
 - Dos versiones, 22 050 y 16 000 Hz, cada una con wavs/NNNN.wav y metadata.csv
   (NNNN.wav|texto, como lo lee piper1-gpl), y un zip por versión, listo para subir a Colab.
+- --frecuencias 22050 deja una sola versión; --silencios atenuados baja las pausas de
+  dentro de la frase (no las de los extremos) ATTENUATION_DB, con rampas de FADE_S.
 - Avisa de dígitos (deben ir en letra), símbolos raros y duraciones fuera de
   1–15 s; las frases vacías no entran. Escribe resumen.txt.
 
@@ -33,6 +35,10 @@ PAD_S = 0.15  # entre 0,1 y 0,2 s de silencio en cada extremo
 MIN_S, MAX_S = 1.0, 15.0
 # Letras (con acentos y ñ), espacios y la puntuación normal del español.
 ALLOWED = re.compile(r"[\wáéíóúüñÁÉÍÓÚÜÑ\s.,;:¿?¡!'\"()\-…]")
+ATTENUATION_DB = -24.0  # las pausas largas de dentro de la frase quedan 24 dB más bajas
+MIN_PAUSE_S = 0.35      # pausas más cortas que esto se dejan: son parte del ritmo de la frase
+PAUSE_MARGIN_S = 0.10   # no se toca lo que rodea a la voz, para no comerse el ataque ni la cola
+FADE_S = 0.03
 BINS = [(0, 1), (1, 2), (2, 4), (4, 6), (6, 10), (10, 15), (15, None)]
 
 
@@ -132,6 +138,24 @@ def trim(audio, rate, segments=silero_segments, pad_s=PAD_S) -> np.ndarray:
     return audio[start:end]
 
 
+def attenuate_silences(audio, rate, segments=silero_segments, db=ATTENUATION_DB) -> np.ndarray:
+    """audio con las pausas largas de dentro de la frase atenuadas db decibelios (no se recorta nada)."""
+    found = segments(resample(audio, rate, VAD_RATE))
+    gain = np.ones(len(audio), dtype=np.float32)
+    quiet = 10 ** (db / 20)
+
+    for (_, end), (start, _) in zip(found, found[1:]):
+        low = int(end * rate / VAD_RATE + PAUSE_MARGIN_S * rate)
+        high = int(start * rate / VAD_RATE - PAUSE_MARGIN_S * rate)
+
+        if (start - end) / VAD_RATE >= MIN_PAUSE_S and high > low:
+            gain[low:high] = quiet
+
+    fade = max(1, int(FADE_S * rate))
+    padded = np.pad(gain, (fade // 2, fade - 1 - fade // 2), mode="edge")  # sin atenuar los bordes
+    return audio * np.convolve(padded, np.ones(fade, dtype=np.float32) / fade, mode="valid")
+
+
 def normalize(audio, peak_dbfs=PEAK_DBFS) -> np.ndarray:
     """Una sola ganancia hasta que el pico quede en peak_dbfs: sin compresión ni limitador."""
     peak = float(np.max(np.abs(audio))) if len(audio) else 0.0
@@ -156,13 +180,16 @@ def distribution(seconds) -> list:
     return rows
 
 
-def build(dataset, metadata, destination, revision=None, segments=silero_segments, log=print) -> dict:
-    """Escribe las dos versiones y sus zip en destination; devuelve el resumen."""
+def build(dataset, metadata, destination, revision=None, segments=silero_segments, log=print,
+          rates=RATES, quiet=False) -> dict:
+    """Escribe las versiones (rates) y sus zip en destination; devuelve el resumen.
+
+    quiet: atenúa las pausas de dentro de la frase (attenuate_silences)."""
     dataset, destination = Path(dataset), Path(destination)
     notes = mismatches(metadata, revision) if revision is not None else []
     items, skipped = [], []
 
-    for version in RATES:
+    for version in rates:
         (destination / str(version) / "wavs").mkdir(parents=True, exist_ok=True)
 
     for id_ in sorted(metadata):
@@ -180,17 +207,18 @@ def build(dataset, metadata, destination, revision=None, segments=silero_segment
 
         audio, rate = read_wav(source)
         audio = trim(audio, rate, segments)
+        audio = attenuate_silences(audio, rate, segments) if quiet else audio
         item = Item(id_, text, round(len(audio) / rate, 2), text_warnings(text))
 
         if not MIN_S <= item.seconds <= MAX_S:
             item.warnings.append(f"dura {item.seconds:.2f} s (fuera de {MIN_S:g}–{MAX_S:g} s)")
 
-        for version in RATES:
+        for version in rates:
             write_wav(destination / str(version) / "wavs" / f"{id_}.wav", normalize(resample(audio, rate, version)), version)
 
         items.append(item)
 
-    for version in RATES:
+    for version in rates:
         folder = destination / str(version)
         # piper1-gpl lee el nombre del archivo en la primera columna (wavs/0001.wav -> "0001.wav").
         (folder / "metadata.csv").write_text("".join(f"{item.id}.wav|{item.text}\n" for item in items), encoding="utf-8")
@@ -206,7 +234,7 @@ def build(dataset, metadata, destination, revision=None, segments=silero_segment
         "distribucion": distribution([item.seconds for item in items]),
         "avisos": [f"{item.id}: {warning}" for item in items for warning in item.warnings],
         "fuera": skipped, "no_cuadra": notes,
-        "zips": {version: (destination / f"{destination.name}_{version}.zip").stat().st_size for version in RATES},
+        "zips": {version: (destination / f"{destination.name}_{version}.zip").stat().st_size for version in rates},
     }
     (destination / "resumen.txt").write_text(summary(result) + "\n", encoding="utf-8")
     return result
@@ -233,6 +261,10 @@ def main():
     parser.add_argument("--metadata", type=Path, required=True, help="el metadata.csv exportado de revisar.html")
     parser.add_argument("--revision", type=Path, help="el revision.json exportado de revisar.html")
     parser.add_argument("--destino", type=Path, required=True, help="carpeta nueva del dataset final")
+    parser.add_argument("--frecuencias", type=int, nargs="+", default=list(RATES), choices=RATES,
+                        help="22050 para el fine-tuning de Piper; por defecto, las dos")
+    parser.add_argument("--silencios", choices=("normal", "atenuados"), default="normal",
+                        help="atenuados: las pausas de dentro de la frase bajan %g dB" % ATTENUATION_DB)
     args = parser.parse_args()
 
     if args.destino.exists() and any(args.destino.iterdir()):
@@ -242,7 +274,8 @@ def main():
         parser.error("--destino no puede ser la carpeta del dataset")
 
     revision = read_revision(args.revision) if args.revision else None
-    result = build(args.dataset, read_metadata(args.metadata), args.destino, revision)
+    result = build(args.dataset, read_metadata(args.metadata), args.destino, revision,
+                   rates=tuple(args.frecuencias), quiet=args.silencios == "atenuados")
     print(summary(result))
     return 0
 
