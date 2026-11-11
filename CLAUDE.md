@@ -30,3 +30,27 @@
 
 ## Biblioteca (RAG)
 - Además de `data/`, `memory/`, `logs/` y `config/settings.json`, respeta el `.gitignore` de cada fuente y excluye siempre `.env`, archivos de claves (`*.key`, `*.pem`, `id_rsa`…), binarios y archivos de más de 1 MB.
+
+## Uso eficiente
+
+### Modelo según la dificultad
+- Antes de empezar un prompt, clasifica cada parte y di en una línea qué modelo hará cada una y el tiempo estimado.
+- Difícil → subagente con model "fable" (o "opus" si Fable no está disponible o se agotó el límite): diseño de arquitectura, diagnósticos sin causa clara después de un intento, decisiones con varias alternativas, cambios en seguridad, confidencialidad o permisos, y la revisión crítica de un plan grande.
+- Normal → Sonnet: implementar con una especificación clara, escribir pruebas, refactorizaciones acotadas.
+- Mecánico → subagente con model "haiku": buscar en el código, correr pytest o scripts y resumir su salida, editar documentación con un texto dado, renombrar, validar JSON o que algo compile, armar tablas de un reporte.
+- A cada subagente: un encargo autocontenido y breve (rutas, criterios de éxito, formato de respuesta corto), porque empieza sin el contexto de la sesión. No le pases archivos enteros si bastan rangos de líneas.
+- Si una parte falla dos veces, sube un nivel de modelo y dilo en el reporte. Si una parte "difícil" resultó sencilla, la próxima vez clasifícala más abajo.
+- Nunca uses Fable ni Opus para esperar procesos, leer salidas largas o tareas mecánicas.
+- Si conviene que toda la sesión cambie de modelo, dímelo con el comando exacto (/model …) en lugar de seguir.
+- En el reporte final, qué modelo hizo cada parte.
+
+### Preguntas juntas
+- Al empezar un prompt, revísalo completo y haz todas las preguntas necesarias en un solo mensaje, numeradas, cada una con tu opción recomendada. Si no respondo, usa la recomendada.
+- Durante el trabajo no te detengas por dudas menores: decide lo razonable y anótalo en una sección "Decisiones tomadas" del reporte.
+- Solo te detienes por: algo irreversible, instalar o descargar, archivos protegidos, privacidad, o una contradicción en el prompt. Si a mitad surgen varias dudas de ese tipo, júntalas en un mensaje.
+
+### Ahorro de tokens
+- Procesos largos (entrenamientos, transcripciones, pytest completo): en segundo plano con aviso al terminar; nada de revisar el estado cada pocos segundos.
+- Lee lo justo: grep y rangos de líneas; no releas lo que ya leíste en la sesión.
+- Reportes cortos: números en tablas o listas, sin repetir el prompt ni explicar lo obvio. Lo largo (salidas, análisis) va a un archivo y en el reporte solo la ruta y el resumen.
+- Al terminar un prompt grande, sugiere /compact antes del siguiente.
