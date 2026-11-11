@@ -203,7 +203,9 @@ class FakeIntentEngine:
         return {"action": "review_file_deep", "params": {"file_path": "moda.py"}}
 
 
-def test_brain_review_file_deep_pasa_show_unverified():
+def test_brain_review_file_deep_pasa_show_unverified(tmp_path, monkeypatch):
+    # En una carpeta sin moda.py: el nombre suelto no se busca en el repo (core/file_lookup.py).
+    monkeypatch.setattr("core.session.Session.user_cwd", tmp_path)
     brain = Brain.__new__(Brain)
     brain.intent_engine = FakeIntentEngine()
     brain.tool_registry = BrainRegistry()

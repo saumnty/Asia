@@ -82,6 +82,7 @@ Archivos y proyecto:
 - Abrir una aplicación -> open_app.
 - "lista la carpeta", "muestra archivos" -> list_folder.
 - "explica", "explícame" o "qué hace" un archivo -> explain_file. "resume" un archivo -> summarize_file.
+- Buscar o preguntar en la biblioteca, la documentación, "mis fuentes" o Wikipedia (no en el código del proyecto) -> search_project_rag con la pregunta. Buscar una palabra o un texto en los archivos del proyecto -> search_text.
 - Una clase, función o método -> explain_symbol. Dónde se usa algo -> find_references. Quién lo importa o depende de él -> find_dependencies.
 
 Revisar sin modificar:
@@ -256,7 +257,7 @@ class IntentEngine:
         """Ctrl+C: cierra la conexión para que Ollama deje de generar."""
         drop_client(self)
 
-    def preload(self, model=None):
+    def preload(self, model=None, keep=()):
         """Carga intent_model (o model) en Ollama sin prompt, para que el primer mensaje no espere la carga.
 
         Con model, la precarga anticipada del modelo de código (core/early_load.py).
@@ -271,7 +272,7 @@ class IntentEngine:
         import httpx
 
         try:
-            unload_others(self.client, model, self.settings)
+            unload_others(self.client, model, self.settings, keep)
             # Una llamada sin prompt solo carga el modelo (keep_alive no se toca).
             # Con el mismo num_ctx (y num_gpu) que las llamadas reales: sin él Ollama
             # lo carga con 4096 y la primera llamada lo vuelve a cargar (~20 s).

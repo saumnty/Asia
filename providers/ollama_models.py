@@ -17,9 +17,10 @@ def full_name(model: str) -> str:
     return model if ":" in model else f"{model}:latest"
 
 
-def unload_others(client, model: str, settings) -> list[str]:
+def unload_others(client, model: str, settings, keep=()) -> list[str]:
     """Descarga de Ollama los modelos cargados distintos de model.
 
+    keep: otros que se quedan (nomic junto al 7B durante una búsqueda).
     Devuelve los que descargó. Si Ollama no responde, no hace nada: la
     llamada siguiente mostrará el error.
     """
@@ -34,7 +35,7 @@ def unload_others(client, model: str, settings) -> list[str]:
     unloaded = []
 
     for name in loaded:
-        if full_name(name) == full_name(model):
+        if full_name(name) == full_name(model) or full_name(name) in {full_name(k) for k in keep}:
             continue
 
         try:

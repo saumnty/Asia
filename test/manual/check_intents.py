@@ -64,6 +64,7 @@ MESSAGES = [
     "busca código muerto en el proyecto",
     "cambia el provider a gemini",
     "por qué falla el streaming",
+    "qué dice la documentación de ROS 2 sobre los parámetros de un nodo",
 ]
 
 # Acción correcta de cada mensaje según las reglas del prompt (en el mismo
@@ -75,7 +76,7 @@ EXPECTED = [
     "run_sandbox", "recall", "forget", "review_file_deep", "explain_file",
     "run_sandbox", "apply_change", "review_project", "chat", "chat",
     "list_folder", "find_references", "detect_dead_code", "set_provider",
-    "debug_project",
+    "debug_project", "search_project_rag",
 ]
 assert len(EXPECTED) == len(MESSAGES)
 
@@ -103,6 +104,11 @@ FIXED_CASES = {
     "muestra el proyecto activo": "show_active_project",
     "¿qué proyecto está activo?": "show_active_project",
     "qué provider estás usando?": "show_settings",
+    # Por voz iban a search_text (grep en el proyecto): core/fixed_intents.library_search.
+    "busca en la biblioteca cómo se crea un nodo en ROS 2": "search_project_rag",
+    "Oye Asia, busca en mis fuentes qué es un launch file": "search_project_rag",
+    "busca cómo se configura Gazebo en la documentación": "search_project_rag",
+    "¿puedes buscar en Wikipedia quién pintó la Mona Lisa?": "search_project_rag",
 }
 
 

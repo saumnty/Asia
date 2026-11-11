@@ -20,7 +20,8 @@ from core.session import Session
 from core.chat_memory import asks_whole_memory, is_recall
 from core.early_load import EarlyLoad
 from core.fast_chat import is_clear_chat
-from core.fixed_intents import fixed_intent
+from core import file_lookup
+from core.fixed_intents import fixed_intent, library_search
 from core.reflection import asks_previous_session, load_summary, previous_session_text
 from core.recent_facts import DEFAULT_KNOWN_UNTIL, asks_recent_fact, is_affirmative, offer_text
 from tools.app_tool import AppTool
@@ -60,6 +61,10 @@ FILE_ACTIONS = {
     "summarize_file", "explain_file", "review_file", "review_file_deep",
     "smart_refactor", "read_file", "read_file_preview", "append_file",
 }
+
+# Las que leen: un nombre suelto se busca en las subcarpetas. append_file no, para no
+# escribir en un archivo de otra carpeta sin que se diga.
+LOOKUP_ACTIONS = FILE_ACTIONS - {"append_file"}
 
 
 def is_multiline(text: str) -> bool:
@@ -276,6 +281,20 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
                 self.last_action = "open_app"
                 return answer
 
+        # "Hay varios timing.py… ¿Cuál?" (core/file_lookup.py): vale solo para este mensaje.
+        pending_file, self.pending_file = getattr(self, "pending_file", None), None
+
+        if pending_file:
+            action, params, asked, matches = pending_file
+            path = file_lookup.chosen(text, matches)
+
+            if path is False:
+                return "Vale, lo dejo."
+
+            if path:
+                self.last_action = action
+                return self.run_file_action(action, asked, {**params, "file_path": path})
+
         # Si mientras se escribía empezó a cargarse el modelo de código, la
         # intención de este mensaje va con él (core/early_load.py).
         early = getattr(self, "early_load", None)
@@ -367,6 +386,13 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         settings = getattr(self, "settings", None)
         known_until = (settings.get("knowledge_until_year") if settings else None) or DEFAULT_KNOWN_UNTIL
 
+        # "busca en la biblioteca X" (core/fixed_intents.py): antes que la charla clara, que se
+        # quedaba con "busca en wikipedia qué es…".
+        library = library_search(text)
+
+        if library:
+            return self.handle_search_project_rag(text, library["params"])
+
         if asks_recent_fact(text, known_until):
             return self.offer_wikipedia(text)
 
@@ -421,6 +447,22 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         if missing_file:
             return MISSING_FILE_MESSAGE if FILE_WORDS.search(text) else None
 
+        # "explica timing.py" sin estar en la carpeta abierta: se busca (core/file_lookup.py).
+        name = params.get("file_path")
+
+        if action in LOOKUP_ACTIONS and file_lookup.is_bare_name(name) and not (Session.get_user_cwd() / name).exists():
+            matches = file_lookup.find_named(Session.get_user_cwd(), name)
+
+            if len(matches) == 1:
+                params = {**params, "file_path": matches[0]}
+            elif matches:
+                self.pending_file = (action, params, text, matches)
+                return file_lookup.which_question(name, matches)
+
+        return self.run_file_action(action, text, params)
+
+    def run_file_action(self, action, text, params):
+        """La acción del IntentEngine con sus parámetros: su handler o la tool directa; None es charla."""
         handler = self.HANDLERS.get(action)
 
         if handler:
