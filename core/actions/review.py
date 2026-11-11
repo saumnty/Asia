@@ -1,4 +1,5 @@
 """Revisión de archivos y proyectos, código muerto y depuración."""
+from core.voice.notices import announce
 from core import prompts
 from core.rag.instructions import with_project_notes
 from core.rag.library import Library
@@ -54,6 +55,8 @@ class ReviewActions:
         if not file_path:
             return "Necesito la ruta del archivo para revisarlo."
 
+        # Con voz: "Reviso el archivo." ya sintetizado, mientras carga el 7B.
+        announce(self, "review")
         content = self.tool_registry.execute(
             "read_file_preview",
             file_path=file_path,

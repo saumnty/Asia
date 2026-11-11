@@ -224,8 +224,25 @@ def is_opinion(question: str) -> bool:
     return bool(OPINION.search(question))
 
 
-def extract_quotes(question, rag_context, translated="", notes=""):
-    """notes: los ASIA.md de las fuentes (core/rag/instructions.py), que no se citan."""
+COPY_QUOTES = """- Copia cada línea textualmente, sin cambiar ni una palabra, con la etiqueta de su fragmento.
+- La primera línea de cada Contenido dice de dónde es el fragmento (título > sección): no la copies; copia las de debajo.
+- Una línea por renglón, con este formato:
+[archivo:líneas] línea copiada
+"""
+NUMBER_QUOTES = """- Cada línea de los fragmentos empieza con su número ("41| texto"). No copies el texto: escribe solo los números de las líneas que responden, con la etiqueta de su fragmento.
+- La primera línea de cada Contenido dice de dónde es el fragmento (título > sección) y no tiene número: no la cites.
+- Un fragmento por renglón, con este formato:
+[archivo:líneas] 41, 43-45
+"""
+
+
+def extract_quotes(question, rag_context, translated="", notes="", numbers=False):
+    """notes: los ASIA.md de las fuentes (core/rag/instructions.py), que no se citan.
+
+    numbers (con voz): el contexto viene numerado (quotes.numbered_context) y el modelo
+    devuelve solo números; es más rápido. Por texto copia las líneas: con números, en
+    check_rag --preguntas 1 respondió una trampa con una línea que solo nombraba el país.
+    """
     in_english = f"\n\nLa misma pregunta en inglés, porque los fragmentos pueden estar en inglés:\n{translated}" if translated else ""
     about = (
         f"\n\nNotas del usuario sobre las fuentes (sirven para entender los fragmentos; no las copies):\n{notes}"
@@ -233,7 +250,7 @@ def extract_quotes(question, rag_context, translated="", notes=""):
     )
 
     return f"""
-Copia de estos fragmentos las líneas que responden la pregunta. No respondas la pregunta.
+{"Elige" if numbers else "Copia"} de estos fragmentos las líneas que responden la pregunta. No respondas la pregunta.
 
 Pregunta:
 {question}{in_english}{about}
@@ -242,17 +259,15 @@ Fragmentos encontrados:
 {rag_context}
 
 Instrucciones:
-- Copia cada línea textualmente, sin cambiar ni una palabra, con la etiqueta de su fragmento.
-- La primera línea de cada Contenido dice de dónde es el fragmento (título > sección): no la copies; copia las de debajo.
-- Una línea por renglón, con este formato:
-[archivo:líneas] línea copiada
-- Si la pregunta es solo un nombre de función, clase o variable, copia las líneas donde se define y las que explican qué hace.
+{NUMBER_QUOTES if numbers else COPY_QUOTES}- Si la pregunta es solo un nombre de función, clase o variable, copia las líneas donde se define y las que explican qué hace.
 {OPINION_QUOTES if is_opinion(question) else ""}- Si lo que se pregunta no aparece en los fragmentos, escribe solo: NINGUNA
 - No expliques nada.
 """
 
 
-def answer_from_quotes(question, quotes):
+def answer_from_quotes(question, quotes, brief=False):
+    """brief: con voz, 1 a 3 frases: se lee cuando está entera y verificada."""
+    length = "- Responde en 1 o 2 frases cortas: se va a leer en voz alta.\n" if brief else ""
     return f"""
 Responde la pregunta usando únicamente estas líneas. Ya se comprobó que existen en las fuentes consultadas.
 
@@ -267,7 +282,7 @@ Instrucciones:
 - Después de cada frase, pon entre corchetes la etiqueta de la línea en que se basa, como [archivo:línea]. Las frases sin etiqueta se marcan como sin cita.
 - Cada frase solo puede usar los nombres y los números de la línea que cita.
 - Si las líneas responden solo una parte, di qué parte falta.
-{OPINION_ANSWER if is_opinion(question) else ""}- Responde claro y breve.
+{OPINION_ANSWER if is_opinion(question) else ""}{length}- Responde claro y breve.
 """
 
 

@@ -107,6 +107,7 @@
         "min_coverage": 0.3,
         "max_distance": 392.0,
         "translate_question": true,
+        "translate_domain": "general",
         "zim_keywords": ["enciclopedia"]
     },
 
@@ -120,7 +121,7 @@
         "explain_file": {"words": 150, "tokens": 450, "voice_tokens": 150},
         "summarize_file": {"words": 100, "tokens": 300, "voice_tokens": 150},
         "search_quotes": {"tokens": 1024},
-        "search_answer": {"tokens": 512},
+        "search_answer": {"tokens": 512, "voice_tokens": 120},
         "chat": {"tokens": 350, "detail_tokens": 1500, "voice_tokens": 150},
         "session_summary": {"tokens": 120}
     },

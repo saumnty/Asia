@@ -11,6 +11,7 @@ import numpy as np
 
 from core import timing
 from core.voice import build_stt, build_tts, voice_settings
+from core.voice.notices import Notices
 from core.voice.reading import Reading
 from core.voice.stt import is_hallucination
 from core.voice.vocabulary import build_prompt
@@ -125,6 +126,7 @@ class VoiceSession:
         def load():
             try:
                 tts.load()
+                self.notices.warm()
             except Exception:
                 pass
 
@@ -132,10 +134,18 @@ class VoiceSession:
         self.voice_preload.start()
         return self.voice_preload
 
+    @property
+    def notices(self) -> Notices:
+        """Los avisos fijos (core/voice/notices.py), con la misma voz que las respuestas."""
+        if getattr(self, "_notices", None) is None:
+            self._notices = Notices(self.tts)
+
+        return self._notices
+
     def start_reading(self) -> Reading:
         """Una lectura frase por frase (core/voice/reading.py); corta la anterior si seguía."""
         self.stop_speaking()
-        self.reading = Reading(self.tts, self.speaker, timing.current())
+        self.reading = Reading(self.tts, self.speaker, timing.current(), self.notices)
         return self.reading
 
     @property

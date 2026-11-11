@@ -51,6 +51,8 @@ class Timings:
     answered: float = None
     # Lectura frase por frase (J2): cuándo empezó a sonar la primera frase.
     first_audio: float = None
+    # El aviso fijo de una tarea larga ("Reviso el archivo.", core/voice/notices.py).
+    notice_audio: float = None
 
 
 _current = ContextVar("asia_timings", default=None)
@@ -228,6 +230,9 @@ def summary(timings: Timings, now=None) -> str:
         ]
 
     parts.append(f"total {number(total)} s")
+
+    if timings.notice_audio is not None:
+        parts.append(f"aviso {number(timings.notice_audio - timings.start)} s")
 
     if timings.first_audio is not None:
         parts.append(f"primer audio {number(timings.first_audio - timings.start)} s")

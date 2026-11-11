@@ -1,4 +1,6 @@
 """Lectura y explicación de archivos y proyectos, y búsqueda con RAG."""
+from core.voice.notices import announce
+import threading
 from pathlib import Path
 
 from core import prompts
@@ -28,6 +30,7 @@ from core.rag.quotes import (
     best_fragments,
     check_draft,
     is_thin,
+    numbered_context,
     parse_fragments,
     quotes_text,
     verified_lines,
@@ -45,14 +48,17 @@ DEFAULT_ANSWER_LIMITS = {
     "explain_file": {"words": 150, "tokens": 450, "voice_tokens": 150},
     "summarize_file": {"words": 100, "tokens": 300, "voice_tokens": 150},
     "search_quotes": {"tokens": 1024},
-    "search_answer": {"tokens": 512},
+    "search_answer": {"tokens": 512, "voice_tokens": 120},
 }
 # Los que recibe el modelo en /buscar.
 RAG_FRAGMENTS = 5
+VOICE_RAG_FRAGMENTS = 4
 # El mismo que context_limits.search_text en config/defaults.json, por si falta la clave.
 SEARCH_TEXT_CHARS = 6000
 # Una pregunta en inglés: si no cabe aquí, no es una traducción.
 TRANSLATION_TOKENS = 80
+TRANSLATE_DOMAIN_SETTING = "translate_domain"
+DEFAULT_TRANSLATE_DOMAIN = "general"
 # La respuesta breve por voz va al modelo de este dominio si cabe en su contexto (brief_domain).
 VOICE_BRIEF_DOMAIN_SETTING = "voice_brief_domain"
 DEFAULT_VOICE_BRIEF_DOMAIN = "general"
@@ -141,16 +147,21 @@ class ExploreActions:
 
         # También por "/buscar", que no pasa por el IntentEngine.
         self.last_action = "search_project_rag"
+        # Con voz: "Busco en la biblioteca." ya sintetizado; la respuesta espera a las citas.
+        announce(self, "search")
 
         # La regla de la entidad mira la pregunta tal cual, sin los equivalentes del glosario.
         asked = question
         question, translated, keywords = self.zim_search_inputs(question)
+        # Con voz: el 7B (citas y respuesta) carga mientras se buscan los fragmentos.
+        self.preload_answer_model()
 
         rag_context = self.tool_registry.execute(
             "search_project_rag",
             question=question,
             project_name=project_name,
-            n_results=RAG_FRAGMENTS,
+            # Con voz, uno menos: el prompt de las citas es lo que más tarda en el 7B.
+            n_results=VOICE_RAG_FRAGMENTS if self.voice_brief(text) else RAG_FRAGMENTS,
             translated=translated,
             keywords=keywords
         )
@@ -170,8 +181,12 @@ class ExploreActions:
 
         # Con tope: un 7B puede no parar nunca (llenó 16384 tokens con una pregunta de Python).
         # Si se corta, vale lo que copió entero; la última línea a medias no se verifica.
+        # Con voz, números de línea: el modelo escribe "41, 43-45" y el código copia el texto
+        # exacto (más rápido). Por texto, el modelo copia las líneas, como siempre.
+        numbers = self.voice_brief(text)
         extracted = self.provider_router.ask(
-            prompts.extract_quotes(question, rag_context, translated, source_notes(rag_context, Library().all())),
+            prompts.extract_quotes(question, numbered_context(rag_context) if numbers else rag_context, translated,
+                                   source_notes(rag_context, Library().all()), numbers=numbers),
             max_tokens=self.answer_limits("search_quotes")["tokens"],
         )
         quotes = verify_quotes(without_cut_notice(extracted)[0], rag_context)
@@ -187,8 +202,12 @@ class ExploreActions:
         if not quotes:
             return best_fragments(rag_context)
 
+        # Con voz, 1 o 2 frases y un tope: se lee cuando está entera y verificada.
+        brief = self.voice_brief(text)
+        limits = self.answer_limits("search_answer")
         answer, cut = without_cut_notice(self.provider_router.ask(
-            prompts.answer_from_quotes(question, quotes_text(quotes)), max_tokens=self.answer_limits("search_answer")["tokens"]
+            prompts.answer_from_quotes(question, quotes_text(quotes), brief=brief),
+            max_tokens=limits.get("voice_tokens", limits["tokens"]) if brief else limits["tokens"]
         ))
 
         if is_refusal(answer) or is_thin(answer):
@@ -204,6 +223,24 @@ class ExploreActions:
             return f"{lines}\n\n{prompts.UNVERIFIED_SUMMARY}\n\n{summary}"
 
         return f"{prompts.INVALID_DRAFT}\n\n{lines}"
+
+    def preload_answer_model(self):
+        """Con voz, la carga del modelo de las citas en un hilo: eran ~9 s esperando al final.
+
+        Después de la traducción (qwen3), que la precarga descarga; nomic, el de los
+        embeddings, puede convivir con el 7B durante la búsqueda.
+        """
+        engine = getattr(self, "intent_engine", None)
+
+        if getattr(self, "action_notice", None) is None or not hasattr(engine, "preload"):
+            return None
+
+        # Sin descargar nomic: si no, el embedding de la pregunta esperaba a que cargara el 7B.
+        keep = [self.settings.get("embedding_model")] if self.settings.get("embedding_model") else []
+        thread = threading.Thread(target=engine.preload, kwargs={"model": model_for(self.settings, "code"), "keep": keep},
+                                  name="asia-precarga-citas", daemon=True)
+        thread.start()
+        return thread
 
     def source_names(self):
         """Los nombres de las fuentes, que no son nombres de la pregunta (core/rag/entities.py)."""
@@ -255,7 +292,11 @@ class ExploreActions:
         text = without_source(question, named) if named else question
         # Con los términos técnicos del glosario: "nombre del equipo" es hostname, no "team name".
         terms = terms_in(text, load_glossary())
-        return clean_translation(self.provider_router.ask(prompts.translate_question(text, terms), max_tokens=TRANSLATION_TOKENS))
+        # Con el modelo ya cargado (qwen3): traducir una frase no necesita el 7B, que tardaba
+        # en cargar y en escribir. rag.translate_domain para cambiarlo.
+        domain = (self.settings.get("rag") or {}).get(TRANSLATE_DOMAIN_SETTING, DEFAULT_TRANSLATE_DOMAIN)
+        answer = self.provider_router.ask(prompts.translate_question(text, terms), max_tokens=TRANSLATION_TOKENS, domain=domain)
+        return clean_translation(answer)
 
     def handle_explain_file(self, text, params):
         file_path = params.get("file_path")

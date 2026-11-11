@@ -19,6 +19,33 @@ from core.voice.speakable import screen_note, to_speakable
 BOUNDARY = re.compile(r"(?<=[^\d\s])[.!?…]+[\"')\]»]*(?=\s)|\n")
 FENCE = "```"
 END = object()
+# En la cola del altavoz, en vez del texto: un aviso fijo, que no es la primera frase.
+NOTICE = object()
+# Un hallazgo de una revisión: un punto de lista o "Línea N" con algo de texto. "1. Bugs
+# posibles" es un título de sección (corto), no un hallazgo.
+FINDING_LINE = re.compile(r"^[ \t>]*(?:[-*•]|\d+[.)]|\**l[ií]nea\s+\d+)[ \t*]*(?P<rest>\S.*)$", re.IGNORECASE)
+MIN_FINDING_CHARS = 30
+# Avisos que, además, hacen esperar al primer hallazgo completo (core/voice/notices.py).
+WAITS_FOR_FINDING = {"review"}
+
+
+def first_finding(text: str):
+    """Dónde empieza el primer hallazgo ya completo (con su salto de línea), o None.
+
+    Una revisión empieza con un preámbulo ("Revisión del archivo…") y títulos de
+    sección: leerlos en voz alta no dice nada. Se lee desde el primer hallazgo.
+    """
+    offset = 0
+
+    for line in text.splitlines(keepends=True):
+        match = FINDING_LINE.match(line.rstrip("\n"))
+
+        if match and len(match.group("rest").strip("*` ")) >= MIN_FINDING_CHARS:
+            return offset if line.endswith("\n") else None
+
+        offset += len(line)
+
+    return None
 
 
 def table_or_code_line(line: str) -> bool:
@@ -69,8 +96,12 @@ class SentenceSplitter:
 class Reading:
     """Una respuesta que se lee frase por frase. timings: la medición del mensaje (--timing)."""
 
-    def __init__(self, tts, speaker, timings=None):
+    def __init__(self, tts, speaker, timings=None, notices=None):
         self.tts = tts
+        # Avisos ya sintetizados (core/voice/notices.py).
+        self.notices = notices
+        # Texto guardado hasta el primer hallazgo completo (review), o None.
+        self.waiting = None
         self.speaker = speaker
         self.timings = timings
         self.splitter = SentenceSplitter()
@@ -94,11 +125,27 @@ class Reading:
     # --- Entrada (hilo principal) -----------------------------------------------
 
     def feed(self, chunk: str):
+        # Revisión con voz: lo de antes del primer hallazgo completo no se lee.
+        if self.waiting is not None:
+            self.waiting += chunk or ""
+            start = first_finding(self.waiting)
+
+            if start is None:
+                return
+
+            chunk, self.waiting = self.waiting[start:], None
+
         for part in self.splitter.feed(chunk or ""):
             self.say(to_speakable(part, note=False))
 
     def finish(self, answer: str = None):
         """Fin de la respuesta: lo que quedaba y "te dejo el código en pantalla" si hacía falta."""
+        # Sin un hallazgo completo (una revisión sin puntos), se lee todo, como antes.
+        if self.waiting is not None:
+            waited, self.waiting = self.waiting, None
+            answer = answer if answer and not waited else None
+            self.feed(waited)
+
         if answer and not self.splitter.buffer:
             self.feed(answer)
 
@@ -109,6 +156,25 @@ class Reading:
     def say(self, text: str):
         if text and not self.stopped.is_set():
             self.texts.put(text)
+
+    def notice(self, key: str):
+        """El aviso fijo, sin pasar por Piper: va directo a la cola del altavoz.
+
+        Antes de la respuesta: lo que se sintetice después suena detrás.
+        """
+        if key in WAITS_FOR_FINDING:
+            self.waiting = ""
+
+        if self.notices is None or self.stopped.is_set():
+            return
+
+        try:
+            audio, rate = self.notices.audio(key)
+        except Exception as e:
+            self.fail(e)
+            return
+
+        self.audios.put((NOTICE, audio, rate))
 
     def stop(self):
         """Corta la lectura: vacía las colas y para el audio que suena."""
@@ -172,6 +238,18 @@ class Reading:
                     break
 
                 text, audio, rate = item
+
+                if text is NOTICE:
+                    if self.timings is not None and self.timings.notice_audio is None:
+                        self.timings.notice_audio = time.perf_counter()
+
+                    try:
+                        self.speaker.play(audio, rate)
+                    except Exception as e:
+                        self.fail(e)
+                        break
+
+                    continue
 
                 if not self.first_audio.is_set():
                     if self.timings is not None and self.timings.first_audio is None:

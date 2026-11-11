@@ -45,7 +45,7 @@ def test_buscar_traduce_con_el_glosario(monkeypatch):
     asked = []
     explorer = SimpleNamespace(
         settings={"rag": {"translate_question": True}},
-        provider_router=SimpleNamespace(ask=lambda prompt, max_tokens=None: asked.append(prompt) or "How do I change the hostname?"),
+        provider_router=SimpleNamespace(ask=lambda prompt, max_tokens=None, **options: asked.append(prompt) or "How do I change the hostname?"),
     )
     source = SimpleNamespace(name="askubuntu", language="en", kind="preguntas")
     monkeypatch.setattr("core.actions.explore.Library", lambda: SimpleNamespace(all=lambda: [source]))

@@ -44,6 +44,8 @@ CODE_LINE = re.compile(r"\s*(?:import|from|def|class|return|if|for|while)\b|\s*[
 # Una línea que es solo adorno: "=====" (subrayado RST), "-----", "*****", "~~~~", "####".
 DECORATION = re.compile(r"^[ \t]*([=\-*~#])\1{2,}[ \t]*$", re.MULTILINE)
 MIN_DRAFT_WORDS = 4
+# "[a.py] 1-900": un rango así no es una cita, es el fragmento entero.
+MAX_RANGE_LINES = 12
 FALLBACK_FRAGMENTS = 3
 FALLBACK_CHARS = 600
 # Qué le pasa a una frase. Solo UNKNOWN_NAME la elimina; lo demás la deja marcada.
@@ -115,15 +117,112 @@ def quote_at(fragment: Fragment, number: int) -> Quote:
     return Quote(fragment.tag[:first.start()], int(first.group(1)) + number - 2, fragment.label, text, fragment.origin)
 
 
+def first_line_of(fragment: Fragment) -> int:
+    """El número en el archivo de la segunda línea de text (la primera dice de dónde es)."""
+    first = FIRST_LINE.search(fragment.tag)
+    return int(first.group(1)) if first else 1
+
+
+def numbered_context(context: str) -> str:
+    """El contexto con el número de cada línea citable delante ("41| texto").
+
+    Para que el modelo devuelva solo números (extract_quote_numbers) y el código copie
+    el texto exacto: copiar líneas enteras era lo más lento de /buscar en el 7B. La
+    línea de origen (la primera de cada Contenido) y las vacías no llevan número.
+    """
+    fragments = parse_fragments(context)
+    headers = list(FRAGMENT_HEADER.finditer(context))
+    parts = [context[:headers[0].start()]] if headers else [context]
+
+    for i, (header, fragment) in enumerate(zip(headers, fragments)):
+        end = headers[i + 1].start() if i + 1 < len(headers) else len(context)
+        head, _, _ = context[header.start():end].partition("Contenido:\n")
+        lines = fragment.text.splitlines()
+        start = first_line_of(fragment)
+        numbered = lines[:1] + [
+            f"{start + index}| {line}" if line.strip() else line for index, line in enumerate(lines[1:])
+        ]
+        parts.append(f"{head}Contenido:\n" + "\n".join(numbered) + "\n\n")
+
+    return "".join(parts)
+
+
+NUMBERS_ONLY = re.compile(r"[\d\s,;y–-]+")
+
+
+def quoted_numbers(text: str):
+    """[(primera, última)] si la cita son solo números de línea ("41, 43-45"); si no, None."""
+    if not NUMBERS_ONLY.fullmatch(text) or not re.search(r"\d", text):
+        return None
+
+    spec = re.sub(r"\s*(?:;|\by\b)\s*", ",", text.strip()).strip(",")
+
+    try:
+        return line_ranges(spec)
+    except ValueError:
+        return None
+
+
+def fragment_for(tag, fragments: list):
+    """El fragmento de esa etiqueta: exacta, o el mismo archivo ("a.py" por "a.py:40-55")."""
+    if tag is None:
+        return None
+
+    exact = next((f for f in fragments if f.tag == tag), None)
+
+    if exact is not None:
+        return exact
+
+    path = FIRST_LINE.sub("", tag)
+    return next((f for f in fragments if FIRST_LINE.sub("", f.tag) == path), None)
+
+
+def numbered_quotes(tag, ranges, fragments: list) -> list:
+    """Las líneas de esos números en su fragmento, tal como están; los que no existen se ignoran."""
+    if tag is None:
+        return []
+
+    path = FIRST_LINE.sub("", tag)
+    candidates = []
+
+    # Primero el de la etiqueta; después los demás del mismo archivo. Sin repetir (por identidad:
+    # Fragment no es hashable).
+    for fragment in [fragment_for(tag, fragments)] + [f for f in fragments if FIRST_LINE.sub("", f.tag) == path]:
+        if fragment is not None and all(fragment is not other for other in candidates):
+            candidates.append(fragment)
+
+    found = []
+
+    for first, last in ranges:
+        for number in range(first, min(last, first + MAX_RANGE_LINES - 1) + 1):
+            for fragment in candidates:
+                index = number - first_line_of(fragment) + 2
+                lines = fragment.text.splitlines()
+
+                if 1 < index <= len(lines) and lines[index - 1].strip():
+                    found.append(quote_at(fragment, index))
+                    break
+
+    return found
+
+
 def verify_quotes(response: str, context: str) -> list:
     """Las citas que existen en los fragmentos, sin repetir, normalizando espacios.
 
-    Si la etiqueta es de otro fragmento, vale el fragmento donde está de verdad.
+    Si la etiqueta es de otro fragmento, vale el fragmento donde está de verdad. Una
+    cita de solo números ("[a.py:40-55] 41, 43") toma esas líneas del fragmento: el
+    texto lo copia el código, no el modelo.
     """
     fragments = parse_fragments(context)
     verified = []
 
     for tag, text in parse_quotes(response):
+        ranges = quoted_numbers(text)
+
+        if ranges is not None:
+            verified += numbered_quotes(tag, ranges, fragments)
+            continue
+
         for fragment in sorted(fragments, key=lambda f: f.tag != tag):
             number = locate_quote(text, fragment.text)
 

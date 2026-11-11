@@ -31,7 +31,9 @@ def test_etapas_que_suman_el_primer_audio():
     assert result["generacion"] == pytest.approx(5.0)
     assert result["sintesis"] == pytest.approx(1.5)
     assert result["primer_audio"] == pytest.approx(8.5)
-    assert sum(result[s] for s in tool.STAGES[:-1]) == pytest.approx(result["primer_audio"])
+    # Las cuatro primeras suman el primer audio; el aviso va aparte.
+    assert sum(result[s] for s in tool.STAGES[:4]) == pytest.approx(result["primer_audio"])
+    assert result["aviso"] is None and result["llamadas"][-1]["modelo"] == "qwen3"
     assert (result["carga"], result["modelo"], result["tokens"]) == (0.2, "qwen3", 40)
 
 

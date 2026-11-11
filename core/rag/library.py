@@ -140,15 +140,44 @@ def searched_sources(question: str, sources: list) -> list:
     return [named] if named else [source for source in sources if not source.named_only]
 
 
+# Palabras que solo una de las dos lenguas usa a menudo: deciden si una pregunta ya está en inglés.
+ENGLISH_WORDS = {
+    "how", "what", "which", "why", "where", "when", "who", "the", "do", "does", "can", "should", "is", "are",
+    "to", "of", "with", "from", "for", "and", "or", "my", "an", "use", "using", "set", "get", "in", "on", "it",
+}
+SPANISH_WORDS = {
+    "como", "que", "cual", "cuales", "por", "para", "el", "la", "los", "las", "un", "una", "unos", "de", "del",
+    "se", "en", "con", "es", "son", "puedo", "hago", "uso", "usar", "mi", "y", "o", "al", "lo", "su", "donde",
+}
+
+
+def is_english(text: str) -> bool:
+    """True si la pregunta ya está en inglés: más palabras típicas del inglés que del español."""
+    from core.rag.tokens import without_accents
+
+    words = re.findall(r"[a-z]+", without_accents(text.lower()))
+    english = sum(word in ENGLISH_WORDS for word in words)
+    spanish = sum(word in SPANISH_WORDS for word in words)
+    return english > spanish
+
+
 def needs_translation(question: str, sources: list) -> bool:
-    """True si nombra una fuente en inglés. Un nombre suelto se dice igual en los dos idiomas."""
+    """True si nombra una fuente en inglés y la pregunta no está ya en inglés.
+
+    Un nombre suelto se dice igual en los dos idiomas.
+    """
     named = named_in_question(question, sources)
     group = questions_group(question, sources)
 
     if group:
-        return any(source.language == ENGLISH_SOURCE for source in group) and len(without_group(question).split()) > 1
+        text = without_group(question)
+        return any(source.language == ENGLISH_SOURCE for source in group) and len(text.split()) > 1 and not is_english(text)
 
-    return bool(named) and named.language == ENGLISH_SOURCE and len(without_source(question, named).split()) > 1
+    if not named or named.language != ENGLISH_SOURCE:
+        return False
+
+    text = without_source(question, named)
+    return len(text.split()) > 1 and not is_english(text)
 
 
 def clean_translation(answer: str) -> str:

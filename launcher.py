@@ -240,7 +240,9 @@ def respond_in_context(brain, text, attachments, use_actions, reading=None, noti
 
     try:
         # Con voz, explain_file y summarize_file escriben y leen a medida que llega la respuesta.
-        response = process_streaming(brain, text, on_action_chunk if reading is not None else None) if use_actions else None
+        response = process_streaming(
+            brain, text, on_action_chunk if reading is not None else None, reading.notice if reading is not None else None
+        ) if use_actions else None
 
         if response is not None:
             print(rest_of(response, "".join(streamed)))
@@ -266,18 +268,21 @@ def respond_in_context(brain, text, attachments, use_actions, reading=None, noti
         return None
 
 
-def process_streaming(brain, text, on_chunk):
-    """brain.process con on_chunk para las acciones que lo usan (core/actions/explore.py)."""
+def process_streaming(brain, text, on_chunk, on_notice=None):
+    """brain.process con on_chunk para las acciones que lo usan (core/actions/explore.py).
+
+    on_notice(clave): el aviso fijo de una tarea larga (core/voice/notices.py), con voz.
+    """
     if on_chunk is None:
         return brain.process(text)
 
-    previous = getattr(brain, "action_stream", None)
-    brain.action_stream = on_chunk
+    previous = getattr(brain, "action_stream", None), getattr(brain, "action_notice", None)
+    brain.action_stream, brain.action_notice = on_chunk, on_notice
 
     try:
         return brain.process(text)
     finally:
-        brain.action_stream = previous
+        brain.action_stream, brain.action_notice = previous
 
 
 def rest_of(response, streamed):

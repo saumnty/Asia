@@ -11,6 +11,15 @@ DOCUMENT_PREFIX = "search_document: "
 QUERY_PREFIX = "search_query: "
 
 
+def direct_host(host: str) -> str:
+    """El host con 127.0.0.1 en vez de localhost, para conectar.
+
+    En Windows, requests prueba primero ::1 con "localhost" y tarda ~2 s en cada
+    conexión nueva: eran 4 de los 8 s de buscar en la biblioteca (dos embeddings).
+    """
+    return host.replace("://localhost", "://127.0.0.1", 1)
+
+
 class ExternalEmbeddingBlocked(RuntimeError):
     pass
 
@@ -21,8 +30,8 @@ class OllamaEmbedder:
 
         self.model = model or settings.get("embedding_model")
         host = host or settings.get("ollama_host")
-        self.url = f"{host.rstrip('/')}/api/embeddings"
-        self.batch_url = f"{host.rstrip('/')}/api/embed"
+        self.url = f"{direct_host(host).rstrip('/')}/api/embeddings"
+        self.batch_url = f"{direct_host(host).rstrip('/')}/api/embed"
         self.timeout = timeout or settings.get("embedding_timeout")
         # Indexar manda el contenido de los archivos: con Ollama en otra
         # máquina (no en trusted_local_hosts) no se hace (fase G).

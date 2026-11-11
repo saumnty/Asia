@@ -1,4 +1,4 @@
-"""Primer audio de las acciones con voz (criterio de cierre de 1.0: ≤ 15 s), sin micrófono.
+"""Primer audio de las acciones con voz (criterios de cierre de 1.0), sin micrófono.
 
 Cada frase entra por texto al mismo camino que sigue la voz después de
 Whisper (launcher.prepare_message y launcher.respond con la sesión de voz):
@@ -18,12 +18,19 @@ Desglose de cada corrida (segundos desde que entra el texto):
 - generación: desde esa llamada hasta la primera frase completa (incluye
   cargar el modelo; "carga" lo da aparte, según Ollama);
 - síntesis: de la primera frase a su audio (Piper);
-- primer audio: el total.
+- primer audio: el total;
+- aviso: cuándo sonó el aviso fijo de una tarea larga ("Reviso el archivo.",
+  core/voice/notices.py), o — si la acción no lo tiene.
+
+Con --llamadas, además, cada llamada al modelo de la corrida (modelo, segundos,
+carga, tokens del prompt y generados), para ver dónde se va el tiempo.
 
 Con el micrófono, el mismo número sale en la línea de --timing ("primer
 audio") de check_voz.py: a esto se le suma la voz a texto (≤ 4 s).
 
-Código de salida 0 si la mediana de cada frase queda en ≤ 15 s.
+Criterios (ROADMAP): primer audio ≤ 15 s; las tareas largas, review_file ≤ 25 s y
+/buscar ≤ 30 s (con la respuesta verificada), con su aviso ≤ 1 s. Código de salida 0
+si la mediana de cada frase los cumple.
 """
 import argparse
 import json
@@ -50,19 +57,21 @@ from core.voice import reading as reading_module
 from core.voice.session import VoiceSession
 
 LIMIT = 15.0
+# Tareas largas: su propio límite y un aviso fijo que suena enseguida.
+LONG_TASK_LIMITS = {"review_file": 25.0, "search_project_rag": 30.0}
+NOTICE_LIMIT = 1.0
 
-# Cinco acciones con voz, como saldrían de Whisper (sin @), con rutas desde C:\Asia: un nombre
-# suelto ("timing.py") que no está en la carpeta no se encuentra y el modelo contesta que no existe.
+# Cinco acciones con voz, como saldrían de Whisper (sin @), con rutas desde C:\Asia (un nombre
+# suelto también vale: core/file_lookup.py; con la ruta, la medición no depende de eso).
 PHRASES = [
     "Explica el archivo launcher.py.",
     "Resume el archivo docs/DEMO.md.",
     "Resume la carpeta docs.",
     "Revisa el archivo core/timing.py.",
-    # La biblioteca: "busca en la biblioteca …" lo manda el IntentEngine a search_text (grep).
     "/buscar cómo se crea un entorno virtual en Python",
 ]
 
-STAGES = ("intencion", "herramienta", "generacion", "sintesis", "primer_audio")
+STAGES = ("intencion", "herramienta", "generacion", "sintesis", "primer_audio", "aviso")
 
 
 class Silent:
@@ -115,8 +124,10 @@ def breakdown(timings, probe) -> dict:
     first_audio = timings.first_audio - start if timings.first_audio else None
     first_text = probe.first_text - start if probe.first_text else None
 
+    notice = timings.notice_audio - start if getattr(timings, "notice_audio", None) else None
     result = {"intencion": intent, "herramienta": None, "generacion": None, "sintesis": None,
-              "primer_audio": first_audio, "carga": None, "modelo": None, "tokens": None}
+              "primer_audio": first_audio, "aviso": notice, "carga": None, "modelo": None, "tokens": None,
+              "llamadas": [call_summary(call) for call in calls]}
 
     if answer_call is not None:
         # timed() anota la duración al terminar; el inicio es la suma de lo anterior.
@@ -135,6 +146,28 @@ def breakdown(timings, probe) -> dict:
         result["sintesis"] = first_audio - first_text
 
     return result
+
+
+def call_summary(call) -> dict:
+    return {"modelo": call.model, "segundos": call.seconds, "carga": call.load,
+            "prompt_tokens": call.prompt_tokens, "tokens": call.tokens}
+
+
+def limit_for(action) -> float:
+    return LONG_TASK_LIMITS.get(action, LIMIT)
+
+
+def meets(action, medians) -> bool:
+    """El primer audio en su límite y, en una tarea larga, el aviso en ≤ 1 s."""
+    total = medians["primer_audio"]
+
+    if total is None or total > limit_for(action):
+        return False
+
+    if action in LONG_TASK_LIMITS:
+        return medians["aviso"] is not None and medians["aviso"] <= NOTICE_LIMIT
+
+    return True
 
 
 def answer_call_start(timings) -> float:
@@ -216,6 +249,7 @@ def main():
     parser.add_argument("--frases", nargs="+", default=PHRASES)
     parser.add_argument("--corridas", type=int, default=3)
     parser.add_argument("--salida", help="JSON con cada corrida")
+    parser.add_argument("--llamadas", action="store_true", help="cada llamada al modelo de cada corrida")
     args = parser.parse_args()
 
     # La consola de Windows (cp1252) no tiene "≤" ni "→".
@@ -243,20 +277,26 @@ def main():
                   + f", carga {number(result['carga'])}, {result['modelo']}, {result['tokens']} tokens",
                   file=sys.stderr)
 
-    print("\n| Frase | Acción | " + " | ".join(STAGES) + " | carga |")
-    print("|---|---|" + "---|" * (len(STAGES) + 1))
+            if args.llamadas:
+                for call in result["llamadas"]:
+                    print(f"    {call['modelo']}: {number(call['segundos'])} s, carga {number(call['carga'])}, "
+                          f"prompt {call['prompt_tokens']}, {call['tokens']} generados", file=sys.stderr)
+
+    print("\n| Frase | Acción | " + " | ".join(STAGES) + " | carga | límite |")
+    print("|---|---|" + "---|" * (len(STAGES) + 2))
     ok = True
 
     for phrase in args.frases:
         mine = [r for r in runs if r["frase"] == phrase]
         medians = {s: median([r[s] for r in mine]) for s in STAGES + ("carga",)}
-        total = medians["primer_audio"]
-        ok = ok and total is not None and total <= LIMIT
-        print(f"| {phrase} | {mine[0]['accion']} | " + " | ".join(number(medians[s]) for s in STAGES)
-              + f" | {number(medians['carga'])} |")
+        action = mine[0]["accion"]
+        ok = meets(action, medians) and ok
+        print(f"| {phrase} | {action} | " + " | ".join(number(medians[s]) for s in STAGES)
+              + f" | {number(medians['carga'])} | {limit_for(action):.0f} |")
 
-    print(f"\nMedianas de {args.corridas} corridas. Criterio: primer audio ≤ {LIMIT:.0f} s → "
-          + ("cumple" if ok else "NO cumple"))
+    print(f"\nMedianas de {args.corridas} corridas. Criterio: primer audio ≤ {LIMIT:.0f} s; review_file "
+          f"≤ {LONG_TASK_LIMITS['review_file']:.0f} s y /buscar ≤ {LONG_TASK_LIMITS['search_project_rag']:.0f} s, "
+          f"con el aviso ≤ {NOTICE_LIMIT:.0f} s → " + ("cumple" if ok else "NO cumple"))
 
     if args.salida:
         Path(args.salida).write_text(json.dumps(runs, ensure_ascii=False, indent=2), encoding="utf-8")
