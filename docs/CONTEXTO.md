@@ -58,8 +58,10 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
     mitad "oye Asia" sola; 3000 negativos con más peso en los
     confundibles), cuaderno test/manual/colab/entrenar_oye_asia.ipynb
     (50 000 pasos, dos rondas de aumento) y empaquetar_mi_voz.py.
-  - Falta: entrenar v0.2, comparar_wake.py v0.1 vs v0.2, check_wake
-    --aciertos 20 y --falsas 30, elegir umbral y configurarlo.
+  - Herramientas listas: comparar_wake.py --audios elige modelo y
+    umbral con mis grabaciones; secuencia en docs/J3_V02.md.
+  - Falta: entrenar v0.2 y seguir docs/J3_V02.md (check_wake
+    --aciertos 20 y --falsas 30, comparar, configurar el umbral).
 - Voz propia:
   - 19 audios de una persona que dio permiso (uso privado), 750
     frases transcritas con small y turbo; revisadas a mano: 746
@@ -70,9 +72,16 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
   - Falta: dataset final (con y sin atenuar silencios), cuaderno de
     entrenamiento, confirmarle a ella que sus audios irán a Colab, y
     entrenar.
-- Cierre de 1.0: faltan J3 (17/20 o más y 0,5 o menos falsas por
-  hora), primer audio de las acciones de 15 s o menos y los check_*
-  finales.
+- Cierre de 1.0 (docs/CIERRE_1.0.md, 2026-11-10):
+  - Primer audio de las acciones: explain_file 4,2 s y
+    summarize_file 5,0 s sin micrófono (antes 21,5 y 21,1), con
+    qwen3 para la respuesta breve. review_file 19 s y /buscar 41 s
+    quedan fuera del criterio.
+  - check_* sin micrófono: 13 de 15 en verde; check_rag --wikipedia
+    0 y 1 dan 10/12 frente a la base 11 (decidir la base).
+  - docs/DEMO.md es la lista para grabar.
+  - Faltan J3 (17/20 o más y 0,5 o menos falsas por hora) y
+    check_voz --timing con el micrófono.
 
 ## Hoja de ruta
 
@@ -83,6 +92,8 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
 - J1 y J2: voz probada con micrófono (primer audio de la charla 3–6
   s), arreglos de Whisper, open_app con confirmación, streaming en las
   acciones.
+- Primer audio de las acciones ≤ 15 s, check_* finales sin
+  micrófono, comparar_wake --audios y la demo como lista.
 - Documentos de cierre, identidad visual (orbe amarillo cálido,
   prototipo en test/manual/visual/asia_orbe.html).
 
@@ -105,7 +116,11 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
 
 ## Pendientes míos
 - git push.
-- Entrenar "Oye Asia" v0.2 en Colab y probarlo.
+- Entrenar "Oye Asia" v0.2 en Colab y probarlo con docs/J3_V02.md.
+- check_voz.py --timing con "explica el archivo launcher.py" dicho.
+- Decidir la base de Wikipedia en check_rag (11 → 10, o mejorar las
+  palabras clave).
+- Grabar la demo (docs/DEMO.md).
 - Confirmarle a la persona de la voz que sus audios irán a Colab.
 - Revisar el orbe en el navegador y decir qué ajustar.
 - Audios del JSON de Facebook (cuando lleguen).

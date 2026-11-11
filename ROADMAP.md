@@ -1271,22 +1271,22 @@ Va después de los extras.
 
 Asia 1.0 se cierra cuando se cumplen todos, medidos en el commit final con la configuración real, un modelo a la vez y Asia sin otras cargas. ✅ cumplido con lo medido hasta hoy; ⏳ falta medir o falta llegar.
 
-| Área | Criterio | Estado (2026-11-05) |
+| Área | Criterio | Estado (2026-11-10) |
 |---|---|---|
 | J3, aciertos | "Oye Asia" con la voz del usuario y el micrófono de la laptop, a distancia corta: `check_wake --modelo oye_asia_vX --aciertos 20` ≥ 17/20 al umbral elegido | ⏳ Sin medir con "Oye Asia". Referencia: "Hey Jarvis" 11/20 a 0,5 (prueba 3). v0.1 en Colab: 24 % de los positivos de prueba (con ruido y eco) |
 | J3, falsas | `check_wake --falsas 30` con el mismo umbral: ≤ 0,5 por hora, con habla y ruido normales del cuarto | ⏳ Sin medir con el micrófono. v0.1 en la validación de Colab (5,3 h): 4,5/h a 0,5, 0,75/h a 0,7 y 0/h a 0,9 |
-| J3, umbral | `voice.wake_threshold` elegido con las dos mediciones de arriba y escrito en `settings.json` | ⏳ |
+| J3, umbral | `voice.wake_threshold` elegido con las dos mediciones de arriba y escrito en `config/defaults.json` | ⏳ Herramienta lista: `comparar_wake --audios` elige el umbral (`docs/J3_V02.md`) |
 | Voz, charla | Primer audio de la charla ≤ 6 s desde que termina la frase dicha (`--timing`, micrófono real) | ✅ 3,4–5,8 s (2026-11-04) |
 | Voz, acciones | Primer audio de `explain_file` y `summarize_file` con voz ≤ 15 s | ✅ sin micrófono (`check_primer_audio`, 2026-11-10): 4,2 s y 5,0 s (antes 21,5 y 21,1 s); falta sumar la voz a texto (≤ 4 s) con el micrófono |
 | Voz, entrada | Voz a texto ≤ 4 s por frase; sin voz detectada, "no te oí" (nunca una alucinación de Whisper) | ✅ 2,6–3,9 s (2026-11-04); "no te oí" con prueba (`c47603b5`) |
 | Voz, interrupción | Enter y Ctrl+C cortan la lectura sin cerrar Asia | ✅ prueba con el micrófono (2026-11-04) |
-| Pruebas | `pytest` completo en verde, con código 0 | ✅ 1978 pasadas (`b8f9aee`) |
-| Biblioteca | `check_rag` con código 0 en todos sus modos con `check_rag_base.json` y las trampas en 0 | ✅ cierre de la fase H (2026-11-04); repetir en el commit final |
-| Intenciones | `check_intents` 44/44 | ✅ 44/44 (2026-11-03); repetir en el commit final |
-| Charla | `check_chat`: 0 atribuciones y 0 fugas | ✅ 21/21 correctas, 0 y 0 (2026-11-04); repetir en el commit final |
-| Confidencialidad | `check_confidencial` 6/6 | ✅ 6/6 (fase G); repetir en el commit final |
-| Afecto | `check_afecto` ≥ 24/28 y la calibración ≥ 19/20 | ✅ 24/28 y 19/20 (`6f9525fc`); repetir en el commit final |
-| Reflexión | `check_reflexion` sin fallos | ⏳ repetir en el commit final |
+| Pruebas | `pytest` completo en verde, con código 0 | ✅ 2014 pasadas, código 0 (2026-11-10) |
+| Biblioteca | `check_rag` con código 0 en todos sus modos con `check_rag_base.json` y las trampas en 0 | ⏳ 2026-11-10: todos con código 0 menos `--wikipedia 0` y `1`: 10/12 artículos frente a la base 11, repetido igual; las trampas en 0. Ver `docs/CIERRE_1.0.md` |
+| Intenciones | `check_intents` 44/44 | ✅ 44/44 (2026-11-10) |
+| Charla | `check_chat`: 0 atribuciones y 0 fugas | ✅ 21/21 correctas, 0 y 0 (2026-11-10) |
+| Confidencialidad | `check_confidencial` 6/6 | ✅ 6/6 (2026-11-10) |
+| Afecto | `check_afecto` ≥ 24/28 y la calibración ≥ 19/20 | ✅ 26/28 y 19/20 (2026-11-10) |
+| Reflexión | `check_reflexion` sin fallos | ✅ sin fallos (2026-11-10) |
 | Documentación | `docs/ARQUITECTURA.md` y `docs/DEMO.md` al día; README con la instalación | ✅ `docs/` (2026-11-05); el README, revisar al cerrar |
 
 **Asia 2.0 (todo lo demás), en este orden:**
@@ -1294,7 +1294,7 @@ Asia 1.0 se cierra cuando se cumplen todos, medidos en el commit final con la co
 1. Estabilizar el modelo actual con uso real.
 2. ~~Fase 4 (limpieza) y revisión sin síntesis.~~ Hecho (`254dc3cd`, `284c1bdc`).
 3. Cambio entre modelos. ~~Ver y cambiar el modelo por comando, `--model`, `models_by_domain`.~~ Hecho (`1231b36b`, `fccf75bd`). Falta lo de "Qué falta" en "Multi-modelo según tipo de tarea".
-4. Voz: J4 y voz propia.
+4. Voz: J4 y voz propia. Hallazgos del 2026-11-10 (`docs/CIERRE_1.0.md`): "busca en la biblioteca…" dicho o escrito sin `/buscar` va a `search_text` y no a la biblioteca; un nombre de archivo suelto que no está en la carpeta abierta ("explica timing.py") no se busca en las subcarpetas; primer audio de `review_file` (19 s) y `/buscar` (41 s) con voz.
 5. Avatar.
 6. Extras (los bots personalizados, después de M y N; la biblioteca de lecciones, con la generación de código): guardián de envíos externos, modo sin rastro, perfiles aislados, Asia multiplataforma, imágenes en la terminal, cambio de modelo seguro, especialistas internos, control y estimación, Asia → ROS 2 → Bolitabot, SQLite como almacenamiento, afecto y cognición social, tareas grandes y MCP.
 7. Jetson, servidor y uso remoto (siempre disponible).
