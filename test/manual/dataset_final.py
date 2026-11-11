@@ -11,6 +11,9 @@
   (NNNN.wav|texto, como lo lee piper1-gpl), y un zip por versión, listo para subir a Colab.
 - --frecuencias 22050 deja una sola versión; --silencios atenuados baja las pausas de
   dentro de la frase (no las de los extremos) ATTENUATION_DB, con rampas de FADE_S.
+- --reemplazos <csv> cambia el texto de las frases por la columna "final" (id, final): el
+  numeros_a_palabras.csv corregido a mano. Acepta , ; o tabulador (Excel) y ids sin los ceros
+  de la izquierda; un "final" vacío o un id que no existe se avisa y se deja el texto original.
 - Avisa de dígitos (deben ir en letra), símbolos raros y duraciones fuera de
   1–15 s; las frases vacías no entran. Escribe resumen.txt.
 
@@ -75,6 +78,38 @@ def mismatches(metadata, revision) -> list:
     notes += [f"{id_}: el texto de metadata.csv y el de revision.json no coinciden" for id_ in sorted(set(metadata) & accepted)
               if " ".join(metadata[id_].split()) != " ".join(str(revision[id_].get("texto", "")).split())]
     return notes
+
+
+def read_replacements(path, ids=()) -> tuple:
+    """({id: texto}, avisos) de un CSV con las columnas id y final (las demás se ignoran).
+
+    ids: los de metadata.csv; sirven para devolver los ceros que Excel quita ("5" -> "0005")."""
+    text = Path(path).read_text(encoding="utf-8-sig")
+    first = text.splitlines()[0] if text.strip() else ""
+    delimiter = max(",;\t", key=first.count)
+    reader = csv.DictReader(text.splitlines(), delimiter=delimiter)
+    reader.fieldnames = [name.strip().lower() for name in reader.fieldnames or []]
+
+    if "id" not in reader.fieldnames or "final" not in reader.fieldnames:
+        raise ValueError(f"{path}: el CSV necesita las columnas id y final")
+
+    width = len(next(iter(sorted(ids)), ""))
+    found, notes = {}, []
+
+    for row in reader:
+        id_ = (row["id"] or "").strip()
+
+        if id_.isdigit() and id_ not in ids and width:
+            id_ = id_.zfill(width)
+
+        final = clean_text(row["final"] or "")
+
+        if not final:
+            notes.append(f"{id_}: la columna final está vacía, se deja el texto original")
+        else:
+            found[id_] = final
+
+    return found, notes
 
 
 def clean_text(text) -> str:
@@ -181,19 +216,25 @@ def distribution(seconds) -> list:
 
 
 def build(dataset, metadata, destination, revision=None, segments=silero_segments, log=print,
-          rates=RATES, quiet=False) -> dict:
+          rates=RATES, quiet=False, replacements=None, replacement_notes=()) -> dict:
     """Escribe las versiones (rates) y sus zip en destination; devuelve el resumen.
 
-    quiet: atenúa las pausas de dentro de la frase (attenuate_silences)."""
+    quiet: atenúa las pausas de dentro de la frase (attenuate_silences).
+    replacements: {id: texto} que sustituye al de metadata.csv (read_replacements)."""
     dataset, destination = Path(dataset), Path(destination)
     notes = mismatches(metadata, revision) if revision is not None else []
     items, skipped = [], []
+    replacements = replacements or {}
+    replaced = 0
+    replacement_notes = list(replacement_notes)
+    replacement_notes += [f"{id_}: no está en metadata.csv, no se usa" for id_ in sorted(set(replacements) - set(metadata))]
 
     for version in rates:
         (destination / str(version) / "wavs").mkdir(parents=True, exist_ok=True)
 
     for id_ in sorted(metadata):
-        text = clean_text(metadata[id_])
+        text = clean_text(replacements.get(id_, metadata[id_]))
+        replaced += id_ in replacements and text != clean_text(metadata[id_])
 
         if not text:
             skipped.append(f"{id_}: texto vacío, no entra")
@@ -233,7 +274,7 @@ def build(dataset, metadata, destination, revision=None, segments=silero_segment
         "frases": len(items), "minutos": sum(item.seconds for item in items) / 60,
         "distribucion": distribution([item.seconds for item in items]),
         "avisos": [f"{item.id}: {warning}" for item in items for warning in item.warnings],
-        "fuera": skipped, "no_cuadra": notes,
+        "fuera": skipped, "no_cuadra": notes, "reemplazados": replaced, "reemplazos_avisos": replacement_notes,
         "zips": {version: (destination / f"{destination.name}_{version}.zip").stat().st_size for version in rates},
     }
     (destination / "resumen.txt").write_text(summary(result) + "\n", encoding="utf-8")
@@ -246,8 +287,12 @@ def summary(result) -> str:
     lines += [f"  {label}: {count}" for label, count in result["distribucion"]]
     lines += [f"Zip de {version} Hz: {size / 1e6:.1f} MB" for version, size in result["zips"].items()]
 
+    if result["reemplazados"]:
+        lines.append(f"Textos reemplazados: {result['reemplazados']}")
+
     for title, key in (("Avisos (revisar el texto o el audio)", "avisos"), ("No entran", "fuera"),
-                       ("metadata.csv y revision.json no cuadran", "no_cuadra")):
+                       ("metadata.csv y revision.json no cuadran", "no_cuadra"),
+                       ("Reemplazos con problemas", "reemplazos_avisos")):
         if result[key]:
             lines.append(f"{title}: {len(result[key])}")
             lines += [f"  {line}" for line in result[key]]
@@ -265,6 +310,7 @@ def main():
                         help="22050 para el fine-tuning de Piper; por defecto, las dos")
     parser.add_argument("--silencios", choices=("normal", "atenuados"), default="normal",
                         help="atenuados: las pausas de dentro de la frase bajan %g dB" % ATTENUATION_DB)
+    parser.add_argument("--reemplazos", type=Path, help="CSV con id y final: el texto que sustituye al de metadata.csv")
     args = parser.parse_args()
 
     if args.destino.exists() and any(args.destino.iterdir()):
@@ -274,8 +320,10 @@ def main():
         parser.error("--destino no puede ser la carpeta del dataset")
 
     revision = read_revision(args.revision) if args.revision else None
-    result = build(args.dataset, read_metadata(args.metadata), args.destino, revision,
-                   rates=tuple(args.frecuencias), quiet=args.silencios == "atenuados")
+    metadata = read_metadata(args.metadata)
+    replacements, notes = read_replacements(args.reemplazos, metadata) if args.reemplazos else ({}, [])
+    result = build(args.dataset, metadata, args.destino, revision, rates=tuple(args.frecuencias),
+                   quiet=args.silencios == "atenuados", replacements=replacements, replacement_notes=notes)
     print(summary(result))
     return 0
 

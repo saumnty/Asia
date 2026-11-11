@@ -190,3 +190,64 @@ def test_variante_atenuada_y_solo_22050(dataset, tmp_path):
     peak = lambda folder: np.max(np.abs(tool.read_wav(tmp_path / folder / "22050" / "wavs" / "0001.wav")[0][int(1.7 * 22050): int(1.9 * 22050)]))
     assert peak("atenuado") < 0.15 * peak("normal")
     assert (tmp_path / "normal" / "22050" / "metadata.csv").read_text(encoding="utf-8") == (tmp_path / "atenuado" / "22050" / "metadata.csv").read_text(encoding="utf-8")
+
+
+# --- Reemplazos: los números en palabras ------------------------------------------------
+
+def test_los_reemplazos_cambian_el_texto_de_metadata(dataset, tmp_path):
+    csv_path = tmp_path / "numeros.csv"
+    csv_path.write_text("id,texto_actual,propuesta,final,nota\n0002,Tengo 2 perros,x,Tengo dos perros | y un gato,\n", encoding="utf-8-sig")
+    replacements, notes = tool.read_replacements(csv_path, METADATA)
+
+    result = tool.build(dataset, METADATA, tmp_path / "final", segments=loud_segments, rates=(22050,),
+                        replacements=replacements, replacement_notes=notes)
+    lines = (tmp_path / "final" / "22050" / "metadata.csv").read_text(encoding="utf-8").splitlines()
+
+    assert "0002.wav|Tengo dos perros y un gato" in lines and "0001.wav|Hola, ¿cómo estás?" in lines
+    assert result["reemplazados"] == 1 and "Textos reemplazados: 1" in tool.summary(result)
+    # Con la frase en letra, ya no avisa de dígitos.
+    assert not any(line.startswith("0002") and "dígitos" in line for line in result["avisos"])
+
+
+def test_excel_quita_los_ceros_y_usa_punto_y_coma(tmp_path):
+    csv_path = tmp_path / "numeros.csv"
+    csv_path.write_text("ID;texto_actual;Final\n2;a las 8;a las ocho\n", encoding="utf-8-sig")
+
+    assert tool.read_replacements(csv_path, METADATA) == ({"0002": "a las ocho"}, [])
+
+
+def test_con_tabuladores_tambien(tmp_path):
+    csv_path = tmp_path / "numeros.csv"
+    csv_path.write_text("id\tfinal\n0001\tHola\n", encoding="utf-8")
+
+    assert tool.read_replacements(csv_path, METADATA) == ({"0001": "Hola"}, [])
+
+
+def test_un_final_vacio_o_un_id_que_no_existe_se_avisan(dataset, tmp_path):
+    csv_path = tmp_path / "numeros.csv"
+    csv_path.write_text("id,final\n0001,\n0099,algo\n0003,Ya mismo.\n", encoding="utf-8")
+    replacements, notes = tool.read_replacements(csv_path, METADATA)
+
+    result = tool.build(dataset, METADATA, tmp_path / "final", segments=loud_segments, rates=(22050,),
+                        replacements=replacements, replacement_notes=notes)
+    lines = (tmp_path / "final" / "22050" / "metadata.csv").read_text(encoding="utf-8").splitlines()
+
+    assert "0001.wav|Hola, ¿cómo estás?" in lines and "0003.wav|Ya mismo." in lines
+    assert any("0001" in note and "vacía" in note for note in result["reemplazos_avisos"])
+    assert any("0099" in note for note in result["reemplazos_avisos"])
+    assert "Reemplazos con problemas: 2" in tool.summary(result)
+
+
+def test_el_csv_sin_la_columna_final_se_rechaza(tmp_path):
+    csv_path = tmp_path / "numeros.csv"
+    csv_path.write_text("id,texto\n0001,Hola\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="id y final"):
+        tool.read_replacements(csv_path, METADATA)
+
+
+def test_sin_reemplazos_todo_sigue_igual(dataset, tmp_path):
+    result = run(dataset, tmp_path)
+
+    assert result["reemplazados"] == 0 and result["reemplazos_avisos"] == []
+    assert "reemplazados" not in tool.summary(result)
