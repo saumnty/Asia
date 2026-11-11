@@ -59,10 +59,24 @@ Huecos observados (hechos, no propuestas):
 1. No existe `run_command`: Asia no ejecuta comandos del sistema, solo
    Python en el sandbox y `open_app`.
 2. No hay deshacer: las `.bak` existen, pero nada las usa.
-3. `apply_pending_change` guarda `old_content` y no lo compara con el
+3. ~~`apply_pending_change` guarda `old_content` y no lo compara con el
    archivo actual antes de escribir: si el archivo cambió entre la propuesta
-   y la confirmación, se sobrescribe.
-4. `forget` borra un dato de la memoria sin confirmación ni copia.
+   y la confirmación, se sobrescribe.~~ **Resuelto en 1.0 (2026-11-11,
+   `4597b90`).** `propose_change` guarda el sha256 del archivo (`old_hash`);
+   "confirmar cambio" lo compara y, si es otro, no escribe, avisa "El archivo
+   cambió desde la propuesta" y pregunta "¿Vuelvo a proponer el cambio con el
+   archivo actual? s/N" (con un sí: el mismo cambio con el diff y el hash
+   del archivo actual; con un no, sigue pendiente). Cubre también el archivo
+   nuevo que alguien creó y el que se borró. Los pendientes anteriores al
+   hash se comparan con `old_content`. Un cambio de hora sin cambio de
+   contenido no cuenta.
+4. ~~`forget` borra un dato de la memoria sin confirmación ni copia.~~
+   **Resuelto en 1.0 (2026-11-11, `ac3c340`), salvo la copia previa.**
+   `forget` pregunta "¿Borro «X»? s/N" con las mismas frases de sí y no que
+   `open_app` (`core/confirm.py`); lo que se borraría va en pantalla entre
+   corchetes y la voz solo dice la pregunta. Un sí lo borra; un no o
+   cualquier otro mensaje lo conserva. Sigue sin copia previa del JSON
+   (ver sección 6).
 5. La única bitácora es la de envíos externos; las acciones locales
    confirmadas o negadas no se registran.
 6. Cada confirmación tiene su frase ("confirmar cambio", "confirmar
@@ -139,7 +153,7 @@ que hace (un `review_project` que además envía a Gemini es nivel Red).
   `config/apps.json`, `memory/*.json` salvo por las acciones de memoria), la
   carpeta `.git`, y cualquier ruta que resuelva fuera por un enlace.
 - Antes de escribir, comprobar que el archivo no cambió desde la propuesta
-  (hueco 3): si cambió, se vuelve a proponer.
+  (hueco 3, **hecho en 1.0** con el sha256): si cambió, se vuelve a proponer.
 - Alcance de un "sí": una vez, o "en esta carpeta durante la sesión" para M
   ("sí a todo en `core/`").
 
@@ -369,7 +383,7 @@ Recomendada en **negrita**; si no hay respuesta, se usa esa.
 | 6 | Delegado que pide un permiso a mitad de tarea | a) reenviar la pregunta en vivo · **b) negar, registrar y ofrecer relanzar al terminar** · c) abortar la delegación | una pregunta en vivo por voz llega sin contexto |
 | 7 | Delegar a Claude Code con código del proyecto | a) libre · **b) como envío externo: una pregunta por delegación, hash en bitácora, negado en modo local** · c) solo en modo abierto | coherente con la fase G: el código sale a Anthropic |
 | 8 | Bitácora: uno o dos archivos | a) todo en `logs/permisos.jsonl` · **b) dos archivos enlazados por hash** · c) migrar ya a SQLite | no rompe "qué has enviado afuera"; SQLite cuando se toque |
-| 9 | Archivo cambiado entre propuesta y confirmación (hueco 3) | a) sobrescribir, como hoy · **b) comparar con `old_content` y volver a proponer** · c) combinar automáticamente | es el único caso actual que pierde trabajo sin aviso |
+| 9 | ✅ **Resuelta en 1.0 (`4597b90`):** archivo cambiado entre propuesta y confirmación (hueco 3) | a) sobrescribir, como hoy · **b) comparar y volver a proponer: hecho, con el sha256 en vez de `old_content`** · c) combinar automáticamente | es el único caso actual que pierde trabajo sin aviso |
 | 10 | Leer fuera de las carpetas de trabajo | a) permitir, como OpenCode · **b) preguntar una vez por carpeta y sesión** · c) negar | Descargas o Documentos son legítimos, pero el usuario debe enterarse |
 
 ---

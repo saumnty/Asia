@@ -97,6 +97,13 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
   - Por voz, "busca en la biblioteca…" va a /buscar y "explica
     timing.py" busca el archivo (pregunta cuál si hay varios).
   - docs/DEMO.md es la lista para grabar.
+  - Seguridad (2 arreglos de docs/DISENO_PERMISOS.md, sin el motor):
+    forget pregunta "¿Borro «X»? s/N" antes de borrar (lo que se
+    borraría va en pantalla entre corchetes; la voz dice solo la
+    pregunta), y "confirmar cambio" no escribe si el archivo cambió
+    desde la propuesta (sha256) y ofrece volver a proponer. Siguen
+    para 2.0 los demás huecos: deshacer, bitácora de decisiones y
+    una sola frase de confirmación.
   - Para 1.0 solo quedan J3 (17/20 o más y 0,5 o menos falsas por
     hora), check_voz --timing con el micrófono y grabar la demo.
 
