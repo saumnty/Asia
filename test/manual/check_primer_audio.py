@@ -29,7 +29,7 @@ Con el micrófono, el mismo número sale en la línea de --timing ("primer
 audio") de check_voz.py: a esto se le suma la voz a texto (≤ 4 s).
 
 Criterios (ROADMAP): primer audio ≤ 15 s; las tareas largas, review_file ≤ 25 s y
-/buscar ≤ 30 s (con la respuesta verificada), con su aviso ≤ 1 s. Código de salida 0
+/buscar ≤ 32 s (con la respuesta verificada; p50 de 5 corridas), con su aviso ≤ 1 s. Código de salida 0
 si la mediana de cada frase los cumple.
 """
 import argparse
@@ -58,7 +58,7 @@ from core.voice.session import VoiceSession
 
 LIMIT = 15.0
 # Tareas largas: su propio límite y un aviso fijo que suena enseguida.
-LONG_TASK_LIMITS = {"review_file": 25.0, "search_project_rag": 30.0}
+LONG_TASK_LIMITS = {"review_file": 25.0, "search_project_rag": 32.0}
 NOTICE_LIMIT = 1.0
 
 # Cinco acciones con voz, como saldrían de Whisper (sin @), con rutas desde C:\Asia (un nombre

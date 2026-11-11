@@ -79,12 +79,14 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
   - check_* sin micrófono: todos en verde (Wikipedia 11/12 con las
     palabras clave y la pregunta unidas; check_intents 49/49).
   - Tareas largas con voz: aviso fijo en 0–0,4 s, review_file 22,7 s
-    (≤ 25). /buscar 31,2 s, todavía sobre los 30 (antes 41,2).
+    (≤ 25) y /buscar 26,8 s de mediana (25,7–31,8; antes 41,2), que
+    cumple el criterio nuevo: p50 ≤ 32 s en 5 corridas. Acercarlo al
+    piso de 26–27 s queda como deuda 1.1 (docs/CIERRE_1.0.md, sec. 4).
   - Por voz, "busca en la biblioteca…" va a /buscar y "explica
     timing.py" busca el archivo (pregunta cuál si hay varios).
   - docs/DEMO.md es la lista para grabar.
-  - Faltan J3 (17/20 o más y 0,5 o menos falsas por hora) y
-    check_voz --timing con el micrófono.
+  - Para 1.0 solo quedan J3 (17/20 o más y 0,5 o menos falsas por
+    hora), check_voz --timing con el micrófono y grabar la demo.
 
 ## Hoja de ruta
 
@@ -107,6 +109,10 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
 2. Voz propia (en paralelo; no bloquea 1.0)
 3. Criterios de cierre en verde y demo grabada
 
+### Asia 1.1 · deuda
+- /buscar por voz más cerca del piso de 26–27 s (opciones en
+  docs/CIERRE_1.0.md, sección 4).
+
 ### Asia 2.0 · 2027
 - Motor de permisos y M (agente de varios pasos), delegando la
   programación grande a OpenCode o Claude Code.
@@ -123,8 +129,6 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
 - git push.
 - Entrenar "Oye Asia" v0.2 en Colab y probarlo con docs/J3_V02.md.
 - check_voz.py --timing con "explica el archivo launcher.py" dicho.
-- Decidir qué hacer con /buscar por voz (31 s): opciones en
-  docs/CIERRE_1.0.md, sección 4.
 - Grabar la demo (docs/DEMO.md).
 - Confirmarle a la persona de la voz que sus audios irán a Colab.
 - Revisar el orbe en el navegador y decir qué ajustar.

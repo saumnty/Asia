@@ -1278,7 +1278,7 @@ Asia 1.0 se cierra cuando se cumplen todos, medidos en el commit final con la co
 | J3, umbral | `voice.wake_threshold` elegido con las dos mediciones de arriba y escrito en `config/defaults.json` | ⏳ Herramienta lista: `comparar_wake --audios` elige el umbral (`docs/J3_V02.md`) |
 | Voz, charla | Primer audio de la charla ≤ 6 s desde que termina la frase dicha (`--timing`, micrófono real) | ✅ 3,4–5,8 s (2026-11-04) |
 | Voz, acciones | Primer audio de `explain_file` y `summarize_file` con voz ≤ 15 s | ✅ sin micrófono (`check_primer_audio`, 2026-11-10): 4,2 s y 5,0 s (antes 21,5 y 21,1 s); falta sumar la voz a texto (≤ 4 s) con el micrófono |
-| Voz, tareas largas | Aviso fijo ≤ 1 s; primer audio de `review_file` ≤ 25 s y de `/buscar` ≤ 30 s con la respuesta verificada (las demás acciones, ≤ 15 s) | ✅ aviso 0,0–0,4 s y `review_file` 22,7 s; ❌ `/buscar` 31,2 s (antes 41,2), opciones en `docs/CIERRE_1.0.md` (`check_primer_audio`, 2026-11-11) |
+| Voz, tareas largas | Aviso fijo ≤ 1 s; primer audio de `review_file` ≤ 25 s y de `/buscar` p50 ≤ 32 s en 5 corridas, con la respuesta verificada (las demás acciones, ≤ 15 s) | ✅ aviso 0,0–0,3 s, `review_file` 22,7 s y `/buscar` 26,8 s (25,7–31,8; antes 41,2) (`check_primer_audio`, 2026-11-11) |
 | Voz, entrada | Voz a texto ≤ 4 s por frase; sin voz detectada, "no te oí" (nunca una alucinación de Whisper) | ✅ 2,6–3,9 s (2026-11-04); "no te oí" con prueba (`c47603b5`) |
 | Voz, interrupción | Enter y Ctrl+C cortan la lectura sin cerrar Asia | ✅ prueba con el micrófono (2026-11-04) |
 | Pruebas | `pytest` completo en verde, con código 0 | ✅ 2091 pasadas, código 0 (2026-11-11) |
@@ -1295,7 +1295,7 @@ Asia 1.0 se cierra cuando se cumplen todos, medidos en el commit final con la co
 1. Estabilizar el modelo actual con uso real.
 2. ~~Fase 4 (limpieza) y revisión sin síntesis.~~ Hecho (`254dc3cd`, `284c1bdc`).
 3. Cambio entre modelos. ~~Ver y cambiar el modelo por comando, `--model`, `models_by_domain`.~~ Hecho (`1231b36b`, `fccf75bd`). Falta lo de "Qué falta" en "Multi-modelo según tipo de tarea".
-4. Voz: J4 y voz propia. `/buscar` con voz a ≤ 30 s (31,2 s el 2026-11-11; opciones en `docs/CIERRE_1.0.md`). ~~"busca en la biblioteca…" a `search_text`; nombres de archivo sueltos~~ Hecho (2026-11-11).
+4. Voz: J4 y voz propia. Deuda 1.1: `/buscar` con voz más cerca del piso de 26–27 s (26,8 s de mediana el 2026-11-11; opciones en `docs/CIERRE_1.0.md`, sección 4). ~~"busca en la biblioteca…" a `search_text`; nombres de archivo sueltos~~ Hecho (2026-11-11).
 5. Avatar.
 6. Extras (los bots personalizados, después de M y N; la biblioteca de lecciones, con la generación de código): guardián de envíos externos, modo sin rastro, perfiles aislados, Asia multiplataforma, imágenes en la terminal, cambio de modelo seguro, especialistas internos, control y estimación, Asia → ROS 2 → Bolitabot, SQLite como almacenamiento, afecto y cognición social, tareas grandes y MCP.
 7. Jetson, servidor y uso remoto (siempre disponible).

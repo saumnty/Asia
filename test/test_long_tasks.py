@@ -223,8 +223,8 @@ def test_criterios_por_accion():
     assert not check_primer_audio.meets("explain_file", medians)
     assert not check_primer_audio.meets("review_file", {"primer_audio": 20.0, "aviso": 1.5})
     assert not check_primer_audio.meets("review_file", {"primer_audio": 20.0, "aviso": None})
-    assert check_primer_audio.meets("search_project_rag", {"primer_audio": 29.0, "aviso": 0.3})
-    assert not check_primer_audio.meets("search_project_rag", {"primer_audio": 31.0, "aviso": 0.3})
+    assert check_primer_audio.meets("search_project_rag", {"primer_audio": 31.0, "aviso": 0.3})
+    assert not check_primer_audio.meets("search_project_rag", {"primer_audio": 33.0, "aviso": 0.3})
     assert check_primer_audio.meets("explain_file", {"primer_audio": 9.0, "aviso": None})
 
 

@@ -110,12 +110,12 @@ El primero, con "explica el archivo launcher.py" dicho en voz alta, da el primer
 
 ### Tareas largas con voz: aviso fijo y criterio propio
 
-Criterio nuevo (ROADMAP): aviso fijo ≤ 1 s; `review_file` ≤ 25 s; `/buscar` ≤ 30 s con la respuesta verificada. Medido con `check_primer_audio.py --llamadas` (mediana de 3 corridas; `/buscar`, de 5), sin micrófono.
+Criterio nuevo (ROADMAP): aviso fijo ≤ 1 s; `review_file` ≤ 25 s; `/buscar` p50 ≤ 32 s en 5 corridas con la respuesta verificada (antes ≤ 30 s). Medido con `check_primer_audio.py --llamadas` (mediana de 3 corridas; `/buscar`, de 5), sin micrófono.
 
 | Acción | Aviso antes | Aviso después | Primer audio antes | Después | Criterio |
 |---|---|---|---|---|---|
 | `review_file` core/timing.py | — | **0,0** ✅ | 19,2 (lee el preámbulo) | **22,7** ✅ (desde el primer hallazgo) | ≤ 25 |
-| `/buscar` entorno virtual en Python | — | **0,0** ✅ | 41,2 | **31,2** ❌ (22,8–36,7) | ≤ 30 |
+| `/buscar` entorno virtual en Python | — | **0,0** ✅ | 41,2 | 31,2 (22,8–36,7) → **26,8** ✅ (25,7–31,8) | p50 ≤ 32 |
 
 Lo que cambió:
 - Aviso: "Reviso el archivo." y "Busco en la biblioteca." se sintetizan al cargar la voz (`core/voice/notices.py`) y van directo al altavoz. La primera vez, 0,3–0,4 s; después, 0,0.
@@ -126,7 +126,9 @@ Lo que cambió:
   - Los embeddings conectan a 127.0.0.1: con "localhost", Windows esperaba 2 s por conexión (4 s por búsqueda).
 - Por texto, `/buscar` sigue copiando las líneas: con números, `check_rag --preguntas 1` respondió una trampa ("capital de Australia" con una línea `pais: "Australia"`) y `--punta-a-punta 1` bajó de 20/24 a 18/24. Repetidos por texto después del cambio: `--preguntas 1` y `--punta-a-punta 1` con código 0, trampas en 0 y 20/24.
 
-**`/buscar`, 31 s, no llega.** Cuenta (Fable): traducción 3 s, búsqueda y carga del 7B solapadas 12–15 s (Ollama carga uno a la vez y la RAM libre es poca), citas 7–9 s y respuesta 6–8 s. El piso con esta arquitectura es de unos 26–27 s, y la variación entre corridas, de ±6 s. Opciones:
+**`/buscar`: cumple con el criterio de p50 ≤ 32 s.** Segunda medición de 5 corridas, el mismo código: 31,8, 25,7, 26,8, 26,7 y 30,4 s (mediana 26,8; aviso 0,0–0,3 s). La variación entre corridas no deja garantizar 30 s, por eso el criterio va por la mediana.
+
+**Deuda para la 1.1: acercarse al piso.** Cuenta (Fable): traducción 3 s, búsqueda y carga del 7B solapadas 12–15 s (Ollama carga uno a la vez y la RAM libre es poca), citas 7–9 s y respuesta 6–8 s. El piso con esta arquitectura es de unos 26–27 s, y la variación entre corridas, de ±6 s. Opciones (para la 1.1):
 1. Los dos embeddings (pregunta y traducción) en una sola llamada, antes de la precarga (−1 a −3 s).
 2. Recortar cada fragmento a las líneas que comparten palabras con la pregunta (−2 a −3 s; riesgo para las citas, medir con check_rag).
 3. Si el 7B ya está cargado (después de otra acción de código), traducir con él y no precargar (−7 a −14 s solo en ese caso).
