@@ -1,4 +1,4 @@
-# Contexto de Asia · 10-nov-2026
+# Contexto de Asia · 11-nov-2026
 
 Respóndeme en español.
 
@@ -75,10 +75,13 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
 - Cierre de 1.0 (docs/CIERRE_1.0.md, 2026-11-10):
   - Primer audio de las acciones: explain_file 4,2 s y
     summarize_file 5,0 s sin micrófono (antes 21,5 y 21,1), con
-    qwen3 para la respuesta breve. review_file 19 s y /buscar 41 s
-    quedan fuera del criterio.
-  - check_* sin micrófono: 13 de 15 en verde; check_rag --wikipedia
-    0 y 1 dan 10/12 frente a la base 11 (decidir la base).
+    qwen3 para la respuesta breve.
+  - check_* sin micrófono: todos en verde (Wikipedia 11/12 con las
+    palabras clave y la pregunta unidas; check_intents 49/49).
+  - Tareas largas con voz: aviso fijo en 0–0,4 s, review_file 22,7 s
+    (≤ 25). /buscar 31,2 s, todavía sobre los 30 (antes 41,2).
+  - Por voz, "busca en la biblioteca…" va a /buscar y "explica
+    timing.py" busca el archivo (pregunta cuál si hay varios).
   - docs/DEMO.md es la lista para grabar.
   - Faltan J3 (17/20 o más y 0,5 o menos falsas por hora) y
     check_voz --timing con el micrófono.
@@ -94,6 +97,8 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
   acciones.
 - Primer audio de las acciones ≤ 15 s, check_* finales sin
   micrófono, comparar_wake --audios y la demo como lista.
+- Segunda vuelta: Wikipedia 11/12, aviso fijo y criterio de tareas
+  largas, biblioteca y nombres de archivo por voz.
 - Documentos de cierre, identidad visual (orbe amarillo cálido,
   prototipo en test/manual/visual/asia_orbe.html).
 
@@ -118,8 +123,8 @@ audio de Windows desactivadas y volumen de entrada al 100. iPhone.
 - git push.
 - Entrenar "Oye Asia" v0.2 en Colab y probarlo con docs/J3_V02.md.
 - check_voz.py --timing con "explica el archivo launcher.py" dicho.
-- Decidir la base de Wikipedia en check_rag (11 → 10, o mejorar las
-  palabras clave).
+- Decidir qué hacer con /buscar por voz (31 s): opciones en
+  docs/CIERRE_1.0.md, sección 4.
 - Grabar la demo (docs/DEMO.md).
 - Confirmarle a la persona de la voz que sus audios irán a Colab.
 - Revisar el orbe en el navegador y decir qué ajustar.

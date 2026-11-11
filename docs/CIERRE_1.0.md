@@ -1,4 +1,4 @@
-# Cierre de Asia 1.0: mediciones del 2026-11-10
+# Cierre de Asia 1.0: mediciones del 2026-11-10 y 11
 
 Mediciones sin micrófono para los criterios de cierre (ROADMAP, "Criterios de cierre de 1.0"). Una medición con modelo real a la vez, Asia cerrada y `ollama stop` antes de cada una.
 
@@ -93,3 +93,46 @@ El primero, con "explica el archivo launcher.py" dicho en voz alta, da el primer
 - `check_wake --falsas --guardar-audio` guarda lo escuchado para compararlo después.
 - Probado de punta a punta con v0.1 contra sí mismo y audio sintético: tablas idénticas, elige 0,75, código 1 (no cumple).
 - Secuencia completa: `docs/J3_V02.md`.
+
+## 4. Segunda vuelta (2026-11-10, noche)
+
+### Wikipedia: palabras clave y pregunta original unidas
+
+`found_articles` (core/rag/wikipedia.py) une, por fusión de rangos recíprocos y sin duplicados, las búsquedas de los títulos de las palabras clave, de cada palabra clave, de todas juntas y de la pregunta original, con el mismo número de artículos (3). Lo que sale en varias búsquedas sube: "Esqueleto_humano" (huesos) entra. "Monte_Everest" no sale en ninguna búsqueda de "la montaña más alta del mundo".
+
+| Check | Antes | Corrida 1 | Corrida 2 |
+|---|---|---|---|
+| `--wikipedia 0` (artículo entre los 3) | 10/12 | 11/12 ✅ | 11/12 ✅ |
+| `--wikipedia 1` (artículo entre los 3) | 10/12 | 11/12 ✅ | 11/12 ✅ |
+| `--wikipedia 1` (respuestas correctas, trampas) | 6/12, 0/6 | 8/12, 0/6 | 6/12, 0/6 |
+
+`--preguntas 0` sin cambios (en Stack Exchange no hay palabras clave: una sola lista conserva su orden). Base sin cambiar.
+
+### Tareas largas con voz: aviso fijo y criterio propio
+
+Criterio nuevo (ROADMAP): aviso fijo ≤ 1 s; `review_file` ≤ 25 s; `/buscar` ≤ 30 s con la respuesta verificada. Medido con `check_primer_audio.py --llamadas` (mediana de 3 corridas; `/buscar`, de 5), sin micrófono.
+
+| Acción | Aviso antes | Aviso después | Primer audio antes | Después | Criterio |
+|---|---|---|---|---|---|
+| `review_file` core/timing.py | — | **0,0** ✅ | 19,2 (lee el preámbulo) | **22,7** ✅ (desde el primer hallazgo) | ≤ 25 |
+| `/buscar` entorno virtual en Python | — | **0,0** ✅ | 41,2 | **31,2** ❌ (22,8–36,7) | ≤ 30 |
+
+Lo que cambió:
+- Aviso: "Reviso el archivo." y "Busco en la biblioteca." se sintetizan al cargar la voz (`core/voice/notices.py`) y van directo al altavoz. La primera vez, 0,3–0,4 s; después, 0,0.
+- `review_file`: atajo sin IntentEngine para "revisa (el archivo) X" (−1,8 s y el aviso antes de 1 s). Con voz se lee desde el primer hallazgo completo; el preámbulo y los títulos no. El prompt no cambia: `check_review_quality --runs 1` igual (archivo: 1 falso, antes 2).
+- `/buscar`:
+  - Traducción con qwen3 (`rag.translate_domain`) y ninguna si la pregunta ya está en inglés.
+  - Con voz, el 7B devuelve solo números de línea y el código copia el texto exacto (`quotes.numbered_context`), con 4 fragmentos en vez de 5, una respuesta de 1 o 2 frases (tope de 120 tokens) y el 7B precargado durante la búsqueda sin descargar nomic.
+  - Los embeddings conectan a 127.0.0.1: con "localhost", Windows esperaba 2 s por conexión (4 s por búsqueda).
+- Por texto, `/buscar` sigue copiando las líneas: con números, `check_rag --preguntas 1` respondió una trampa ("capital de Australia" con una línea `pais: "Australia"`) y `--punta-a-punta 1` bajó de 20/24 a 18/24. Repetidos por texto después del cambio: `--preguntas 1` y `--punta-a-punta 1` con código 0, trampas en 0 y 20/24.
+
+**`/buscar`, 31 s, no llega.** Cuenta (Fable): traducción 3 s, búsqueda y carga del 7B solapadas 12–15 s (Ollama carga uno a la vez y la RAM libre es poca), citas 7–9 s y respuesta 6–8 s. El piso con esta arquitectura es de unos 26–27 s, y la variación entre corridas, de ±6 s. Opciones:
+1. Los dos embeddings (pregunta y traducción) en una sola llamada, antes de la precarga (−1 a −3 s).
+2. Recortar cada fragmento a las líneas que comparten palabras con la pregunta (−2 a −3 s; riesgo para las citas, medir con check_rag).
+3. Si el 7B ya está cargado (después de otra acción de código), traducir con él y no precargar (−7 a −14 s solo en ese caso).
+4. Responder desde las citas con qwen3 (−5 s o más): cambia la estrategia B; habría que medir la calidad.
+
+### Voz: biblioteca y nombres de archivo
+
+- "busca en la biblioteca…", "busca … en mis fuentes", "busca en Wikipedia…" y "busca en la documentación de ROS 2…" van a `/buscar` sin el IntentEngine (`fixed_intents.library_search`), y el IntentEngine tiene la regla para las variantes. `check_intents`: 49/49, con 5 casos nuevos.
+- "explica timing.py": el nombre se busca en la carpeta de Asia (`core/file_lookup.py`; sin entornos, `data/`, `memory/` ni `logs/`). Una coincidencia: esa ruta. Varias: "¿Cuál?" con la lista, para el mensaje siguiente, como "¿Abro X? s/N" de open_app. `append_file` no busca.
