@@ -42,6 +42,8 @@ CASES = {
     "recall_sin_dato": [step("cuál es mi perro", "recall", key="perro")],
     "forget": [step("olvida mi color", "forget", key="color")],
     "forget_sin_dato": [step("olvida mi perro", "forget", key="perro")],
+    "forget_confirmado": [step("olvida mi color", "forget", key="color"), step("sí")],
+    "forget_rechazado": [step("olvida mi color", "forget", key="color"), step("no")],
     "show_settings": [step("muestra la configuración", "show_settings")],
     "set_provider": [step("usa Gemini", "set_provider", provider=" Gemini ")],
     "set_provider_alias": [step("usa olama", "set_provider", provider="olama")],

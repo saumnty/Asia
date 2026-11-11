@@ -209,6 +209,8 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
         self.previous_session = load_summary()
         self.last_debug_report = None
         self.pending_run = PendingRun()
+        # El dato que espera un sí para borrarse ("¿Borro «color»? s/N"), o None.
+        self.pending_forget = None
         # Qué hizo el último mensaje (resumen de la sesión): una acción, "chat" o
         # None si fue un comando de sesión.
         self.last_action = None
@@ -279,6 +281,16 @@ class Brain(MemoryActions, ExploreActions, ReviewActions, CodeActions, SandboxAc
 
             if answer:
                 self.last_action = "open_app"
+                return answer
+
+        # "¿Borro «color»? s/N" (core/actions/memory.py): vale solo para este mensaje; sin un sí, el dato se queda.
+        pending_forget, self.pending_forget = getattr(self, "pending_forget", None), None
+
+        if pending_forget:
+            answer = self.forget_confirmation(text, pending_forget)
+
+            if answer:
+                self.last_action = "forget"
                 return answer
 
         # "Hay varios timing.py… ¿Cuál?" (core/file_lookup.py): vale solo para este mensaje.

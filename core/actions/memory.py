@@ -1,16 +1,22 @@
 """Memoria personal, memoria del proyecto y ajustes (provider, proyecto activo)."""
+import re
 from pathlib import Path
 
 from core import prompts
-from core.actions.models import set_session
+from core.actions.models import command_text, set_session
 from core.project_history import read_roadmap, recent_commits
 from core.provenance import PROYECTO, Fragment, record
+from core.recent_facts import is_affirmative
 from memory.project_memory import age_notice
 
 
 MISSING_REMEMBER = "¿Qué quieres que recuerde? Ej.: recuerda que mi color favorito es el azul"
 MISSING_RECALL = "¿Qué dato quieres que busque? Ej.: ¿cuál es mi color favorito?"
 MISSING_FORGET = "¿Qué dato quieres que olvide? Ej.: olvida mi color favorito"
+# Como "¿Abro X? s/N" (core/brain.py: OPEN_IT y DONT_OPEN): un sí, escrito o dicho, lo borra; un no, lo deja.
+FORGET_IT = {"borralo", "si borralo", "olvidalo", "si olvidalo"}
+DONT_FORGET = {"n", "no", "no gracias", "nada", "cancela", "cancelar", "dejalo"}
+SHOWN_CHARS = 200
 
 
 def possessive(key: str) -> str:
@@ -67,12 +73,33 @@ class MemoryActions:
         if not key:
             return MISSING_FORGET
 
-        deleted = self.memory.forget(key)
+        value = self.memory.recall(key)
 
-        if deleted:
-            return f"Listo. Olvidé el dato: {key}."
+        if value is None:
+            return f"No tenía guardado ningún dato para: {key}."
 
-        return f"No tenía guardado ningún dato para: {key}."
+        # Nunca se borra a la primera: "¿Borro «color»? s/N" y la respuesta, en el mensaje siguiente
+        # (core/brain.py, process_labeled). Lo que se borraría va entre corchetes: se ve en pantalla
+        # y la voz se lo salta (core/voice/speakable.py), que solo dice "¿Borro «color»?".
+        self.pending_forget = key
+        shown = str(value) if len(str(value)) <= SHOWN_CHARS else str(value)[:SHOWN_CHARS] + "…"
+        return f"¿Borro «{key}»? s/N\n\n[Se borraría: {key} = {shown}]"
+
+    def forget_confirmation(self, text, key):
+        """Respuesta a "¿Borro «X»? s/N": con un sí lo borra, con un no lo deja; None si el mensaje
+        es otra cosa (y entonces la pregunta se olvida y el dato se queda)."""
+        words = " ".join(re.findall(r"\w+", command_text(text or "")))
+
+        if is_affirmative(text) or words in FORGET_IT:
+            if self.memory.forget(key):
+                return f"Listo. Olvidé el dato: {key}."
+
+            return f"No tenía guardado ningún dato para: {key}."
+
+        if words in DONT_FORGET:
+            return f"Vale, no borro «{key}»."
+
+        return None
 
     def handle_summarize_and_save_project(self, text, params):
         folder_path = params.get("folder_path", ".")

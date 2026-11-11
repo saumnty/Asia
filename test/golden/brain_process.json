@@ -50,16 +50,12 @@
  },
  "forget": {
   "results": [
-   "Listo. Olvidé el dato: color."
+   "¿Borro «color»? s/N\n\n[Se borraría: color = azul]"
   ],
   "events": [
    [
     "process",
     "olvida mi color"
-   ],
-   [
-    "forget",
-    "color"
    ]
   ]
  },
@@ -71,10 +67,42 @@
    [
     "process",
     "olvida mi perro"
+   ]
+  ]
+ },
+ "forget_confirmado": {
+  "results": [
+   "¿Borro «color»? s/N\n\n[Se borraría: color = azul]",
+   "Listo. Olvidé el dato: color."
+  ],
+  "events": [
+   [
+    "process",
+    "olvida mi color"
+   ],
+   [
+    "process",
+    "sí"
    ],
    [
     "forget",
-    "perro"
+    "color"
+   ]
+  ]
+ },
+ "forget_rechazado": {
+  "results": [
+   "¿Borro «color»? s/N\n\n[Se borraría: color = azul]",
+   "Vale, no borro «color»."
+  ],
+  "events": [
+   [
+    "process",
+    "olvida mi color"
+   ],
+   [
+    "process",
+    "no"
    ]
   ]
  },
