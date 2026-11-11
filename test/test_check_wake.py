@@ -354,3 +354,55 @@ def test_repuntuar_completa_el_calentamiento_con_silencio(tmp_path):
 
     # 7 tramos de silencio delante de los 25 del archivo, y los 75 de la ventana.
     assert model.seen == 7 + 100
+
+
+def test_falsas_guarda_lo_escuchado_con_la_numeracion_siguiente(tmp_path, capsys):
+    check_wake.save_wav(tmp_path / "falsas_01.wav", [np.zeros(CHUNK, dtype=np.int16)])
+    # 3 s de silencio, 0,5 s fuerte (una activación) y 2 s de silencio.
+    microphone = Microphone(frames(3.0) + frames(0.5, 0.9) + frames(2.0))
+
+    result = check_wake.false_alarms(LoudModel(), 5.5 / 60, 0.5, tmp_path, microphone)
+
+    assert result["falsas"] == 1
+    assert [path.name for path in check_wake.false_files(tmp_path)] == ["falsas_01.wav", "falsas_02.wav"]
+    saved = check_wake.read_wav(tmp_path / "falsas_02.wav")
+    # Los tramos completos de 1280 muestras que dio el micrófono (172 de 512).
+    assert len(saved) == 172 * 512 // CHUNK * CHUNK and saved.max() > 16000
+    assert "falsas_02.wav" in capsys.readouterr().out
+
+
+def test_falsas_sin_guardar_audio_no_escribe_nada(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    microphone = Microphone(frames(1.0))
+
+    check_wake.false_alarms(LoudModel(), 1 / 60, 0.5, microphone=microphone)
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_falsas_en_la_carpeta_de_los_intentos_no_es_pisar(tmp_path, monkeypatch):
+    # --falsas --guardar-audio en la carpeta de --aciertos: no la rechaza (falsas_NN no pisa intentos).
+    check_wake.save_wav(tmp_path / "intento_01.wav", [np.zeros(CHUNK, dtype=np.int16)])
+    called = {}
+    monkeypatch.setattr(sys, "argv", ["check_wake.py", "--falsas", "1", "--guardar-audio", str(tmp_path)])
+    monkeypatch.setattr(check_wake, "load_model", lambda config: LoudModel())
+    monkeypatch.setattr(check_wake, "false_alarms",
+                        lambda model, minutes, threshold, audio_dir=None: called.update(dir=audio_dir) or {})
+
+    assert check_wake.main() == 0
+    assert called["dir"] == tmp_path
+
+
+def test_el_calentamiento_grabado_es_lo_que_va_antes_de_la_ventana(tmp_path):
+    # Grabado con oye_asia (32 tramos de calentamiento) y repuntuado con el mismo: sin relleno,
+    # y lo fuerte del calentamiento no cuenta.
+    loud = [np.full(CHUNK, 20000, dtype=np.int16)]
+    quiet = [np.full(CHUNK, 100, dtype=np.int16)]
+    check_wake.save_wav(tmp_path / "intento_01.wav", loud * 32 + quiet * 75)
+    model = LoudModel()
+    model.model_inputs = {"oye_asia_v0.1": 23}
+
+    result = check_wake.rescore(model, tmp_path, 0.5)
+
+    assert model.seen == 32 + 75 and result["aciertos"] == 0
+    assert check_wake.recorded_warmup(quiet * 100) == 25 and check_wake.recorded_warmup(quiet * 10) == 10

@@ -21,6 +21,10 @@ normal, música, la tele...) y cuenta cuántas veces se activa; da la tasa por h
 
     .venv\\Scripts\\python.exe test\\manual\\check_wake.py --falsas 30
 
+Con --guardar-audio CARPETA, lo escuchado queda en CARPETA/falsas_NN.wav (16 kHz;
+~1,9 MB por minuto), y comparar_wake.py --audios CARPETA compara modelos y umbrales
+con esos WAV y los intento_*.wav de --aciertos en la misma carpeta.
+
 Por defecto, lo de "voice" en la configuración (voice.wake_word, voice.wake_threshold,
 voice.wake_vad_threshold, los modelos de voice.wake_models_dir). --modelo cambia el
 .onnx ("Oye Asia", más adelante), --umbral la puntuación desde la que cuenta y --vad
@@ -95,13 +99,17 @@ def load_model(config):
     return load_wake_model(config)
 
 
-def scores(model, stream, seconds):
-    """La puntuación de cada tramo de 80 ms durante seconds de audio del micrófono."""
+def scores(model, stream, seconds, keep=None):
+    """La puntuación de cada tramo de 80 ms durante seconds de audio del micrófono.
+    keep (lista): se le añade cada tramo, para guardarlo."""
     chunker = Chunker()
     heard = 0.0
 
     for frame in stream:
         for chunk in chunker.feed(frame):
+            if keep is not None:
+                keep.append(chunk)
+
             prediction = model.predict(chunk)
             heard += CHUNK / SAMPLE_RATE
             yield max(prediction.values(), default=0.0)
@@ -245,18 +253,27 @@ def hits(model, trials, threshold, audio_dir=None, microphone=None):
     return summary(rows, threshold)
 
 
+def recorded_warmup(chunks) -> int:
+    """Los tramos de calentamiento de un intento guardado: todo lo que va antes de la ventana
+    de WINDOW_S. Depende del modelo con que se grabó (25 con "Hey Jarvis", 32 con oye_asia);
+    los WAV muy cortos, WARMUP_S."""
+    window = chunk_count(WINDOW_S)
+    return len(chunks) - window if len(chunks) > window else min(len(chunks), chunk_count(WARMUP_S))
+
+
 def rescore(model, folder, threshold):
     """Puntúa los intentos guardados con --guardar-audio, sin micrófono.
 
-    Los WAV traen WARMUP_S de calentamiento; si el modelo pide más (oye_asia_v0.1), se
-    completa con silencio delante: lo que llena sus buffers es audio, no tiene que ser voz.
+    Los WAV traen el calentamiento del modelo con que se grabaron (recorded_warmup); si este
+    pide más (oye_asia_v0.1 tras "Hey Jarvis"), se completa con silencio delante: lo que llena
+    sus buffers es audio, no tiene que ser voz.
     """
     rows = []
-    warm = chunk_count(WARMUP_S)
-    padding = [np.zeros(CHUNK, dtype=np.int16)] * max(0, warmup_chunks(model) - warm)
 
     for path in trial_files(folder):
         chunks = split_chunks(read_wav(path))
+        warm = recorded_warmup(chunks)
+        padding = [np.zeros(CHUNK, dtype=np.int16)] * max(0, warmup_chunks(model) - warm)
         row, _ = run_trial(model, padding + chunks[:warm], chunks[warm:], threshold)
         rows.append({"archivo": path.name, **row})
         print(f"{path.name}: {describe(row)}", flush=True)
@@ -264,18 +281,29 @@ def rescore(model, folder, threshold):
     return summary(rows, threshold)
 
 
-def false_alarms(model, minutes, threshold):
+def false_files(folder) -> list:
+    return sorted(Path(folder).glob("falsas_*.wav"))
+
+
+def false_alarms(model, minutes, threshold, audio_dir=None, microphone=None):
+    """audio_dir: guarda lo escuchado en falsas_NN.wav (el siguiente número libre)."""
     found = Activations(threshold)
     start = time.perf_counter()
+    kept = [] if audio_dir else None
     print(f"Escuchando {minutes} min sin llamarla. Ctrl+C para terminar antes.", flush=True)
 
     try:
-        with Microphone().open() as stream:
-            for score in scores(model, stream, minutes * 60):
+        with (microphone or Microphone()).open() as stream:
+            for score in scores(model, stream, minutes * 60, kept):
                 if found.feed(score):
                     print(f"    activación a los {found.elapsed:.0f} s (puntuación {score:.2f})", flush=True)
     except KeyboardInterrupt:
         pass
+
+    if kept:
+        path = Path(audio_dir) / f"falsas_{len(false_files(audio_dir)) + 1:02d}.wav"
+        save_wav(path, kept)
+        print(f"Guardado en {path}.", flush=True)
 
     seconds = found.elapsed or time.perf_counter() - start
     rate = per_hour(len(found.times), seconds)
@@ -409,7 +437,7 @@ def main():
     parser.add_argument("--vad", type=float, help="umbral del VAD de openWakeWord (voice.wake_vad_threshold; 0 lo apaga)")
     parser.add_argument("--guardar", type=Path, help="JSON con el resultado")
     parser.add_argument("--guardar-audio", type=Path, nargs="?", const=AUDIO_DIR, metavar="CARPETA",
-                        help="guarda cada intento de --aciertos como WAV de 16 kHz (por defecto, data/wake)")
+                        help="guarda cada intento de --aciertos y lo escuchado en --falsas como WAV de 16 kHz (por defecto, data/wake)")
     parser.add_argument("--repuntuar", type=Path, metavar="CARPETA", help="puntúa los WAV guardados, sin micrófono")
     parser.add_argument("--grabar", type=int, metavar="N", help="graba N clips de --frase para entrenar, sin puntuar")
     parser.add_argument("--frase", help="la frase de --grabar (\"oye Asia\")")
@@ -437,8 +465,8 @@ def main():
     if args.repuntuar and not trial_files(args.repuntuar):
         parser.error(f"no hay intento_*.wav en {args.repuntuar}")
 
-    # Nunca se pisa una grabación anterior.
-    if args.guardar_audio and trial_files(args.guardar_audio):
+    # Nunca se pisa una grabación anterior (los falsas_NN.wav siguen la numeración).
+    if args.guardar_audio and args.aciertos and trial_files(args.guardar_audio):
         parser.error(f"ya hay intentos guardados en {args.guardar_audio}; usa otra carpeta")
 
     config = config_for(args.modelo, args.vad)
@@ -454,14 +482,14 @@ def main():
     if args.repuntuar:
         result["repuntuados"] = rescore(model, args.repuntuar, threshold)
 
-    if args.aciertos:
-        if args.guardar_audio:
-            args.guardar_audio.mkdir(parents=True, exist_ok=True)
+    if args.guardar_audio:
+        args.guardar_audio.mkdir(parents=True, exist_ok=True)
 
+    if args.aciertos:
         result["aciertos"] = hits(model, args.aciertos, threshold, args.guardar_audio)
 
     if args.falsas:
-        result["falsas"] = false_alarms(model, args.falsas, threshold)
+        result["falsas"] = false_alarms(model, args.falsas, threshold, args.guardar_audio)
 
     if args.guardar:
         args.guardar.write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
